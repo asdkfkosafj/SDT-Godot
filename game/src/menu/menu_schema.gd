@@ -360,7 +360,8 @@ static func _scene() -> Dictionary:
 
 static func _behaviour() -> Dictionary:
 	var om := func(): return _m().optionsMenu
-	return {"id": "behaviour", "name": "Behaviour", "groups": [
+	# its long cards fold (Resistance and Reactions folded at first: MenuFold)
+	return {"id": "behaviour", "name": "Behaviour", "fold": {"Resistance": true, "Reactions": true}, "groups": [
 		{"title": "Resistance", "controls": [
 			slider("Resistance", "How much she resists at first; it wears off while you play.",
 				func(): return _m().costumeMenu.resistanceSlider, _m().resistanceSliderChanged, _m().resistanceSliderReleased,

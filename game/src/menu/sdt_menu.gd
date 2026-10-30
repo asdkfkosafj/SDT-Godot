@@ -598,7 +598,7 @@ func _show() -> void:
 		_back.visible = s.get("hidden", false)
 		view = _cache.get(section)
 		if view == null:
-			view = _build_view(_groups_of(s), "")
+			view = _build_view(_groups_of(s), "", s)
 			_cache[section] = view
 	for v in _content.get_children():
 		v.visible = v == view
@@ -614,8 +614,9 @@ func _show() -> void:
 
 
 ## One section's (or the search results') cards, added to the content and kept for the next visit. The cards are
-## made now; their rows are built a few per frame (_pump), so opening a big section never stalls a frame.
-func _build_view(groups: Array, empty_text: String) -> Control:
+## made now; their rows are built a few per frame (_pump), so opening a big section never stalls a frame. A section
+## with "fold" ({group title: folded at first}) gets a fold button on each card (MenuFold; not in search results).
+func _build_view(groups: Array, empty_text: String, sec := {}) -> Control:
 	var view := VBoxContainer.new()
 	view.add_theme_constant_override("separation", 6)
 	view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -638,8 +639,11 @@ func _build_view(groups: Array, empty_text: String) -> Control:
 			h.add_child(MenuWidgets.tag(grp["owner"]))
 		cv.add_child(h)
 		view.add_child(card)
+		var body: VBoxContainer = cv
+		if sec.has("fold"):
+			body = MenuFold.card(h, hl, cv, sec, grp, specs)
 		for spec in specs:
-			pending.append([cv, spec])
+			pending.append([body, spec])
 	if pending.is_empty() and empty_text != "":
 		var l := Label.new()
 		l.text = empty_text
@@ -690,7 +694,7 @@ func _pump_frame() -> void:
 	for sec in sections:   # one section per frame
 		var sid: String = sec["id"]
 		if not _cache.has(sid):
-			var v := _build_view(_groups_of(sec), "")
+			var v := _build_view(_groups_of(sec), "", sec)
 			v.visible = false
 			_cache[sid] = v
 			return

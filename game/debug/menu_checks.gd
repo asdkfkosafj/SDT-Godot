@@ -34,6 +34,7 @@ func step(_frame: int) -> void:
 				_section_checks()
 				_control_checks()
 				_settings_checks()
+				_fold_checks()
 				_dev_mode_checks()
 				_behaviour_checks()
 				_extension_checks()
@@ -244,6 +245,51 @@ func _control_checks() -> void:
 		r.free()
 	_check("long labels: two lines / wrapped, short ones one line", fits == [[false, false], [true, false], [false, true]],
 		str(fits))
+
+
+## Behaviour's cards fold (MenuFold): Resistance and Reactions folded at first, the rest open; the button and a click
+## on the heading; the state kept; none in search results.
+func _fold_checks() -> void:
+	menu.open_menu()
+	menu.show_section("behaviour")
+	menu.build_now()
+	var cards := {}
+	for card in menu._cache["behaviour"].get_children():
+		if not card is PanelContainer:
+			continue
+		var cv: VBoxContainer = card.get_child(0)
+		var h: HBoxContainer = cv.get_child(0)
+		cards[(h.get_child(1) as Label).text] = [h, cv.get_child(1)]
+	_check("fold: Behaviour cards have a fold button", cards.has("RESISTANCE") and cards.has("REACTIONS")
+		and (cards["REACTIONS"][0].get_child(0) as Button).text in ["▸", "▾"], str(cards.keys()))
+	var others_open := true
+	for k in cards:
+		if k not in ["RESISTANCE", "REACTIONS"] and not cards[k][1].visible:
+			others_open = false
+	_check("fold: Resistance and Reactions folded at first, the rest open", not cards["RESISTANCE"][1].visible
+		and not cards["REACTIONS"][1].visible and others_open)
+	var fold_btn: Button = cards["REACTIONS"][0].get_child(0)
+	fold_btn.pressed.emit()
+	_check("fold: the button opens it, and it is kept", cards["REACTIONS"][1].visible and fold_btn.text == "▾"
+		and PortSettings.get_value("menu_fold", "behaviour/Reactions", true) == false)
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	cards["REACTIONS"][0].gui_input.emit(click)
+	_check("fold: a click on the heading folds it again", not cards["REACTIONS"][1].visible and fold_btn.text == "▸"
+		and PortSettings.get_value("menu_fold", "behaviour/Reactions", false) == true)
+	_check("fold: a folded card shows how many settings it holds", (cards["REACTIONS"][0].get_child(2) as Label).visible
+		and (cards["REACTIONS"][0].get_child(2) as Label).text.begins_with("("))
+	menu.query = "swallow queue"
+	menu._show()
+	var found := 0
+	for b in menu._content.find_children("*", "Button", true, false):
+		if b.is_visible_in_tree() and b.text in ["▸", "▾"]:
+			found += 1
+	_check("fold: none in search results", found == 0)
+	menu.query = ""
+	menu._show()
+	menu.close_menu()
 
 
 func _settings_checks() -> void:
