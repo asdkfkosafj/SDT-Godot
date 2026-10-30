@@ -18,7 +18,6 @@ var _breath_fright := false
 var _breath_spent := false
 var lowered_breath := false
 var _prev_quiet := 0.0
-var _prev_breath_max := 50.0
 var _prev_out_of_breath := 25.0
 var _rand_pulloff := 1.0
 var _prev_held := false
@@ -162,13 +161,12 @@ func _breathing(m: String) -> void:
 	if m in ["Spent", "Broken", "Android", "Numb", "Asleep"]:
 		lowered_breath = true
 		if not _breath_spent and not _breath_fright:
-			_prev_breath_max = g.breathLevelMax
 			_prev_out_of_breath = g.outOfBreathPoint
 			_prev_quiet = sc.quietBreathingLevel
-			g.breathLevelMax = 4
-			g.outOfBreathPoint = 4
+			mm.modify(&"Her.breathMax", {"phase": Hooks.MOOD, "op": "set", "value": 4.0})
+			mm.modify(&"Her.outOfBreathPoint", {"phase": Hooks.MOOD, "op": "fn", "fn": func(_v, _her): return g.breathLevelMax})
 			sc.quietBreathingLevel = 5
-			g.setBreathTo(g.currentBreathLevel / _prev_breath_max * g.breathLevelMax)
+			g.resolveBreath()   # now, keeping how much of her breath is used
 			_breath_spent = true
 	else:
 		lowered_breath = false
@@ -179,11 +177,10 @@ func _breathing(m: String) -> void:
 func _restore_breath() -> void:
 	var sc = g.soundControl
 	if _breath_spent:
-		var cur: float = g.breathLevelMax
-		g.breathLevelMax = _prev_breath_max
-		g.outOfBreathPoint = _prev_out_of_breath
+		mm.unmodify(&"Her.breathMax")
+		mm.unmodify(&"Her.outOfBreathPoint")
 		sc.quietBreathingLevel = _prev_quiet
-		g.setBreathTo(g.currentBreathLevel / cur * g.breathLevelMax)
+		g.resolveBreath()
 		_breath_spent = false
 	if _breath_fright:
 		sc.quietBreathingLevel = _prev_quiet

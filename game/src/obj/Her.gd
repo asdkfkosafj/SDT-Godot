@@ -212,7 +212,8 @@ var leftEyebrowAngryTween: LinearTween
 var eyebrowOffsets: Array = []
 var passedOut := false
 var passOutFactor: float = 0.0
-var passOutMax: float = 40.0
+var passOutMax: float = PASS_OUT_MAX   # port: the value point Her.passOutMax's result (g.resolveBreath)
+const PASS_OUT_MAX := 40.0
 var leftBreastController: BreastController
 var rightBreastController: BreastController
 var breastCostumeOn := false

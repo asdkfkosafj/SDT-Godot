@@ -264,6 +264,7 @@ func tick() -> void:
 			menuBG.visible = false
 			fadingBG = false
 	if g.gameRunning:
+		g.resolveBreath()   # port: her breath limits' value points
 		if not g.gamePaused:
 			if not g.controlLocked:
 				var mirroredControls: bool = (g.mirrored or g.invertControls) and not (g.mirrored and g.invertControls)

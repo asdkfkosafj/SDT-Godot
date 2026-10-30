@@ -52,8 +52,9 @@ const maxStrandLength := 18
 var cumRGB := 16776439   # port: a variable (the cumRGB extension changes it)
 
 var currentBreathLevel: float = 0.0
-var breathLevelMax: float = 50.0
-var outOfBreathPoint: float = 25.0
+var breathLevelMax: float = BREATH_MAX   # port: the value point Her.breathMax's result (resolveBreath)
+var outOfBreathPoint: float = 25.0       # port: Her.outOfBreathPoint's (half her air in the game)
+const BREATH_MAX := 50.0
 var strandShaders := true
 var showMouse := true
 var qualitySetting: int = 2
@@ -294,6 +295,32 @@ func addBreath(amount: float) -> void:
 func setBreathTo(amount: float) -> void:
 	if breathing:
 		currentBreathLevel = maxf(0.0, minf(breathLevelMax, amount))
+
+
+## Port: her breath limits, the game's numbers unless extensions change them on the value points Her.breathMax,
+## Her.outOfBreathPoint and Her.passOutMax. Once per tick (DT.tick), and by an extension right after it changes
+## their modifiers. A new limit keeps how much of it is used (her breath, how close she is to passing out).
+func resolveBreath() -> void:
+	var mx := BREATH_MAX
+	if Hooks.has_value(&"Her.breathMax"):   # HOOK value point: how much breath she has (50)
+		mx = maxf(1.0, Hooks.value(&"Her.breathMax", her, mx))
+	if mx != breathLevelMax:
+		var was := breathLevelMax
+		breathLevelMax = mx
+		setBreathTo(currentBreathLevel / was * mx)
+		currentBreathLevel = minf(currentBreathLevel, mx)
+	var oob := mx * 0.5
+	if Hooks.has_value(&"Her.outOfBreathPoint"):   # HOOK value point: she is out of breath past this (half her air)
+		oob = Hooks.value(&"Her.outOfBreathPoint", her, oob)
+	outOfBreathPoint = oob
+	if her == null:
+		return
+	var po := Her.PASS_OUT_MAX
+	if Hooks.has_value(&"Her.passOutMax"):   # HOOK value point: how long she lasts with no air before passing out (40)
+		po = maxf(1.0, Hooks.value(&"Her.passOutMax", her, po))
+	if po != her.passOutMax:
+		her.passOutFactor = her.passOutFactor / her.passOutMax * po
+		her.passOutMax = po
 
 
 func randomSpitMass() -> float:

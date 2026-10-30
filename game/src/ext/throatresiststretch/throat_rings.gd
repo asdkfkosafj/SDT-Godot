@@ -66,6 +66,11 @@ static func rings() -> Array:
 	return [entrance, collar]
 
 
+## True once the rings have been worked out this game tick (their values are this tick's).
+static func worked_out_this_tick() -> bool:
+	return _tick_done == Flash.tick_count
+
+
 ## Worked out read only while Developer mode is on (for its Body section).
 static func active() -> bool:
 	return SDTMenu.dev != null and SDTMenu.dev._enabled()

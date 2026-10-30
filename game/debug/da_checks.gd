@@ -486,7 +486,16 @@ func _gaze_step() -> void:
 	elif t == 200:
 		_check("after [OPEN_MOUTH] the frightened mood closes her mouth again", her.head.jaw.rotation_degrees < 0.0,
 			str(her.head.jaw.rotation_degrees))
+		g.currentBreathLevel = 20.0
+		mm.set_mood("Spent")
+	elif t == 205:
+		_check("Spent lowers her breath (value points Her.breathMax and Her.outOfBreathPoint: 4, her breath kept in proportion)",
+			g.breathLevelMax == 4.0 and g.outOfBreathPoint == 4.0 and g.currentBreathLevel <= 4.0,
+			"%s %s %s" % [g.breathLevelMax, g.outOfBreathPoint, g.currentBreathLevel])
 		mm.set_mood("Normal")
+	elif t == 210:
+		_check("after Spent her breath is the game's again", g.breathLevelMax == 50.0 and g.outOfBreathPoint == 25.0
+			and not Hooks.has_value(&"Her.breathMax"), "%s %s" % [g.breathLevelMax, g.outOfBreathPoint])
 		_finish()
 
 

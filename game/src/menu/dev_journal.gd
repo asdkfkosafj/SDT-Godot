@@ -189,9 +189,9 @@ static func _tick() -> void:
 	if g.him != null:
 		_edge("him_cums", g.him.ejaculating, "him", "He starts to cum", "He is done", 0)
 	_edge("in_mouth", her.penisInMouthDist > 0.0, "mouth", "He is in her mouth", "He is out of her mouth")
-	_edge("deep", her.penisInMouthDist > 150.0, "mouth", "Past her throat entrance", "Back above her throat entrance")
+	_edge("deep", her.penisInMouthDist > Her.deepthroatDistance, "mouth", "Past her throat entrance", "Back above her throat entrance")
 	_edge("full", her.cumInMouth >= her.maxCumInMouth, "mouth", "Her mouth is full of cum", "", 0)
-	if ThroatRings._tick_done == Flash.tick_count and ThroatRings.collar["on"]:
+	if ThroatRings.worked_out_this_tick() and ThroatRings.collar["on"]:
 		var col: Dictionary = ThroatRings.collar
 		_edge("collar_holds", col["hold"] > 0.0, "mouth", "Collar holds", "Collar lets go")
 		_edge("collar_snapped", col["snapped"], "mouth", "Collar snapped", "Collar repaired", 0)
