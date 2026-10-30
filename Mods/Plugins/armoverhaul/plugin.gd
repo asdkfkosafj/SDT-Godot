@@ -1,9 +1,10 @@
 extends SDTExtension
-## Port of sby's armOverhaulV1 Loader mod, stage 1: her arms get animtools' extra positions (Cupping Breast to On Her
-## Ass) and the mod's own (On Hips to Holding Hand), in Clothes > Arms and the "arms:" field of the character code;
+## Port of sby's armOverhaulV1 Loader mod: her arms get animtools' extra positions (Cupping Breast to On Her Ass)
+## and the mod's own (On Hips to Holding Hand), in Clothes > Arms and the "arms:" field of the character code;
 ## In Air, Holding Stomach, Cupping Balls, On Neck and Masturbating move every tick; In His Hand / Holding Hand put her
 ## hand in his left hand; hotkeys cycle her arms, his arms and his leg layer, with the mod's arm transitions.
-## Later stages: dynamic arms, restrained mode, jitter / resistance / tapping / rubbing, spank reactions.
+## Dynamic arms (dynamic_arms.gd): her arms move by themselves, following what happens and her mood.
+## Later stages: restrained mode, jitter / resistance / tapping / rubbing, spank reactions.
 ## The mod's numbers are in values.cfg (its own key names); the menu has only the switches.
 
 ## animtools' positions, then the mod's own, in the Loader's order (animtools' "Custom" pose editor is not ported)
@@ -28,11 +29,17 @@ const CLOSED_LEFT := ["Gripping Breast", "Gripping Thigh", "Holding Stomach", "O
 const CLOSED_RIGHT := ["Gripping Breast", "Gripping Thigh", "Holding Stomach", "Holding Hand"]
 
 var V := {}                   # values.cfg: the mod's key -> number
+var moods := {}               # values.cfg [mood_...]: mood name -> {key: number}
+var mood_keys: Array = []     # a mood's keys, in the file's (and the character code's) order
+var dyn                       # dynamic_arms.gd
+var restrained := false       # restrained mode (stage 3)
+var restrained_type := 3      # 0 loose, 1 tight, 2 fixed, 3 off
 var _keys := {}               # Flash key code -> [[left: bool, position name]] (values.cfg [keys])
 var _key_lists := {}          # values.cfg [keys] as read: the mod's key name -> "76,77"
 
 var in_air := 0.0             # In Air: how far up her hands are (0..1)
 var mas_speed := 0.0          # Masturbating: her hand's speed
+var mas_final := 0.0          # ... with her mood and the random bursts
 var _random_mas_speed := 0.0
 var _random_mas_interval := 0
 var _random_mas_duration := 0
@@ -68,6 +75,7 @@ func _setup() -> void:
 	setting("cycleHisLeftArmKey", 221, {"label": "His left arm key", "group": "Keys", "min": 0, "max": 255})
 	setting("cycleHisRightArmKey", 219, {"label": "His right arm key", "group": "Keys", "min": 0, "max": 255})
 	setting("himLegLayerDefault", false, {"label": "His leg in front at the start"})
+	setting("toggleDynamicArmsKey", 56, {"label": "Dynamic arms key", "group": "Keys", "min": 0, "max": 255})
 
 
 func _enable() -> void:
@@ -81,17 +89,30 @@ func _enable() -> void:
 	for k in _key_lists:
 		_add_keys(k, _key_lists[k])
 	_random_mas_interval = _rand_int("randomMasMinInterval", "randomMasMaxInterval")
+	dyn = load_script("dynamic_arms.gd").new(self)
+	dyn.mode = clampi(int(V["dynamicArms"]), 0, 1)
+	dyn.update_mood()
 	on_tick(_tick)
+	hook_before(&"Her.wakeUp", func(_c): dyn.before_wake())
 	hook_after(&"Her.wakeUp", func(_c): _woke())
-	hook_after(&"Her.cough", func(c): in_air += V["inAirCoughGain"] * c.obj.coughFactor)
-	hook_after(&"Her.openCough", func(c): in_air += V["inAirCoughGain"] * c.obj.coughFactor)
+	hook_after(&"Her.cough", func(c): in_air += V["inAirCoughGain"] * c.obj.coughFactor; dyn.cough())
+	hook_after(&"Her.openCough", func(c): in_air += V["inAirCoughGain"] * c.obj.coughFactor; dyn.open_cough())
+	hook_after(&"Her.eyeHit", func(_c): dyn.eye_hit())
+	hook_after(&"Her.fillMouth", func(_c): dyn.fill_mouth())
+	hook_before(&"Him.ejaculate", func(_c): dyn.ejaculate())
+	charcode_field("armOverhaul", dyn.code, func(v: String, _l): dyn.load_code(v), func(_l): dyn.clear_custom())
+	on_dialogueactions(func(da):
+		da.register_trigger("DYNAMIC_ARMS_MODE", 1, func(args): set_dynamic(int(args[0]))))
 	hook_after(&"Him.givePleasure", _pleasure)
 	hook_after(&"Him.setLeftArmPosition", _his_left_arm)
 	hook_after(&"Him.setBody", func(_c): _his_body())
 	hook_after(&"g.setPenisOut", func(_c): _penis_out())
+	menu_control("clothes", "Arms", MenuSchema.choice("Dynamic arms", "Her arms move by themselves, following what "
+		+ "happens and her mood (armOverhaul). Saved with the character.", dyn.MODES, func(): return dyn.MODES[dyn.mode],
+		func(v: String): set_dynamic(dyn.MODES.find(v)), {"after": "Right arm", "keywords": "dynamic arms armoverhaul"}))
 	menu_control("clothes", "Arms", MenuSchema.toggle("His leg in front", "His left leg over her and her arms "
 		+ "(armOverhaul). Cupping Balls and On His Ass put it there for her right arm.", func(): return leg_on_top,
-		_set_leg, {"after": "Right arm", "keywords": "leg layer armoverhaul"}))
+		_set_leg, {"after": "Dynamic arms", "keywords": "leg layer armoverhaul"}))
 	menu_control("clothes", "Arms", MenuSchema.actions("", "", [["Let go of his hand", func(): _toggle_release(),
 		"In His Hand / Holding Hand: she lets go of his hand, or takes it again."]],
 		{"after": "His leg in front", "visible": func(): return _right_name() in RIGHT_ONLY}))
@@ -102,6 +123,7 @@ func _enable() -> void:
 		on_key(get_setting("cycleRightArmKeyRight"), func(): _cycle(false, 1), "her right arm on")
 		on_key(get_setting("toggleReleaseHandKey"), _toggle_release, "let go of his hand")
 		on_key(get_setting("toggleHimLegLayerKey"), _toggle_leg, "his leg in front")
+		on_key(get_setting("toggleDynamicArmsKey"), func(): set_dynamic((dyn.mode + 1) % 4), "dynamic arms")
 		on_key(get_setting("cycleHisLeftArmKey"), func():
 			g.him.setLeftArmPosition((g.him.currentLeftArmPosition + 1) % Him.leftArmPositions.size()), "his left arm")
 		on_key(get_setting("cycleHisRightArmKey"), func():
@@ -109,7 +131,8 @@ func _enable() -> void:
 		for k in _keys:
 			on_key(k, _position_key.bind(k), "arm position key")
 		menu_control("help", "Keys", MenuSchema.note("Arm overhaul: numpad 7 / 9 her left arm, 4 / 6 her right arm, "
-			+ "5 she lets go of his hand (or takes it), 2 his leg in front · [ / ] his right / left arm"))
+			+ "5 she lets go of his hand (or takes it), 2 his leg in front, 8 dynamic arms (off, both, left, right) · "
+			+ "[ / ] his right / left arm"))
 	if get_setting("himLegLayerDefault") and not leg_on_top:
 		_toggle_leg()
 	her.setLeftArmPosition()
@@ -118,6 +141,8 @@ func _enable() -> void:
 
 
 func _disable() -> void:
+	if dyn != null and dyn._auto_on:
+		g.autoModeOn = dyn._auto_before
 	if leg_on_top:
 		_toggle_leg()
 	Her.removeArmPositions(id)
@@ -126,6 +151,8 @@ func _disable() -> void:
 
 func _load_values() -> void:
 	V.clear()
+	moods.clear()
+	mood_keys.clear()
 	_keys.clear()
 	_key_lists.clear()
 	var cf := ConfigFile.new()
@@ -134,6 +161,14 @@ func _load_values() -> void:
 		push_error("armoverhaul: values.cfg could not be read (%s)" % error_string(err))
 		return
 	for section in cf.get_sections():
+		if section.begins_with("mood_"):
+			var mood := {}
+			for k in cf.get_section_keys(section):
+				mood[k] = float(cf.get_value(section, k))
+			moods[section.substr(5).capitalize()] = mood
+			if mood_keys.is_empty():
+				mood_keys = Array(cf.get_section_keys(section))
+			continue
 		for k in cf.get_section_keys(section):
 			if section == "keys":
 				_key_lists[k] = str(cf.get_value(section, k))
@@ -342,6 +377,8 @@ func _tick() -> void:
 	if g.gamePaused or not g.gameRunning:
 		return
 	var her: Her = g.her
+	dyn.update_mood()
+	dyn.hand_job_tick()
 	_arrivals(her)
 	# In Air
 	in_air -= V["inAirLoss"]
@@ -364,13 +401,8 @@ func _tick() -> void:
 		match n:
 			"On Neck":
 				if V["onNeckMoveWithBulge"] == 1:
-					var neck = her.head.neck
-					var i := int(V["onNeckDrawPoint"])
-					var dx := 0.0
-					if i < neck.renderedPoints.size():
-						dx = neck.renderedPoints[i].x - neck.neckPoints[i].x
 					ik.setEndRotationTarget(V["onNeckRotation" + ("Left" if left else "Right")]
-						+ round(V["onNeckDrawPointRate"] * dx * g.throatBulgeAmount), [neck, her])
+						+ round(V["onNeckDrawPointRate"] * neck_bulge() * g.throatBulgeAmount), [her.head.neck, her])
 			"In Air":
 				_in_air_target(her, left)
 			"Holding Stomach":
@@ -381,6 +413,16 @@ func _tick() -> void:
 				if not her.passedOut:
 					ik.newTarget(Vector2(-70 + cos(_mas_angle) * 10, 260 + sin(_mas_angle) * 10), her.torso.back, true)
 					ik.setEndRotationTarget(45, [her.torso.back, her.torso])
+	dyn.tick()
+
+
+## How far the bulge pushes her neck out where On Neck holds it (the mod's neckXDifference)
+func neck_bulge() -> float:
+	var neck = g.her.head.neck
+	var i := int(V["onNeckDrawPoint"])
+	if i < neck.renderedPoints.size():
+		return neck.renderedPoints[i].x - neck.neckPoints[i].x
+	return 0.0
 
 
 ## Masturbating: her hand's speed (the mod's calcMasSpeed and its random bursts), her breath while she does it
@@ -406,7 +448,9 @@ func _mas_tick(her: Her) -> void:
 	mas_speed = maxf(V["minMasSpeed"], mas_speed)
 	if _random_mas_speed <= mas_speed:
 		_random_mas_speed = 0.0
-	var speed := clampf(maxf(mas_speed, _random_mas_speed), V["minMasSpeed"], V["maxMasSpeed"])
+	var speed: float = clampf(maxf(mas_speed, _random_mas_speed) * dyn.m["masSpeedFactor"], V["minMasSpeed"],
+		V["maxMasSpeed"]) * (1.0 - dyn.exh("masSpeed"))
+	mas_final = speed
 	if masturbating and not her.passedOut:
 		_breath_rest += V["breathLossAmount"] * (speed - V["minMasSpeed"]) / (V["maxMasSpeed"] - V["minMasSpeed"])
 		var lose := roundf(_breath_rest)
@@ -416,6 +460,7 @@ func _mas_tick(her: Her) -> void:
 
 
 func _woke() -> void:
+	dyn.after_wake()
 	in_air = V["inAirWakeMinGain"] + randf() * (V["inAirWakeMaxGain"] - V["inAirWakeMinGain"])
 	mas_speed += V["wakeMasSpeedMin"] + randf() * (V["wakeMasSpeedMax"] - V["wakeMasSpeedMin"])
 
@@ -423,6 +468,13 @@ func _woke() -> void:
 func _pleasure(c: Hooks.Call) -> void:
 	if c.args[0] > 0 and g.handJobMode:
 		mas_speed += c.args[0] * V["hjPleasureMasSpeed"]
+	dyn.pleasure()
+
+
+## Dynamic arms: 0 off, 1 both arms, 2 left arm, 3 right arm (hotkey, menu, [DYNAMIC_ARMS_MODE_n])
+func set_dynamic(mode: int) -> void:
+	dyn.mode = clampi(mode, 0, 3)
+	g.saveData.saveCharData()
 
 
 # ---------------------------------------------------------------- him
@@ -507,6 +559,7 @@ func _position_key(code: int) -> void:
 	for pair in _keys[code]:
 		if Her.armPositionAllowed(Her.armPositions.find(pair[1]), pair[0]):
 			transition(pair[0], pair[1], V["hotkeyTransitions"] == 1)
+			dyn.key_weight(pair[0], pair[1])
 	g.inGameMenu.updateArmsList()
 	g.saveData.saveCharData()
 
@@ -520,10 +573,11 @@ func transition(left: bool, n: String, smooth: bool) -> void:
 	var cur_name: String = Her.armPositions[cur]
 	var ik: IKController = her.leftArmIK if left else her.rightArmIK
 	var s := 0 if left else 1
-	ik.tapping = false
-	ik.tapDist = 0
 	if i < 0:
 		return
+	dyn.moved(left)
+	ik.tapping = false
+	ik.tapDist = 0
 	if not smooth or (i == cur and n not in RIGHT_ONLY):
 		_put(her, left, i)
 		return
@@ -568,8 +622,8 @@ func transition(left: bool, n: String, smooth: bool) -> void:
 		_reverse[s] = n in REVERSED
 	ik.jumpTo(from)
 	ik.startTrackingTarget(true)
-	ik.mass = V["transitionMass"]
-	ik.s3Mass = V["transitionHandMass"]
+	ik.s3Mass = dyn.m["transitionHandMassFactor"] * V["transitionHandMass"] * (1.0 + dyn.exh("transitionHandMass"))
+	ik.mass = dyn.m["transitionMassFactor"] * V["transitionMass"] * (1.0 if n == "In His Hand" else 1.0 + dyn.exh("transitionMass"))
 	if n in (CLOSED_LEFT if left else CLOSED_RIGHT):
 		_close(her, left, false)
 		if left:

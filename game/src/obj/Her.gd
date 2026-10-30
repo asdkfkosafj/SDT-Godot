@@ -2399,6 +2399,8 @@ func fillMouth(force: bool = false) -> void:
 		else:
 			g.dialogueControl.buildState(Dialogue.CUM_IN_MOUTH, Dialogue.TICK_BUILD * 2)
 			cumInMouth = mini(maxCumInMouth, cumInMouth + 1)
+	if Hooks.has(&"Her.fillMouth"):   # HOOK
+		Hooks.after(&"Her.fillMouth", self, [force])
 
 
 ## Port: the moment she swallows (the jaw update's, split out so it has its own hook point): she squints,
