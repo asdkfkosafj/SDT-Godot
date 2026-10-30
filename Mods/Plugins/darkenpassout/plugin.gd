@@ -43,7 +43,7 @@ func _enable() -> void:
 	c.addChildAt(_flash, c.getChildIndex(g.screenEffects))
 	_flash.whiteout.alpha = get_setting("darkringalpha")
 	_match_screen()
-	_button = menu_button("optionsMenu", 90, -38, "☀", func(): on = not on; _match_screen())
+	_button = menu_button("optionsMenu", 90, -38, "☀", func(): on = not on; _match_screen(); g.saveData.saveCharData())
 	on_late_tick(_tick)
 	hook_after(&"Her.passOut", func(_c): _passed_out())
 	if get_setting("enablevanillasaving"):

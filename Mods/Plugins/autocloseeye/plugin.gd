@@ -33,7 +33,7 @@ func _setup() -> void:
 
 func _enable() -> void:
 	on = get_setting("defaultmode")
-	_button = menu_button("sceneMenu", -330 + 100 + 1 + 22 + 2, 40, "ὄ1", func(): on = not on)
+	_button = menu_button("sceneMenu", -330 + 100 + 1 + 22 + 2, 40, "ὄ1", func(): on = not on; g.saveData.saveCharData())
 	# the Loader mod ran after both her breathing and her elements update, so twice per tick
 	hook_after(&"Her.animateBreathing", func(_c): _adjust())
 	hook_after(&"Her.updateElements", func(_c): _adjust())
@@ -42,7 +42,7 @@ func _enable() -> void:
 	on_late_tick(_update_button)
 	menu_control("behaviour", "Reactions", MenuSchema.toggle("Close her eyes while sucking",
 		"She closes her eyes while the penis is in her mouth and opens them, looking at him, once it is out. Saved with the character.",
-		func(): return on, func(v: bool): on = v, {"keywords": "eyes close autocloseeye"}))
+		func(): return on, func(v: bool): on = v; g.saveData.saveCharData(), {"keywords": "eyes close autocloseeye"}))
 	if get_setting("enablevanillasaving"):
 		charcode_field("autoCloseEye", func(): return "CloseEye" if on else "Normal", _load_code,
 			func(_l): on = get_setting("defaultmode"))

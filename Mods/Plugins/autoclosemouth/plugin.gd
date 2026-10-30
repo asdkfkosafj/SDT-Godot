@@ -48,11 +48,11 @@ func _enable() -> void:
 	goclose = get_setting("manualstartsclosed")
 	manual = not get_setting("startauto")
 	on = get_setting("defaultmode")
-	_button = menu_button("sceneMenu", -330 + 100 + 1 + 22 + 22, 40, "ᾑ0", func(): on = not on)
+	_button = menu_button("sceneMenu", -330 + 100 + 1 + 22 + 22, 40, "ᾑ0", func(): on = not on; g.saveData.saveCharData())
 	on_late_tick(_tick)
 	menu_control("behaviour", "Reactions", MenuSchema.toggle("Close her mouth after sucking",
 		"She closes her mouth a while after the penis left it. Saved with the character.",
-		func(): return on, func(v: bool): on = v, {"keywords": "mouth close autoclosemouth"}))
+		func(): return on, func(v: bool): on = v; g.saveData.saveCharData(), {"keywords": "mouth close autoclosemouth"}))
 	# closing: her jaw drawn towards closed by closepercent (MOOD modifier of Her.jawAngle, after moods' mouth hang;
 	# dialogue triggers such as MoreTriggers' [OPEN_MOUTH_ms] override it)
 	modify(&"Her.jawAngle", {"phase": Hooks.MOOD, "order": 10, "op": "fn", "fn": func(v, _her):

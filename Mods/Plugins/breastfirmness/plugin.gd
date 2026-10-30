@@ -39,14 +39,14 @@ func _enable() -> void:
 		"after": "Breast size", "keywords": "breast firmness bounce jiggle breastfirmness",
 		"tip": "How firmly her breasts spring back (0.01 floppy, 1 stiff). Reset: the game's own, which depends on breast size. Saved with the character.",
 		"get": func(): return firmness if manual else g.her.leftBreastController._breastFirmness,
-		"set": func(v: float): _set_firmness(v),
-		"reset": func(): _set_game()})
+		"set": func(v: float): _set_firmness(v), "release": func(): g.saveData.saveCharData(),
+		"reset": func(): _set_game(); g.saveData.saveCharData()})
 	menu_control("her", "Body", {"type": "slider", "label": "Breast bounce", "min": 0.0, "max": 1.0,
 		"after": "Breast size", "keywords": "breast force bounce jiggle breastfirmness",
 		"tip": "How much her movement throws her breasts. Reset: the game's own (0.25). Saved with the character.",
 		"get": func(): return force if force_manual else 0.25,
-		"set": func(v: float): force = v; force_manual = true,
-		"reset": func(): force_manual = false})
+		"set": func(v: float): force = v; force_manual = true, "release": func(): g.saveData.saveCharData(),
+		"reset": func(): force_manual = false; g.saveData.saveCharData()})
 	if get_setting("enablevanillasaving"):
 		charcode_field("breastfirmness", func(): return "%s,%.5f" % ["Manual" if manual else "Normal", firmness],
 			func(v: String, _l): _load_code(v, false), func(_l): _set_game())

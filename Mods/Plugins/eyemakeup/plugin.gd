@@ -67,9 +67,9 @@ func _enable() -> void:
 	for c in [["Eye liner", "line"], ["Smoky eye shadow", "smoke"], ["Smoky eye shadow lower", "tear"]]:
 		menu_control("her", "Colours", MenuSchema.colour(c[0], "Fully transparent: none (the default, also the reset).",
 			func(): return get(c[1] + "_rgb"), func(rgb, _fill): _set_colour(c[1], rgb), "rgbFill", true,
-			{"after": "Mascara", "keywords": "eye makeup eyemakeup smoky " + c[1], "reset": func(): _set_colour(c[1], BLANK)}))
+			{"after": "Mascara", "keywords": "eye makeup eyemakeup smoky " + c[1], "reset": func(): _set_colour(c[1], BLANK); g.saveData.saveCharData()}))
 	menu_control("her", "Colours", MenuSchema.toggle("Eye glitter", "Glitter on her eye shadow. Saved with the character.",
-		func(): return glitter, func(v: bool): glitter = v; _follow(), {"after": "Mascara", "keywords": "eye makeup glitter sparkle"}))
+		func(): return glitter, func(v: bool): glitter = v; _follow(); g.saveData.saveCharData(), {"after": "Mascara", "keywords": "eye makeup glitter sparkle"}))
 	if get_setting("enablevanillasaving"):
 		for c in [["eyelinemakeup", "line"], ["eyesmokemakeup", "smoke"], ["eyestainmakeup", "tear"]]:
 			charcode_field(c[0], func(): return _code(get(c[1] + "_rgb")), func(v: String, _l): _load_colour(c[1], v),
