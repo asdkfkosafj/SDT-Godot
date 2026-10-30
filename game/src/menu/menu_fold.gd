@@ -1,7 +1,7 @@
 class_name MenuFold
 extends RefCounted
 ## Port addition: folding cards and a card reset, for menu sections that ask for it with "fold" (Behaviour for now):
-## {"fold": {group title: folded at first}}. The card's heading gets ▸/▾ (a click anywhere on the heading too) and,
+## {"fold": {group title: folded at first}} ({}: all open at first). The card's heading gets ▸/▾ (a click anywhere on the heading too) and,
 ## while folded, how many settings it holds; the state is kept in port.cfg (menu_fold/<section>/<group>). Its ↺ sets
 ## every setting of that card back to its default - through the rows' own back-to-the-default buttons ("reset"),
 ## extension settings to their declared defaults ("restore"), the game's checkboxes to its starting values

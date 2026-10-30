@@ -360,9 +360,9 @@ static func _scene() -> Dictionary:
 
 static func _behaviour() -> Dictionary:
 	var om := func(): return _m().optionsMenu
-	# its long cards fold (Resistance and Reactions folded at first: MenuFold) and reset as a whole; "default": the
-	# game's starting values of its checkboxes (g.gd), for that reset
-	return {"id": "behaviour", "name": "Behaviour", "fold": {"Resistance": true, "Reactions": true}, "groups": [
+	# its cards fold (all open at first: MenuFold) and reset as a whole; "default": the game's starting values of its
+	# checkboxes (g.gd), for that reset
+	return {"id": "behaviour", "name": "Behaviour", "fold": {}, "groups": [
 		{"title": "Resistance", "controls": [
 			slider("Resistance", "How much she resists at first; it wears off while you play.",
 				func(): return _m().costumeMenu.resistanceSlider, _m().resistanceSliderChanged, _m().resistanceSliderReleased,

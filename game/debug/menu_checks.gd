@@ -247,8 +247,8 @@ func _control_checks() -> void:
 		str(fits))
 
 
-## Behaviour's cards fold (MenuFold): Resistance and Reactions folded at first, the rest open; the button and a click
-## on the heading; the state kept; none in search results.
+## Behaviour's cards fold (MenuFold): all open at first; the button and a click on the heading; the state kept; none
+## in search results.
 func _fold_checks() -> void:
 	menu.open_menu()
 	menu.show_section("behaviour")
@@ -262,24 +262,23 @@ func _fold_checks() -> void:
 		cards[(h.get_child(1) as Label).text] = [h, cv.get_child(1)]
 	_check("fold: Behaviour cards have a fold button", cards.has("RESISTANCE") and cards.has("REACTIONS")
 		and (cards["REACTIONS"][0].get_child(0) as Button).text in ["▸", "▾"], str(cards.keys()))
-	var others_open := true
+	var all_open := true
 	for k in cards:
-		if k not in ["RESISTANCE", "REACTIONS"] and not cards[k][1].visible:
-			others_open = false
-	_check("fold: Resistance and Reactions folded at first, the rest open", not cards["RESISTANCE"][1].visible
-		and not cards["REACTIONS"][1].visible and others_open)
+		if not cards[k][1].visible:
+			all_open = false
+	_check("fold: every card open at first", all_open)
 	var fold_btn: Button = cards["REACTIONS"][0].get_child(0)
 	fold_btn.pressed.emit()
-	_check("fold: the button opens it, and it is kept", cards["REACTIONS"][1].visible and fold_btn.text == "▾"
-		and PortSettings.get_value("menu_fold", "behaviour/Reactions", true) == false)
+	_check("fold: the button folds it, and it is kept", not cards["REACTIONS"][1].visible and fold_btn.text == "▸"
+		and PortSettings.get_value("menu_fold", "behaviour/Reactions", false) == true)
+	_check("fold: a folded card shows how many settings it holds", (cards["REACTIONS"][0].get_child(2) as Label).visible
+		and (cards["REACTIONS"][0].get_child(2) as Label).text.begins_with("("))
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.pressed = true
 	cards["REACTIONS"][0].gui_input.emit(click)
-	_check("fold: a click on the heading folds it again", not cards["REACTIONS"][1].visible and fold_btn.text == "▸"
-		and PortSettings.get_value("menu_fold", "behaviour/Reactions", false) == true)
-	_check("fold: a folded card shows how many settings it holds", (cards["REACTIONS"][0].get_child(2) as Label).visible
-		and (cards["REACTIONS"][0].get_child(2) as Label).text.begins_with("("))
+	_check("fold: a click on the heading opens it again", cards["REACTIONS"][1].visible and fold_btn.text == "▾"
+		and PortSettings.get_value("menu_fold", "behaviour/Reactions", true) == false)
 	# a card's reset: change a game checkbox, a game slider and extension settings in Reactions and the collar's
 	# stiffness in Resistance; ↺ once only asks, twice sets Reactions back and leaves Resistance as it is
 	var x = Extensions.get_extension("throatcumbulge")
