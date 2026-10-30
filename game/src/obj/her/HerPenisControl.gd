@@ -84,6 +84,8 @@ func clothingChanged(_n: String = "") -> void:
 	wearingNone = cc.bottomsControl.selection == 0 and cc.pantiesControl.selection == 0
 	wearingNone = wearingNone and cc.legwearControl.selectedName != "Pantyhose"
 	wearingNone = wearingNone and cc.legwearBControl.selectedName != "Pantyhose"
+	if throughClothes():
+		wearingNone = true
 	if not wearingNone:
 		penisContainer.rotation_degrees = MIN_PENIS_ANGLE
 	updateCostumeVisibility()
@@ -99,20 +101,33 @@ func _costumeContainers() -> Array:
 
 
 func updateCostumeVisibility() -> void:
+	var shown := currentPenisID != 0 and not throughClothes()
 	for c in _costumeContainers():
-		c.visible = currentPenisID != 0
+		c.visible = shown
+
+
+## Port: her penis sticks out through her clothes (moves freely, the clothes' penis shapes hidden) instead of lying
+## against her body under them. The game: false. After changing its modifiers, call clothingChanged().
+func throughClothes() -> bool:
+	return Hooks.has_value(&"HerPenisControl.throughClothes") and Hooks.value(&"HerPenisControl.throughClothes", self, false)   # HOOK value point
 
 
 func update() -> void:
 	if currentPenisID != 0:
 		if wearingNone:
 			torsoAngle = g.her.rotation_degrees + g.her.torso.rotation_degrees
+			var rest := 0.0
+			if Hooks.has_value(&"HerPenisControl.restAngle"):   # HOOK value point: the angle it swings back to (0)
+				rest = Hooks.value(&"HerPenisControl.restAngle", self, rest)
+			var highest := MIN_PENIS_ANGLE
+			if Hooks.has_value(&"HerPenisControl.minAngle"):   # HOOK value point: the furthest it rises (-24)
+				highest = Hooks.value(&"HerPenisControl.minAngle", self, highest)
 			angSpeed -= (torsoAngle - lastTorsoAngle) * 0.1
-			angSpeed -= penisContainer.rotation_degrees * 0.1
+			angSpeed -= (penisContainer.rotation_degrees - rest) * 0.1
 			angSpeed *= 0.8 + 0.1
 			penisContainer.rotation_degrees += angSpeed
-			if penisContainer.rotation_degrees < MIN_PENIS_ANGLE:
-				penisContainer.rotation_degrees = MIN_PENIS_ANGLE
+			if penisContainer.rotation_degrees < highest:
+				penisContainer.rotation_degrees = highest
 				angSpeed *= -0.7
 			lastTorsoAngle = torsoAngle
 		else:
