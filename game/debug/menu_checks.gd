@@ -351,7 +351,7 @@ func _behaviour_checks() -> void:
 		and DevBehaviour._watch_fns.size() == DevBehaviour.hooks().size())
 	dev.open_menu("dev_mouth")
 	dev.build_now()
-	_check("Mouth tab: All off / on and 6 rows", dev._rows.size() == 7, str(dev._rows.size()))
+	_check("Mouth tab: All off / on, 10 rows, 3 hand settings", dev._rows.size() == 14, str(dev._rows.size()))
 	_check("everything on at first", DevBehaviour.off_count() == 0)
 	var was := [her.swallowing, her.cumInMouth]
 	DevBehaviour.set_auto(&"Her.swallow", false)
@@ -375,6 +375,10 @@ func _behaviour_checks() -> void:
 		and not Hooks.has_value(&"Her.swallowWince"), "%d %d" % [winces[0], her.cumInMouth])
 	Hooks.remove_owner("menu_checks")
 	her.cumInMouth = was[1]
+	_teeth_tongue_checks()
+	_spurt_checks()
+	DevTuning.set_clench_time(5.0)
+	DevTuning.set_spam_j(true)
 	DevBehaviour.set_all(false)
 	_check("Freeze all switches off every behaviour", DevBehaviour.off_count() == DevBehaviour.hooks().size())
 	DevBehaviour.set_all(true, "eyes")
@@ -397,6 +401,67 @@ func _behaviour_checks() -> void:
 	dev.close_menu()
 	_spec("settings", "Developer mode")["set"].call(false)
 	_check("Developer mode off: no vetoes or observers left", not DevBehaviour._active and DevBehaviour._watch_fns.is_empty())
+	_check("Developer mode off: hand settings back to the game's", DevTuning._mods.is_empty() and not DevTuning._spam_fn.is_valid()
+		and DevTuning.clench_s == 0.0 and not Hooks.has_value(&"Her.clenchTime"))
+
+
+## Her teeth (Her.releaseTeeth, Her.clenchTime, Her.clenchTaps through the hand settings) and her tongue's rows
+## (Tongue.startMovingTongue: the Tongue out switch vetoes only "out").
+func _teeth_tongue_checks() -> void:
+	var her = g.her
+	var was := [her.gagged, her.mouthFull]
+	her.gagged = false
+	her.mouthFull = false
+	her.clenchTeeth = false
+	var taps := [0]
+	var tap := func(_c): taps[0] += 1
+	Hooks.add_before(&"Her.tapHands", tap, "menu_checks")
+	her.startClenchingTeeth()
+	_check("teeth: the game's clench time (2 to 6 s) and its taps", her.clenchTeeth and her.clenchedTeethTime >= 60
+		and her.clenchedTeethTime < 180 and taps[0] == 1)
+	her.releaseTeeth()
+	_check("teeth: Release teeth unclenches them now", not her.clenchTeeth)
+	DevTuning.set_clench_time(5.0)
+	DevTuning.set_clench_taps(false)
+	her.startClenchingTeeth()
+	_check("teeth: Clench time 5 s = 150 ticks, no tap with Taps off", her.clenchedTeethTime == 150 and taps[0] == 1)
+	var veto := func(c): c.cancel()
+	Hooks.add_before(&"Her.releaseTeeth", veto, "menu_checks")
+	her.releaseTeeth()
+	_check("teeth: Her.releaseTeeth can be vetoed", her.clenchTeeth)
+	Hooks.remove_owner("menu_checks")
+	her.releaseTeeth()
+	DevTuning.reset()
+	_check("teeth: hand settings back to the game's, no modifiers", not Hooks.has_value(&"Her.clenchTime")
+		and not Hooks.has_value(&"Her.clenchTaps"))
+	her.gagged = was[0]
+	her.mouthFull = was[1]
+	var t = her.tongue
+	DevBehaviour.set_auto(&"Tongue.startMovingTongue", false)
+	t.startMovingTongue("out")
+	var out_vetoed: bool = DevBehaviour._seen[&"Tongue.startMovingTongue"][0].cancelled
+	t.startMovingTongue("in")
+	var in_vetoed: bool = DevBehaviour._seen[&"Tongue.startMovingTongue"][0].cancelled
+	DevBehaviour.set_auto(&"Tongue.startMovingTongue", true)
+	_check("Tongue out off: vetoes her tongue coming out, not going in", out_vetoed and not in_vetoed)
+
+
+## His spurts: J adds a spurt while he cums (a before handler on Him.ejaculate); Spurt now.
+func _spurt_checks() -> void:
+	var him = g.him
+	var was := [him.ejaculating, him.ejaculation.duplicate()]
+	him.ejaculating = true
+	him.ejaculation = []
+	DevTuning.set_spam_j(true)
+	him.ejaculate()
+	_check("J adds a spurt: one more each press while he cums", him.ejaculation.size() == 1)
+	DevTuning.add_spurt()
+	_check("Spurt now: one more", him.ejaculation.size() == 2)
+	DevTuning.set_spam_j(false)
+	him.ejaculate()
+	_check("J adds a spurt off: the game's (nothing while he cums)", him.ejaculation.size() == 2)
+	him.ejaculating = was[0]
+	him.ejaculation = was[1]
 
 
 func _extension_checks() -> void:

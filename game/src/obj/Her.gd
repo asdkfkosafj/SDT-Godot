@@ -1227,9 +1227,24 @@ func startClenchingTeeth() -> void:
 	if not clenchTeeth and not gagged and not mouthFull:
 		clenchTeeth = true
 		clenchedTeethTime = int(randf() * 120 + 60)
+		if Hooks.has_value(&"Her.clenchTime"):   # HOOK value point: how long she keeps them clenched, ticks (the game: 60..179)
+			clenchedTeethTime = int(Hooks.value(&"Her.clenchTime", self, clenchedTeethTime))
 		clenchedTeethTimer = 0
 		tongue.startFastIn()
-		tapHands(3)
+		if not Hooks.has_value(&"Her.clenchTaps") or Hooks.value(&"Her.clenchTaps", self, true):   # HOOK value point: she taps him as she clenches (true in the game)
+			tapHands(3)
+
+
+## Port: she unclenches her teeth now. The game has no call for it: the clench ends when its time is up, when she
+## speaks or her mood changes; the teeth then open over a few ticks (updateLips).
+func releaseTeeth() -> void:
+	if Hooks.has(&"Her.releaseTeeth"):   # HOOK
+		var h := Hooks.before(&"Her.releaseTeeth", self, [])
+		if h.cancelled:
+			return
+	clenchTeeth = false
+	if Hooks.has(&"Her.releaseTeeth"):   # HOOK
+		Hooks.after(&"Her.releaseTeeth", self, [])
 
 
 func lookUp() -> void:

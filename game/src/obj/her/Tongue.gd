@@ -101,6 +101,11 @@ func stopHangingOut() -> void:
 
 
 func startMovingTongue(dir: String) -> void:
+	if Hooks.has(&"Tongue.startMovingTongue"):   # HOOK: her tongue asked to move "out" or "in"
+		var h := Hooks.before(&"Tongue.startMovingTongue", self, [dir])
+		if h.cancelled:
+			return
+		dir = h.args[0]
 	if dir == "out":
 		if g.tongue and not tongueOut and not g.her.isSpeaking() and not g.her.teethClenched:
 			waitingForIn = false
