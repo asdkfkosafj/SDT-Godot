@@ -4,7 +4,8 @@ extends SDTExtension
 ## In Air, Holding Stomach, Cupping Balls, On Neck and Masturbating move every tick; In His Hand / Holding Hand put her
 ## hand in his left hand; hotkeys cycle her arms, his arms and his leg layer, with the mod's arm transitions.
 ## Dynamic arms (dynamic_arms.gd): her arms move by themselves, following what happens and her mood.
-## Later stages: restrained mode, jitter / resistance / tapping / rubbing, spank reactions.
+## Restrained mode (restrained.gd): her hands tied to her thighs or behind her back, and her struggling.
+## Later stages: jitter / resistance / tapping / rubbing, spank reactions.
 ## The mod's numbers are in values.cfg (its own key names); the menu has only the switches.
 
 ## animtools' positions, then the mod's own, in the Loader's order (animtools' "Custom" pose editor is not ported)
@@ -27,12 +28,15 @@ const REVERSED := ["Cupping Breast", "Holding Breast", "On Her Ass", "On Neck", 
 ## the game's own, from hand job mode)
 const CLOSED_LEFT := ["Gripping Breast", "Gripping Thigh", "Holding Stomach", "On His Hand"]
 const CLOSED_RIGHT := ["Gripping Breast", "Gripping Thigh", "Holding Stomach", "Holding Hand"]
+## the menu's restrained choice, in its order (restrained_type 3, 0, 1, 2)
+const RESTRAINED_MENU := ["Off", "Loose", "Tight", "Fixed"]
 
 var V := {}                   # values.cfg: the mod's key -> number
 var moods := {}               # values.cfg [mood_...]: mood name -> {key: number}
 var mood_keys: Array = []     # a mood's keys, in the file's (and the character code's) order
 var dyn                       # dynamic_arms.gd
-var restrained := false       # restrained mode (stage 3)
+var res                       # restrained.gd
+var restrained := false       # restrained mode
 var restrained_type := 3      # 0 loose, 1 tight, 2 fixed, 3 off
 var _keys := {}               # Flash key code -> [[left: bool, position name]] (values.cfg [keys])
 var _key_lists := {}          # values.cfg [keys] as read: the mod's key name -> "76,77"
@@ -76,6 +80,7 @@ func _setup() -> void:
 	setting("cycleHisRightArmKey", 219, {"label": "His right arm key", "group": "Keys", "min": 0, "max": 255})
 	setting("himLegLayerDefault", false, {"label": "His leg in front at the start"})
 	setting("toggleDynamicArmsKey", 56, {"label": "Dynamic arms key", "group": "Keys", "min": 0, "max": 255})
+	setting("cycleRestrainedModeKey", 57, {"label": "Restrained mode key", "group": "Keys", "min": 0, "max": 255})
 
 
 func _enable() -> void:
@@ -92,17 +97,22 @@ func _enable() -> void:
 	dyn = load_script("dynamic_arms.gd").new(self)
 	dyn.mode = clampi(int(V["dynamicArms"]), 0, 1)
 	dyn.update_mood()
+	res = load_script("restrained.gd").new(self)
+	restrained_type = clampi(int(V["restrainedType"]), 0, 3)
 	on_tick(_tick)
 	hook_before(&"Her.wakeUp", func(_c): dyn.before_wake())
 	hook_after(&"Her.wakeUp", func(_c): _woke())
-	hook_after(&"Her.cough", func(c): in_air += V["inAirCoughGain"] * c.obj.coughFactor; dyn.cough())
-	hook_after(&"Her.openCough", func(c): in_air += V["inAirCoughGain"] * c.obj.coughFactor; dyn.open_cough())
+	hook_before(&"Her.passOut", func(_c): res.before_pass_out())
+	hook_before(&"Her.startClenchingTeeth", func(_c): res.clench())
+	hook_after(&"Her.cough", _coughed.bind(false))
+	hook_after(&"Her.openCough", _coughed.bind(true))
 	hook_after(&"Her.eyeHit", func(_c): dyn.eye_hit())
 	hook_after(&"Her.fillMouth", func(_c): dyn.fill_mouth())
 	hook_before(&"Him.ejaculate", func(_c): dyn.ejaculate())
 	charcode_field("armOverhaul", dyn.code, func(v: String, _l): dyn.load_code(v), func(_l): dyn.clear_custom())
 	on_dialogueactions(func(da):
-		da.register_trigger("DYNAMIC_ARMS_MODE", 1, func(args): set_dynamic(int(args[0]))))
+		da.register_trigger("DYNAMIC_ARMS_MODE", 1, func(args): set_dynamic(int(args[0])))
+		da.register_trigger("RESTRAINED_MODE", 1, func(args): set_restrained(int(args[0]))))
 	hook_after(&"Him.givePleasure", _pleasure)
 	hook_after(&"Him.setLeftArmPosition", _his_left_arm)
 	hook_after(&"Him.setBody", func(_c): _his_body())
@@ -110,9 +120,13 @@ func _enable() -> void:
 	menu_control("her", "Arms", MenuSchema.choice("Dynamic arms", "Her arms move by themselves, following what "
 		+ "happens and her mood (armOverhaul). Saved with the character.", dyn.MODES, func(): return dyn.MODES[dyn.mode],
 		func(v: String): set_dynamic(dyn.MODES.find(v)), {"after": "Right arm", "keywords": "dynamic arms armoverhaul"}))
+	menu_control("her", "Arms", MenuSchema.choice("Restrained", "Loose: her hands tied to her thighs. Tight: behind her "
+		+ "back, she struggles to free them. Fixed: behind her back, no struggling (armOverhaul). Saved with the character.",
+		RESTRAINED_MENU, func(): return RESTRAINED_MENU[(restrained_type + 1) % 4],
+		func(v: String): set_restrained((RESTRAINED_MENU.find(v) + 3) % 4), {"after": "Dynamic arms", "keywords": "restrained tied struggle"}))
 	menu_control("her", "Arms", MenuSchema.toggle("His leg in front", "His left leg over her and her arms "
 		+ "(armOverhaul). Cupping Balls and On His Ass put it there for her right arm.", func(): return leg_on_top,
-		_set_leg, {"after": "Dynamic arms", "keywords": "leg layer armoverhaul"}))
+		_set_leg, {"after": "Restrained", "keywords": "leg layer armoverhaul"}))
 	menu_control("her", "Arms", MenuSchema.actions("", "", [["Let go of his hand", func(): _toggle_release(),
 		"In His Hand / Holding Hand: she lets go of his hand, or takes it again."]],
 		{"after": "His leg in front", "visible": func(): return _right_name() in RIGHT_ONLY}))
@@ -124,6 +138,7 @@ func _enable() -> void:
 		on_key(get_setting("toggleReleaseHandKey"), _toggle_release, "let go of his hand")
 		on_key(get_setting("toggleHimLegLayerKey"), _toggle_leg, "his leg in front")
 		on_key(get_setting("toggleDynamicArmsKey"), func(): set_dynamic((dyn.mode + 1) % 4), "dynamic arms")
+		on_key(get_setting("cycleRestrainedModeKey"), func(): set_restrained((restrained_type + 1) % 4), "restrained mode")
 		on_key(get_setting("cycleHisLeftArmKey"), func():
 			g.him.setLeftArmPosition((g.him.currentLeftArmPosition + 1) % Him.leftArmPositions.size()), "his left arm")
 		on_key(get_setting("cycleHisRightArmKey"), func():
@@ -131,12 +146,15 @@ func _enable() -> void:
 		for k in _keys:
 			on_key(k, _position_key.bind(k), "arm position key")
 		menu_control("help", "Keys", MenuSchema.note("Arm overhaul: numpad 7 / 9 her left arm, 4 / 6 her right arm, "
-			+ "5 she lets go of his hand (or takes it), 2 his leg in front, 8 dynamic arms (off, both, left, right) · "
+			+ "5 she lets go of his hand (or takes it), 2 his leg in front, 8 dynamic arms (off, both, left, right), "
+			+ "9 restrained mode (loose, tight, fixed, off) · "
 			+ "[ / ] his right / left arm"))
 	if get_setting("himLegLayerDefault") and not leg_on_top:
 		_toggle_leg()
 	her.setLeftArmPosition()
 	her.setRightArmPosition()
+	if restrained_type != 3:
+		res.set_type(restrained_type, false)
 	g.inGameMenu.updateArmsList()
 
 
@@ -251,9 +269,14 @@ func _set_up(her: Her, n: String, left: bool) -> void:
 			ik.setEndRotationTarget(-70, breast_chain)
 			_close(her, left, true)
 		"Gripping Thigh":
-			ik.newTarget(Vector2(105, -90) if left else Vector2(95, -75), her.torsoBack.backside, true)
-			ik.setEndRotationTarget(-22, [her.torsoBack.backside, her.torsoBack] + ([] if left else [her]))
-			_close(her, left, true)
+			if restrained:   # tied: where her struggling puts the hand, open
+				if left:
+					g.changeLayer(her.leftArmContainer, g.backLayer)
+				res.aim(her, left)
+			else:
+				ik.newTarget(Vector2(105, -90) if left else Vector2(95, -75), her.torsoBack.backside, true)
+				ik.setEndRotationTarget(-22, [her.torsoBack.backside, her.torsoBack] + ([] if left else [her]))
+				_close(her, left, true)
 		"On Her Ass":
 			ik.reversedEnd = true
 			ik.newTarget(Vector2(-5, -80), her.torsoBack.backside, true)
@@ -364,6 +387,8 @@ func _pass_out(her: Her, left: bool, n: String) -> void:
 	var ik: IKController = her.leftArmIK if left else her.rightArmIK
 	if n == "In His Hand" and V["inHisHandHoldAfterPassout"] == 1 or n == "Holding Hand" and V["holdingHandHoldAfterPassout"] == 1:
 		return
+	if restrained and n == "Gripping Thigh":   # tied there
+		return
 	ik.startDropping(V.get(_key(n) + "SlipTime", 15.0))
 	if left:
 		if n in ["Gripping Breast", "Gripping Thigh"]:
@@ -413,7 +438,9 @@ func _tick() -> void:
 				if not her.passedOut:
 					ik.newTarget(Vector2(-70 + cos(_mas_angle) * 10, 260 + sin(_mas_angle) * 10), her.torso.back, true)
 					ik.setEndRotationTarget(45, [her.torso.back, her.torso])
+	res.tick()
 	dyn.tick()
+	res.act()
 
 
 ## How far the bulge pushes her neck out where On Neck holds it (the mod's neckXDifference)
@@ -465,6 +492,15 @@ func _woke() -> void:
 	mas_speed += V["wakeMasSpeedMin"] + randf() * (V["wakeMasSpeedMax"] - V["wakeMasSpeedMin"])
 
 
+func _coughed(c: Hooks.Call, open: bool) -> void:
+	in_air += V["inAirCoughGain"] * c.obj.coughFactor
+	if open:
+		dyn.open_cough()
+	else:
+		dyn.cough()
+	res.cough(c.obj.coughFactor)
+
+
 func _pleasure(c: Hooks.Call) -> void:
 	if c.args[0] > 0 and g.handJobMode:
 		mas_speed += c.args[0] * V["hjPleasureMasSpeed"]
@@ -475,6 +511,14 @@ func _pleasure(c: Hooks.Call) -> void:
 func set_dynamic(mode: int) -> void:
 	dyn.mode = clampi(mode, 0, 3)
 	g.saveData.saveCharData()
+
+
+## Restrained mode: 0 loose, 1 tight, 2 fixed, 3 off (hotkey, menu, [RESTRAINED_MODE_n], character code)
+func set_restrained(t: int, save := true) -> void:
+	res.set_type(t, V["restrainedModeTransitions"] == 1)
+	g.inGameMenu.updateArmsList()
+	if save:
+		g.saveData.saveCharData()
 
 
 # ---------------------------------------------------------------- him
@@ -659,7 +703,7 @@ func _arrivals(her: Her) -> void:
 				_to_hand_job[s] = false
 			if _close_hand[s]:
 				var n: String = _left_name() if left else _right_name()
-				if n in (CLOSED_LEFT if left else CLOSED_RIGHT):
+				if n in (CLOSED_LEFT if left else CLOSED_RIGHT) and not restrained:
 					_close(her, left, true)
 					g.characterControl.setArmSkin()
 				_close_hand[s] = false

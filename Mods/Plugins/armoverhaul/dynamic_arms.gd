@@ -537,7 +537,7 @@ func load_code(v: String) -> void:
 	if parts.size() >= 1 and parts[0].is_valid_int():
 		mode = clampi(int(parts[0]), 0, 3)
 	if parts.size() >= 2 and parts[1].is_valid_int():
-		x.restrained_type = clampi(int(parts[1]), 0, 3)
+		x.set_restrained(clampi(int(parts[1]), 0, 3), false)
 	_custom_mood = ""
 	if parts.size() == 34:
 		custom = {}
