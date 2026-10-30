@@ -1,6 +1,6 @@
 extends SDTExtension
 ## Port of sby's armOverhaulV1 Loader mod: her arms get animtools' extra positions (Cupping Breast to On Her Ass)
-## and the mod's own (On Hips to Holding Hand), in Clothes > Arms and the "arms:" field of the character code;
+## and the mod's own (On Hips to Holding Hand), in Her > Arms and the "arms:" field of the character code;
 ## In Air, Holding Stomach, Cupping Balls, On Neck and Masturbating move every tick; In His Hand / Holding Hand put her
 ## hand in his left hand; hotkeys cycle her arms, his arms and his leg layer, with the mod's arm transitions.
 ## Dynamic arms (dynamic_arms.gd): her arms move by themselves, following what happens and her mood.
@@ -107,13 +107,13 @@ func _enable() -> void:
 	hook_after(&"Him.setLeftArmPosition", _his_left_arm)
 	hook_after(&"Him.setBody", func(_c): _his_body())
 	hook_after(&"g.setPenisOut", func(_c): _penis_out())
-	menu_control("clothes", "Arms", MenuSchema.choice("Dynamic arms", "Her arms move by themselves, following what "
+	menu_control("her", "Arms", MenuSchema.choice("Dynamic arms", "Her arms move by themselves, following what "
 		+ "happens and her mood (armOverhaul). Saved with the character.", dyn.MODES, func(): return dyn.MODES[dyn.mode],
 		func(v: String): set_dynamic(dyn.MODES.find(v)), {"after": "Right arm", "keywords": "dynamic arms armoverhaul"}))
-	menu_control("clothes", "Arms", MenuSchema.toggle("His leg in front", "His left leg over her and her arms "
+	menu_control("her", "Arms", MenuSchema.toggle("His leg in front", "His left leg over her and her arms "
 		+ "(armOverhaul). Cupping Balls and On His Ass put it there for her right arm.", func(): return leg_on_top,
 		_set_leg, {"after": "Dynamic arms", "keywords": "leg layer armoverhaul"}))
-	menu_control("clothes", "Arms", MenuSchema.actions("", "", [["Let go of his hand", func(): _toggle_release(),
+	menu_control("her", "Arms", MenuSchema.actions("", "", [["Let go of his hand", func(): _toggle_release(),
 		"In His Hand / Holding Hand: she lets go of his hand, or takes it again."]],
 		{"after": "His leg in front", "visible": func(): return _right_name() in RIGHT_ONLY}))
 	if get_setting("hotkeys"):

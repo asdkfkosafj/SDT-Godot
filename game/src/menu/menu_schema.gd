@@ -193,6 +193,14 @@ static func _her() -> Dictionary:
 				"tip": "Mods that change her body (thicker thighs, other breasts...) from Mods/Clothing. Several can be on.",
 				"build": func(): return ModSwitchList.build(ModCatalog.BODY_MODS_LIST, _toggle_body, "None found in Mods/Clothing.")},
 		]},
+		{"title": "Arms", "controls": [
+			arrows("Left arm", "Where she keeps her left arm.", func(): return Her.armPositionsFor(true),
+				func(): return Her.armPositionsFor(true).find(Her.armPositions[g.her.currentLeftArmPosition]),
+				_m().leftArmLeftClicked, _m().leftArmRightClicked),
+			arrows("Right arm", "Where she keeps her right arm.", func(): return Her.armPositionsFor(false),
+				func(): return Her.armPositionsFor(false).find(Her.armPositions[g.her.currentRightArmPosition]),
+				_m().rightArmLeftClicked, _m().rightArmRightClicked),
+		]},
 		{"title": "Hair", "controls": [
 			pick("Hairstyle", "The game's hairstyles, then hair mods from the Mods folders.",
 				func(): return _m().charNames + (g.modCatalog.hair_entries.map(func(e): return e["title"]) if g.modCatalog else []),
@@ -266,14 +274,6 @@ static func _clothes() -> Dictionary:
 				func(): tan.call().tanLeftClicked(), func(): tan.call().tanRightClicked()),
 			slider("Tan strength", "", func(): return tan.call()._alphaSlider, func(): tan.call().alphaSliderChanged(),
 				func(): tan.call().alphaSliderReleased(), func(): tan.call().resetAlpha()),
-		]},
-		{"title": "Arms", "controls": [
-			arrows("Left arm", "Where she keeps her left arm.", func(): return Her.armPositionsFor(true),
-				func(): return Her.armPositionsFor(true).find(Her.armPositions[g.her.currentLeftArmPosition]),
-				_m().leftArmLeftClicked, _m().leftArmRightClicked),
-			arrows("Right arm", "Where she keeps her right arm.", func(): return Her.armPositionsFor(false),
-				func(): return Her.armPositionsFor(false).find(Her.armPositions[g.her.currentRightArmPosition]),
-				_m().rightArmLeftClicked, _m().rightArmRightClicked),
 		]},
 	]}
 
