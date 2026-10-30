@@ -1227,6 +1227,12 @@ func passOut() -> void:
 
 
 func startArmsPassOut(left: bool = true, right: bool = true) -> void:
+	if Hooks.has(&"Her.startArmsPassOut"):   # HOOK
+		var h := Hooks.before(&"Her.startArmsPassOut", self, [left, right])
+		if h.cancelled:
+			return
+		left = h.args[0]
+		right = h.args[1]
 	if left and _dropExtraArm(currentLeftArmPosition, true):
 		left = false
 	if right and _dropExtraArm(currentRightArmPosition, false):

@@ -5,7 +5,8 @@ extends SDTExtension
 ## hand in his left hand; hotkeys cycle her arms, his arms and his leg layer, with the mod's arm transitions.
 ## Dynamic arms (dynamic_arms.gd): her arms move by themselves, following what happens and her mood.
 ## Restrained mode (restrained.gd): her hands tied to her thighs or behind her back, and her struggling.
-## Later stages: jitter / resistance / tapping / rubbing, spank reactions.
+## Hands (hands.gd): tapping, rubbing, jitter, resistance, how her arms drop when she passes out.
+## Later: spank reactions (with SpankAnywhere).
 ## The mod's numbers are in values.cfg (its own key names); the menu has only the switches.
 
 ## animtools' positions, then the mod's own, in the Loader's order (animtools' "Custom" pose editor is not ported)
@@ -36,6 +37,7 @@ var moods := {}               # values.cfg [mood_...]: mood name -> {key: number
 var mood_keys: Array = []     # a mood's keys, in the file's (and the character code's) order
 var dyn                       # dynamic_arms.gd
 var res                       # restrained.gd
+var hands                     # hands.gd
 var restrained := false       # restrained mode
 var restrained_type := 3      # 0 loose, 1 tight, 2 fixed, 3 off
 var _keys := {}               # Flash key code -> [[left: bool, position name]] (values.cfg [keys])
@@ -98,6 +100,7 @@ func _enable() -> void:
 	dyn.mode = clampi(int(V["dynamicArms"]), 0, 1)
 	dyn.update_mood()
 	res = load_script("restrained.gd").new(self)
+	hands = load_script("hands.gd").new(self)
 	restrained_type = clampi(int(V["restrainedType"]), 0, 3)
 	on_tick(_tick)
 	hook_before(&"Her.wakeUp", func(_c): dyn.before_wake())
@@ -106,8 +109,10 @@ func _enable() -> void:
 	hook_before(&"Her.startClenchingTeeth", func(_c): res.clench())
 	hook_after(&"Her.cough", _coughed.bind(false))
 	hook_after(&"Her.openCough", _coughed.bind(true))
-	hook_after(&"Her.eyeHit", func(_c): dyn.eye_hit())
-	hook_after(&"Her.fillMouth", func(_c): dyn.fill_mouth())
+	hook_after(&"Her.eyeHit", func(_c): dyn.eye_hit(); hands.eye_hit())
+	hook_after(&"Her.fillMouth", func(_c): dyn.fill_mouth(); hands.fill_mouth())
+	hook_before(&"Her.tapHands", func(c): c.cancel(); hands.tap(c.args[0]))
+	hook_before(&"Her.startArmsPassOut", _arms_pass_out)
 	hook_before(&"Him.ejaculate", func(_c): dyn.ejaculate())
 	charcode_field("armOverhaul", dyn.code, func(v: String, _l): dyn.load_code(v), func(_l): dyn.clear_custom())
 	on_dialogueactions(func(da):
@@ -383,6 +388,23 @@ func _his_hand_target(her: Her, n: String) -> void:
 		[hand, g.him])
 
 
+## Her arms drop (she passes out, or an arm goes loose): the mod's drop for every position
+func _arms_pass_out(c: Hooks.Call) -> void:
+	c.cancel()
+	var her: Her = g.her
+	for left in [true, false]:
+		if not c.args[0 if left else 1]:
+			continue
+		var i: int = her.currentLeftArmPosition if left else her.currentRightArmPosition
+		var n: String = Her.armPositions[i]
+		if i < Her.GAME_ARM_POSITIONS:
+			hands.drop(her, left)
+		elif n in ANIMTOOLS or n in OWN:
+			_pass_out(her, left, n)
+		else:
+			her._dropExtraArm(i, left)
+
+
 func _pass_out(her: Her, left: bool, n: String) -> void:
 	var ik: IKController = her.leftArmIK if left else her.rightArmIK
 	if n == "In His Hand" and V["inHisHandHoldAfterPassout"] == 1 or n == "Holding Hand" and V["holdingHandHoldAfterPassout"] == 1:
@@ -441,6 +463,7 @@ func _tick() -> void:
 	res.tick()
 	dyn.tick()
 	res.act()
+	hands.tick()
 
 
 ## How far the bulge pushes her neck out where On Neck holds it (the mod's neckXDifference)
@@ -487,6 +510,14 @@ func _mas_tick(her: Her) -> void:
 
 
 func _woke() -> void:
+	var her: Her = g.her
+	if not restrained:   # an arm that slipped from behind her back is behind it again
+		if _left_name() == "Back":
+			her.setLeftArmFree(false)
+		if _right_name() == "Back":
+			her.setRightArmFree(false)
+		if her._tan:
+			her._tan.updateSkin()
 	dyn.after_wake()
 	in_air = V["inAirWakeMinGain"] + randf() * (V["inAirWakeMaxGain"] - V["inAirWakeMinGain"])
 	mas_speed += V["wakeMasSpeedMin"] + randf() * (V["wakeMasSpeedMax"] - V["wakeMasSpeedMin"])
@@ -499,6 +530,7 @@ func _coughed(c: Hooks.Call, open: bool) -> void:
 	else:
 		dyn.cough()
 	res.cough(c.obj.coughFactor)
+	hands.cough(c.obj.coughFactor)
 
 
 func _pleasure(c: Hooks.Call) -> void:
@@ -620,6 +652,10 @@ func transition(left: bool, n: String, smooth: bool) -> void:
 	if i < 0:
 		return
 	dyn.moved(left)
+	hands.rubbing[s] = false
+	hands._finishing[s] = false
+	if dyn.mode != 0 and V["dynamicRubbing"] == 1:
+		hands.check_rub()
 	ik.tapping = false
 	ik.tapDist = 0
 	if not smooth or (i == cur and n not in RIGHT_ONLY):

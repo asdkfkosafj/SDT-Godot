@@ -400,6 +400,7 @@ func _decide(her: Her) -> void:
 					wr[r[0]][_kind(r[1])] += V["extraWeightOnTransition"]
 				else:
 					wr[r[0]] = [0.0, 0.0, 0.0]
+		x.hands.rub_tick()
 	post_wake = maxi(0, post_wake - 1)
 	if V["debugMode"] == 1:
 		_debug -= 1
