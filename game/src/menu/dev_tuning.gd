@@ -59,6 +59,27 @@ static func add_spurt() -> void:
 		DevBehaviour.call_now(&"Him.ejaculate", func(): him.ejaculate())
 		return
 	him.addRandomSpurt(int(floor(randf() * 20.0 + 6.0)))
+	Journal.log("him", "Spurt added: %d to come" % him.ejaculation.size())
+
+
+## Tools > Her: her air (g.breathLevelMax, 50 in the game; out of breath at half of it) and how long she lasts with
+## none before passing out (her passOutMax, 40). The game's numbers, changed by hand; back with reset().
+const AIR := 50.0
+const LAST := 40.0
+static var _breath_changed := false
+
+
+static func set_air(v: float) -> void:
+	_breath_changed = true
+	g.breathLevelMax = v
+	g.outOfBreathPoint = v / 2.0
+	g.currentBreathLevel = minf(g.currentBreathLevel, v)
+
+
+static func set_last(v: float) -> void:
+	_breath_changed = true
+	g.her.passOutMax = v
+	g.her.passOutFactor = minf(g.her.passOutFactor, v)
 
 
 ## All back to the game's.
@@ -66,6 +87,11 @@ static func reset() -> void:
 	set_clench_time(0.0)
 	set_clench_taps(true)
 	set_spam_j(false)
+	if _breath_changed:
+		set_air(AIR)
+		if g.her != null:
+			set_last(LAST)
+		_breath_changed = false
 
 
 ## The tab's hand settings, under its rows.

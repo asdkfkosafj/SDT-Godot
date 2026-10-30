@@ -166,7 +166,9 @@ static func _apply() -> void:
 		if _off.has(c.name) and not _allow.has(c.name) and (not _filters.has(c.name) or _filters[c.name].call(c)):
 			c.cancel()
 	for h in hooks():
-		var watch := func(c): _seen[h] = [c, Flash.tick_count, _allow.has(h)]
+		var watch := func(c):
+			_seen[h] = [c, Flash.tick_count, _allow.has(h)]
+			Journal.observed(h, c, _allow.has(h))   # the event log reads how it ended
 		_watch_fns[h] = watch
 		Hooks.add_before(h, watch, OWNER, -100000)   # first: sees every call, then reads how it ended
 		if _off.has(h):

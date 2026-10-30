@@ -49,9 +49,10 @@ func _default_help() -> String:
 
 
 ## Developer mode, Vanilla mode or the classic menu changed: hide the tab (and close) when it is off; the behaviour
-## tabs' vetoes and observers only exist while it is on.
+## tabs' vetoes and observers, their hand settings and the event log (Tools > Log) only exist while it is on.
 func apply_mode() -> void:
 	DevBehaviour.sync(_enabled())
+	Journal.sync(_enabled())
 	if _root == null:
 		return
 	if not _enabled():

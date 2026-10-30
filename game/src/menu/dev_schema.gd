@@ -18,6 +18,33 @@ static func _tools() -> Dictionary:
 		{"title": "Workbench", "controls": [
 			MenuSchema.note("Experimental and diagnostic tools appear here."),
 		]},
+		_her_tools(),   # short, above the log
+		DevJournalTab.group(),
+	]}
+
+
+## Her breath, for testing: her air and how long she lasts without it (DevTuning; the game's again when Developer
+## mode goes off). The "now" sliders set the current levels, as DialogueActions' breath / oxygen.
+static func _her_tools() -> Dictionary:
+	var her := func(): return g.her
+	return {"title": "Her", "controls": [
+		MenuSchema.note("Her breath, for testing. Air: how much breath she has. Oxygen: how long she lasts with no air before she passes out. While Developer mode is on; ↺ is the game's."),
+		{"type": "slider", "label": "Air", "tip": "How much breath she has (the game: 50). She is out of breath past half of it; at none she starts to pass out.",
+			"min": 10.0, "max": 200.0, "step": 5.0, "get": func(): return g.breathLevelMax, "set": func(v: float): DevTuning.set_air(v),
+			"format": func(v): return "%d" % int(v), "reset": func(): DevTuning.set_air(DevTuning.AIR)},
+		{"type": "slider", "label": "Oxygen", "tip": "Before passing out: how long she lasts with no air left (the game: 40, about 27 s).",
+			"min": 5.0, "max": 200.0, "step": 5.0, "get": func(): return her.call().passOutMax, "set": func(v: float): DevTuning.set_last(v),
+			"format": func(v): return "%d" % int(v), "reset": func(): DevTuning.set_last(DevTuning.LAST)},
+		{"type": "slider", "label": "Air now", "tip": "How much air she has left now (100%: full).",
+			"min": 0.0, "max": 100.0, "step": 1.0,
+			"get": func(): return 100.0 - g.currentBreathLevel / g.breathLevelMax * 100.0,
+			"set": func(v: float): g.currentBreathLevel = g.breathLevelMax * (100.0 - v) / 100.0,
+			"format": func(v): return "%d%%" % int(v), "reset": func(): g.currentBreathLevel = 0.0},
+		{"type": "slider", "label": "Oxygen now", "tip": "How far she is from passing out now (100%: not at all).",
+			"min": 0.0, "max": 100.0, "step": 1.0,
+			"get": func(): return 100.0 - her.call().passOutFactor / her.call().passOutMax * 100.0,
+			"set": func(v: float): her.call().passOutFactor = her.call().passOutMax * (100.0 - v) / 100.0,
+			"format": func(v): return "%d%%" % int(v), "reset": func(): her.call().passOutFactor = 0.0},
 	]}
 
 
