@@ -236,7 +236,7 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.pushBack` | how far her head is pushed back off him this tick (0), before the `minPos`/`maxPos` clamp | `her.pos` |
 | `Neck.depth` | how deep the throat bulge sits (his depth / 400) | `neck.lastDepth` |
 | `Neck.throatBulge` | how much her throat bulges (her throat bulge setting) | |
-| `Neck.bulgeCap` | the most the bulge pushes the neck out, px (35) | |
+| `Neck.bulgeCap` | the most the bulge pushes the neck out, px (35); throatcumbulge's "Neck follows his size" scales it with his width | |
 | `Neck.band` | a band that holds the front of her neck in, asked once per render: `null`, or `{top, bottom, inside, soft}` (edges as depth along the front, px her neck may push out between them, depth over which that blends into the free bulge past each edge); a second holder returns `Neck.narrower(value, its own)` | `neck.renderedPoints` |
 
 `Hooks.explain(name)` returns the last evaluation step by step (recording starts with the first call),

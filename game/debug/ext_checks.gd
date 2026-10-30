@@ -1009,6 +1009,18 @@ func _swallow_queue_checks() -> void:
 	x.set_setting("speed", 1.0)
 	x.set_setting("wince", true)
 	_check("speed and squint back: no modifiers", not Hooks.has_value(&"Her.swallowSpeed") and not Hooks.has_value(&"Her.swallowWince"))
+	_check("neck follows his size: off by default, the game's limit", not x.get_setting("follow_size")
+		and not Hooks.has_value(&"Neck.bulgeCap"))
+	var scales := [g.him.penisLengthScale, g.him.penisWidthScale]
+	x.set_setting("follow_size", true)
+	g.him.loadPenisScales(1.0, 1.2)
+	_check("neck follows his size: the bulge limit grows with his width",
+		is_equal_approx(Hooks.value(&"Neck.bulgeCap", her.head.neck, 35.0), 35.0 * g.him.getPenisWidthWithTwitch()))
+	g.him.loadPenisScales(1.0, 0.8)
+	_check("neck follows his size: never below the game's limit", Hooks.value(&"Neck.bulgeCap", her.head.neck, 35.0) == 35.0)
+	x.set_setting("follow_size", false)
+	g.him.loadPenisScales(scales[0], scales[1])
+	_check("neck follows his size off: no modifier", not Hooks.has_value(&"Neck.bulgeCap"))
 	her.cumInMouth = was[0]
 	her.swallowing = was[1]
 	her.speaking = was[2]

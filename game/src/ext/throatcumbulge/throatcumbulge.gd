@@ -22,6 +22,8 @@ extends SDTExtension
 ##   - "Swallow speed": how fast a swallow plays;
 ##   - "Squint when swallowing": off, she swallows without squinting.
 ## Extra swallows say nothing (no SWALLOW dialogue line each time).
+## "Neck follows his size" (off by default): the game stops her throat bulge at 35 px however wide he is; with this
+## the limit grows with his width (value point Neck.bulgeCap: 35 x his width, never below the game's).
 
 const MAX_BULGE := 1.5
 const CHANGE_SPEED := 0.7
@@ -44,6 +46,7 @@ var _prev_swallowing := false
 var last_amount := 0          # how much the last swallow took
 var queued := 0               # swallows waiting for the one she is swallowing
 var _gap := 0                 # ticks since the last swallow ended, while some wait
+var _cap_fn := Callable()
 var _speed_fn := Callable()
 var _queue_hook := false
 
@@ -62,6 +65,8 @@ func _setup() -> void:
 		"desc": "How much her throat bulges when she swallows."})
 	setting("swallow_amount", 0.25, {"label": "Swallow bulge size", "min": 0, "max": 1, "step": 0.01,
 		"desc": "0.25 is about the game's."})
+	setting("follow_size", false, {"label": "Neck follows his size",
+		"desc": "Her throat bulge grows with his width (the game stops it at the same size for every width)."})
 	setting("guzzle", false, {"label": "Swallow until empty",
 		"desc": "When a swallow ends with cum left and her mouth free, she swallows again until it is empty."})
 	setting("pump", PUMP_MODES[0], {"label": "Swallow while he cums", "options": PUMP_MODES,
@@ -93,12 +98,13 @@ func _enable() -> void:
 		{"after": "Throat bulge", "wide": true}))
 	menu_control("behaviour", "Reactions", MenuSchema.setting_control(self, "swallow_amount",
 		{"after": "Throat bulge", "visible": func(): return get_setting("swallow_mode") in SWALLOW_MODES.slice(2, 4)}))
-	for key in ["guzzle", "pump", "per_swallow", "queue", "queue_gap", "dry", "speed", "wince"]:
+	for key in ["follow_size", "guzzle", "pump", "per_swallow", "queue", "queue_gap", "dry", "speed", "wince"]:
 		var info := {"after": "Throat bulge", "wide": key in ["pump", "per_swallow", "queue", "queue_gap", "speed"]}   # sliders: the label above
 		if key in ["queue_gap", "dry"]:
 			info["visible"] = func(): return get_setting("queue") > 0
 		menu_control("behaviour", "Reactions", MenuSchema.setting_control(self, key, info))
 	hook_after(&"Him.nextSpurt", func(_c): _on_spurt())
+	_cap_fn = func(v, _neck) -> float: return v * maxf(1.0, g.him.getPenisWidthWithTwitch())
 	_speed_fn = func(v, _her) -> float: return v * float(get_setting("speed"))
 	_apply_mods()
 	queued = 0
@@ -108,7 +114,7 @@ func _enable() -> void:
 
 
 func _setting_changed(key: String, _value) -> void:
-	if key in ["speed", "wince"]:
+	if key in ["follow_size", "speed", "wince"]:
 		_apply_mods()
 	elif key == "queue":
 		queued = mini(queued, int(get_setting("queue")))
@@ -125,10 +131,14 @@ func _apply_queue() -> void:
 	_queue_hook = want
 
 
-## The swallow's speed and squint (Her.swallowSpeed, Her.swallowWince); no modifiers while they are the game's.
+## The swallow's speed and squint (Her.swallowSpeed, Her.swallowWince) and the neck's bulge limit (Neck.bulgeCap);
+## no modifiers while they are the game's.
 func _apply_mods() -> void:
 	unmodify(&"Her.swallowSpeed")
 	unmodify(&"Her.swallowWince")
+	unmodify(&"Neck.bulgeCap")
+	if get_setting("follow_size"):
+		modify(&"Neck.bulgeCap", {"phase": Hooks.MOOD, "op": "fn", "fn": _cap_fn})
 	if not is_equal_approx(float(get_setting("speed")), 1.0):
 		modify(&"Her.swallowSpeed", {"phase": Hooks.MOOD, "op": "fn", "fn": _speed_fn})
 	if not get_setting("wince"):
