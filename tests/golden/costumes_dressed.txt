@@ -601,7 +601,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
             jawBack [FlashMovieClip#991] f=1/1 pos=(-28.6,84.8) sc=(1.00,1.00) rot=6.0
               jawBulgeOutline [FlashMovieClip#990] f=1/81 pos=(67.8,50.2) sc=(1.00,1.00) rot=0.0
                  [FlashShape#987] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-            neck [Neck#992] f=1/1 pos=(-32.0,131.8) sc=(1.00,1.00) rot=367.6
+            neck [Neck#992] f=1/1 pos=(-32.0,131.8) sc=(1.00,1.00) rot=7.6
               outline0 [FlashMovieClip#226] f=1/1 pos=(77.3,-74.7) sc=(1.00,1.00) rot=0.0
               outline2 [FlashMovieClip#226] f=1/1 pos=(59.3,-26.9) sc=(1.00,1.00) rot=0.0
               outline3 [FlashMovieClip#226] f=1/1 pos=(57.5,16.8) sc=(1.00,1.00) rot=0.0
@@ -770,7 +770,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
             rgbFill [FlashMovieClip#1314] f=1/1 pos=(17.8,-20.7) sc=(1.00,1.00) rot=0.0
                [FlashShape#1313] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#1315] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-          collarContainer [FlashMovieClip#1342] f=1/1 pos=(-32.5,-24.4) sc=(1.00,1.00) rot=367.6
+          collarContainer [FlashMovieClip#1342] f=1/1 pos=(-32.5,-24.4) sc=(1.00,1.00) rot=7.6
             collar [FlashMovieClip#1341] f=4/4 'Gem Choker' pos=(12.1,79.8) sc=(1.00,1.00) rot=-3.0
               rgbFill2 [FlashMovieClip#1336] f=1/1 pos=(-16.3,-8.3) sc=(1.00,1.00) rot=0.0 ct=(1.00,1.00,1.00|255,255,255)
                  [FlashShape#1335] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0

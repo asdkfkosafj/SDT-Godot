@@ -541,7 +541,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
             jawBack [FlashMovieClip#991] f=1/1 pos=(-28.6,84.8) sc=(1.00,1.00) rot=-0.0
               jawBulgeOutline [FlashMovieClip#990] f=1/81 pos=(67.8,50.2) sc=(1.00,1.00) rot=0.0
                  [FlashShape#987] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-            neck [Neck#992] f=1/1 pos=(-32.0,131.8) sc=(1.01,1.01) rot=367.3
+            neck [Neck#992] f=1/1 pos=(-32.0,131.8) sc=(1.01,1.01) rot=7.3
               outline0 [FlashMovieClip#226] f=1/1 pos=(77.3,-74.7) sc=(1.00,1.00) rot=0.0
               outline2 [FlashMovieClip#226] f=1/1 pos=(59.3,-26.9) sc=(1.00,1.00) rot=0.0
               outline3 [FlashMovieClip#226] f=1/1 pos=(57.5,16.8) sc=(1.00,1.00) rot=0.0
@@ -706,7 +706,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
             rightEyebrowFill [FlashMovieClip#1284] f=113/200 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 ct=(1.00,1.00,1.00|45,25,16)
                [FlashShape#1281] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
           gagFront [FlashMovieClip#1316] f=1/4 'None' pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-          collarContainer [FlashMovieClip#1342] f=1/1 pos=(-32.5,-24.4) sc=(1.01,1.01) rot=367.3
+          collarContainer [FlashMovieClip#1342] f=1/1 pos=(-32.5,-24.4) sc=(1.01,1.01) rot=7.3
             collar [FlashMovieClip#1341] f=2/4 'Leather' pos=(12.1,79.8) sc=(1.00,1.00) rot=-3.0
               rgbFill [FlashMovieClip#1318] f=1/1 pos=(-18.1,-5.4) sc=(1.00,1.00) rot=0.0
                  [FlashShape#1317] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0

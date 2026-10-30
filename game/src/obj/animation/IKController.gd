@@ -323,8 +323,8 @@ func trigBound(v_: float) -> float:
 
 func getEndRotation() -> float:
 	var a := 0.0
-	for t in endRotationTargets:
-		a += t.rotation_degrees / 180.0 * PI
+	for t in endRotationTargets:   # Flash's rotation is always -180..180; a Godot node keeps what was assigned
+		a += wrapf(t.rotation_degrees, -180.0, 180.0) / 180.0 * PI
 	return a + endRotationAngle / 180.0 * PI
 
 

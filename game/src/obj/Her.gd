@@ -2008,7 +2008,7 @@ func updateNeck() -> void:
 	var neckP: Vector2 = globalToLocal(head.localToGlobal(Vector2(head.neck.x, head.neck.y)))
 	var torsoP: Vector2 = globalToLocal(torso.localToGlobal(Vector2(0, 0)))
 	var ang: float = g.getAngle(torsoP.x - neckP.x, torsoP.y - neckP.y) + 180.0
-	head.neck.rotation_degrees = ang
+	head.neck.rotation_degrees = wrapf(ang, -180.0, 180.0)   # Flash keeps rotation in -180..180 (ang reaches 367)
 	collarContainer.rotation_degrees = head.neck.rotation_degrees
 
 
