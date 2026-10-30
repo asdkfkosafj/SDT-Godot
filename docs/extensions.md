@@ -231,6 +231,7 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.clenchTime` | how long she keeps her teeth clenched, ticks (the game: 60..179 at random) | `her.clenchedTeethTime` |
 | `Her.clenchTaps` | whether she taps him as she clenches her teeth (true) | |
 | `Her.teethClosing` | whether her clenched teeth close further this tick (true; false holds them where they are) | `her.clenchTeethRatio` |
+| `Her.shockFade` | how much her eyes' shock (`her.eyelidMotion["shock"]`, set by `Her.shock`) eases this tick (1), while it is above 0 | `her.eyelidMotion["shock"]` |
 | `Her.breathMax` | how much breath she has (50), once per tick; a change keeps how much of it is used. After changing its modifiers, `g.resolveBreath()` applies them at once | `g.breathLevelMax` |
 | `Her.outOfBreathPoint` | past this she is out of breath (half of `Her.breathMax`), right after it | `g.outOfBreathPoint` |
 | `Her.passOutMax` | how long she lasts with no air before passing out (40), right after it; a change keeps how close she is | `her.passOutMax` |

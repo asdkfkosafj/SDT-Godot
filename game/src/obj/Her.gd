@@ -1741,7 +1741,10 @@ func updateElements() -> void:
 		lookPoint = Hooks.value(&"Her.lookTarget", self, lookPoint)
 	lookAt(lookPoint)
 	if eyelidMotion["shock"] > 0:
-		eyelidMotion["shock"] -= 1
+		if Hooks.has_value(&"Her.shockFade"):   # HOOK value point: how much her eyes' shock eases this tick (1)
+			eyelidMotion["shock"] = maxf(0.0, eyelidMotion["shock"] - Hooks.value(&"Her.shockFade", self, 1.0))
+		else:
+			eyelidMotion["shock"] -= 1
 	eyelidShock = eyelidMotion["shock"]
 	if Hooks.has_value(&"Her.eyelidShock"):   # HOOK value point: how shocked her eyes are (wider, smaller iris)
 		eyelidShock = Hooks.value(&"Her.eyelidShock", self, eyelidShock)
