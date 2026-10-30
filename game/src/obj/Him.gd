@@ -468,6 +468,8 @@ func setLeftArmPosition(p: int) -> void:
 	currentLeftArmPosition = p
 	leftArmContainer.visible = currentLeftArmPosition == 1 and not bodyHidden
 	g.inGameMenu.updateHisLeftArmList()
+	if Hooks.has(&"Him.setLeftArmPosition"):   # HOOK
+		Hooks.after(&"Him.setLeftArmPosition", self, [p])
 
 
 func resetArmPosition() -> void:
@@ -509,6 +511,8 @@ func givePleasure(amount: float) -> void:
 	var p := amount * 0.01 if amount > 0 else -amount * 0.01
 	pleasure = minf(ejacPleasure + 6.0, pleasure + p)
 	buildUp += p
+	if Hooks.has(&"Him.givePleasure"):   # HOOK
+		Hooks.after(&"Him.givePleasure", self, [amount])
 
 
 func smearLipstick(p: float, movement: float) -> void:

@@ -268,10 +268,12 @@ static func _clothes() -> Dictionary:
 				func(): tan.call().alphaSliderReleased(), func(): tan.call().resetAlpha()),
 		]},
 		{"title": "Arms", "controls": [
-			arrows("Left arm", "Where she keeps her left arm.", func(): return Her.armPositions,
-				func(): return g.her.currentLeftArmPosition, _m().leftArmLeftClicked, _m().leftArmRightClicked),
-			arrows("Right arm", "Where she keeps her right arm.", func(): return Her.armPositions,
-				func(): return g.her.currentRightArmPosition, _m().rightArmLeftClicked, _m().rightArmRightClicked),
+			arrows("Left arm", "Where she keeps her left arm.", func(): return Her.armPositionsFor(true),
+				func(): return Her.armPositionsFor(true).find(Her.armPositions[g.her.currentLeftArmPosition]),
+				_m().leftArmLeftClicked, _m().leftArmRightClicked),
+			arrows("Right arm", "Where she keeps her right arm.", func(): return Her.armPositionsFor(false),
+				func(): return Her.armPositionsFor(false).find(Her.armPositions[g.her.currentRightArmPosition]),
+				_m().rightArmLeftClicked, _m().rightArmRightClicked),
 		]},
 	]}
 

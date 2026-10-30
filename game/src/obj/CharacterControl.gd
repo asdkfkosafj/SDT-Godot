@@ -515,13 +515,15 @@ func setArmSkin(force: bool = false) -> void:
 	var h: Her = g.her
 	setArmFrame(h.rightArmContainer.upperArm, h.isRightArmFree(), force)
 	setArmFrame(h.rightForeArmContainer.upperArm.foreArm, h.isRightArmFree(), force)
-	setArmFrame(h.rightForeArmContainer.upperArm.foreArm.hand, h.isRightArmFree(), force, g.rightHandJobMode)
+	setArmFrame(h.rightForeArmContainer.upperArm.foreArm.hand, h.isRightArmFree(), force, g.rightHandJobMode or h.rightHandClosed)
 	if h.rightForeArmContainer.upperArm.foreArm.hand.get("grip"):
 		h.rightForeArmContainer.upperArm.foreArm.hand.grip.visible = true
 		h.rightForeArmContainer.upperArm.foreArm.hand.grip.gotoAndStop(currentSkinType)
 	setArmFrame(h.leftArmContainer.upperArm, h.isLeftArmFree(), force)
 	setArmFrame(h.leftArmContainer.upperArm.foreArm, h.isLeftArmFree(), force)
-	setArmFrame(h.leftArmContainer.upperArm.foreArm.hand, h.isLeftArmFree(), force, g.leftHandJobMode)
+	setArmFrame(h.leftArmContainer.upperArm.foreArm.hand, h.isLeftArmFree(), force, g.leftHandJobMode or h.leftHandClosed)
+	h.leftArmContainer.upperArmCostume.foreArmCostume.handCostume.nailPolish.visible = not h.leftHandClosed
+	h.rightForeArmContainer.upperArmCostume.foreArmCostume.handCostume.nailPolish.visible = not h.rightHandClosed
 	armwearControl.resetElement()
 
 
@@ -948,8 +950,8 @@ func setBraFill(c, n: String = "rgbFill") -> void:
 func setArmwear(id: int) -> void:
 	var h: Her = g.her
 	var label: String = armwearNameList[id]
-	tryToSetFrameLabel(h.rightForeArmContainer.upperArmCostume.foreArmCostume.handCostume, "Grip" if g.rightHandJobMode else "Free")
-	tryToSetFrameLabel(h.leftArmContainer.upperArmCostume.foreArmCostume.handCostume, "Grip" if g.leftHandJobMode else "Free")
+	tryToSetFrameLabel(h.rightForeArmContainer.upperArmCostume.foreArmCostume.handCostume, "Grip" if g.rightHandJobMode or h.rightHandClosed else "Free")
+	tryToSetFrameLabel(h.leftArmContainer.upperArmCostume.foreArmCostume.handCostume, "Grip" if g.leftHandJobMode or h.leftHandClosed else "Free")
 	tryToSetFrameLabel(h.rightForeArmContainer.upperArmCostume.foreArmCostume.glove, label)
 	tryToSetFrameLabel(h.leftArmContainer.upperArmCostume.foreArmCostume.glove, label)
 	tryToSetFrameLabel(h.rightForeArmContainer.upperArmCostume.foreArmCostume.handCostume.glove, label)

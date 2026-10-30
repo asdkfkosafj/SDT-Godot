@@ -261,6 +261,8 @@ func setPenisOut(out: bool = true) -> void:
 		sceneLayer.addChildAt(frontLayer.removeChild(him), 0)
 		her.leftHandOverContainer.addChild(frontLayer.removeChild(her.leftHandOver))
 		penisOut = false
+	if Hooks.has(&"g.setPenisOut"):   # HOOK
+		Hooks.after(&"g.setPenisOut", self, [out])
 
 
 func setAuto(mode: int) -> void:

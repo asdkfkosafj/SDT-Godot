@@ -10,7 +10,9 @@ const AHEGAO_MOOD := "Ahegao"
 const fullUp := -40.0
 const fullDown := 250.0
 const range := fullDown - fullUp
-const armPositions := ["Back", "On Legs", "On His Legs", "Hand Job", "Loose"]
+## Her arm positions: the game's five, then the ones extensions add (addArmPosition), in the order they were added.
+static var armPositions: Array = ["Back", "On Legs", "On His Legs", "Hand Job", "Loose"]
+const GAME_ARM_POSITIONS := 5
 const randomArmPositions := ["Back", "On Legs", "On His Legs", "Loose"]
 const MouthShapeAH := {"name": "AH", "upperLip": 51, "lowerLip": 61, "jaw": -4.6}
 const MouthShapeOO := {"name": "OO", "upperLip": 59, "lowerLip": 64, "jaw": -6.6}
@@ -138,6 +140,9 @@ var currentLeftArmPosition: int = 0
 var currentRightArmPosition: int = 0
 var leftArmFree := false
 var rightArmFree := false
+## A hand closed in a fist (the hand art's grip frame, no nail polish shown), set by an extension's arm position.
+var leftHandClosed := false
+var rightHandClosed := false
 var leftIsFirstHandJobHand := false
 var armsPushing := false
 var armsPushPower: float = 0.0
@@ -541,10 +546,109 @@ func setRandomArmPosition() -> void:
 		setRightArmPosition(int(floor(randf() * (randomArmPositions.size() - 1))), true)
 
 
+# ---------------------------------------------------------------- arm positions added by extensions
+
+## name -> {"left": Callable(her) or null, "right": Callable(her) or null, "tap": bool, "owner": String}
+static var _extraArms: Dictionary = {}
+
+
+## Adds an arm position to the end of the list (Her > Left arm / Right arm, the "arms:" field of the character code,
+## dialogue arm triggers by name). left / right set her arm up when she takes the position, called with her
+## (leftArmIK.newTarget, setEndRotationTarget, layers, leftHandClosed...); an empty Callable leaves the position out of
+## that arm's list. spec: "tap" (false: that hand doesn't tap him while she's held), "slip" (ticks the arm takes to
+## drop when she passes out, from where it is; default 15), "pass_out" (Callable(her, left: bool) run instead of the
+## drop). Returns its index; a name already added is replaced in place.
+static func addArmPosition(n: String, left: Callable, right: Callable, owner := "", spec := {}) -> int:
+	var i := armPositions.find(n)
+	if i < 0:
+		armPositions.append(n)
+		i = armPositions.size() - 1
+	elif i < GAME_ARM_POSITIONS:
+		push_error("Her.addArmPosition: %s is one of the game's positions" % n)
+		return i
+	_extraArms[n] = {"left": left if left.is_valid() else null, "right": right if right.is_valid() else null,
+		"tap": spec.get("tap", true), "slip": float(spec.get("slip", 15.0)), "pass_out": spec.get("pass_out", Callable()),
+		"owner": owner}
+	return i
+
+
+## Takes out the positions an extension added; an arm in one of them goes behind her back.
+static func removeArmPositions(owner: String) -> void:
+	var her: Her = g.her if g else null
+	var left_name: String = armPositions[her.currentLeftArmPosition] if her else ""
+	var right_name: String = armPositions[her.currentRightArmPosition] if her else ""
+	for n in _extraArms.keys():
+		if _extraArms[n]["owner"] == owner:
+			_extraArms.erase(n)
+			armPositions.erase(n)
+	if her:
+		her.currentLeftArmPosition = maxi(0, armPositions.find(left_name))
+		her.currentRightArmPosition = maxi(0, armPositions.find(right_name))
+		her.setLeftArmPosition()
+		her.setRightArmPosition()
+
+
+## Whether that arm can take position i (extension positions can be for one arm only).
+static func armPositionAllowed(i: int, left: bool) -> bool:
+	if i < GAME_ARM_POSITIONS:
+		return i >= 0
+	if i >= armPositions.size():
+		return false
+	return _extraArms[armPositions[i]]["left" if left else "right"] != null
+
+
+## The positions that arm can take, in list order (the new menu's Left arm / Right arm lists).
+static func armPositionsFor(left: bool) -> Array:
+	var out := []
+	for i in armPositions.size():
+		if armPositionAllowed(i, left):
+			out.append(armPositions[i])
+	return out
+
+
+## The next position that arm can take from `from` in direction dir (+1 / -1), or `from` at the end of the list.
+static func stepArmPosition(from: int, dir: int, left: bool) -> int:
+	var i := from + dir
+	while i >= 0 and i < armPositions.size():
+		if armPositionAllowed(i, left):
+			return i
+		i += dir
+	return from
+
+
+func _setUpExtraArm(p: int, left: bool) -> void:
+	if p < GAME_ARM_POSITIONS or p >= armPositions.size():
+		return
+	var fn = _extraArms[armPositions[p]]["left" if left else "right"]
+	if fn != null:
+		fn.call(self)
+
+
+## She passed out with that arm in an extension position: it drops from where it is (or the position's own pass_out).
+func _dropExtraArm(p: int, left: bool) -> bool:
+	if p < GAME_ARM_POSITIONS or p >= armPositions.size():
+		return false
+	var spec: Dictionary = _extraArms[armPositions[p]]
+	if spec["pass_out"].is_valid():
+		spec["pass_out"].call(self, left)
+	elif left:
+		leftArmIK.startDropping(spec["slip"])
+		g.changeLayer(leftHandOver, g.backLayer)
+	else:
+		rightArmIK.startDropping(spec["slip"])
+	return true
+
+
+func _armCanTap(p: int) -> bool:
+	return p < GAME_ARM_POSITIONS or p >= armPositions.size() or _extraArms[armPositions[p]]["tap"]
+
+
 func setLeftArmPosition(p: int = -1, update: bool = true) -> void:
 	if p == -1:
 		p = currentLeftArmPosition
 	leftHandOver.visible = false
+	leftArmIK.reversedEnd = false
+	leftHandClosed = false
 	match p:
 		1:
 			g.changeLayer(leftArmContainer, self, leftLegContainer)
@@ -570,6 +674,8 @@ func setLeftArmPosition(p: int = -1, update: bool = true) -> void:
 				leftArmIK.newTarget(leftHandOnLegs, leftLegContainer.leg, false)
 				leftArmIK.setEndRotationTarget(-50, [g.her.torso.leg, g.her.torso])
 			startArmsPassOut(true, false)
+		_:
+			_setUpExtraArm(p, true)
 	currentLeftArmPosition = p
 	checkHandJobMode()
 	if passedOut:
@@ -586,6 +692,8 @@ func setLeftArmPosition(p: int = -1, update: bool = true) -> void:
 func setRightArmPosition(p: int = -1, update: bool = true) -> void:
 	if p == -1:
 		p = currentRightArmPosition
+	rightArmIK.reversedEnd = false
+	rightHandClosed = false
 	match p:
 		1:
 			rightArmIK.stopDropping()
@@ -603,6 +711,8 @@ func setRightArmPosition(p: int = -1, update: bool = true) -> void:
 				rightArmIK.newTarget(rightHandOnLegs, torso.leg, false)
 				rightArmIK.setEndRotationTarget(-50, [g.her.torso.leg, g.her.torso, g.her])
 			startArmsPassOut(false, true)
+		_:
+			_setUpExtraArm(p, false)
 	currentRightArmPosition = p
 	checkHandJobMode()
 	if passedOut:
@@ -1117,6 +1227,10 @@ func passOut() -> void:
 
 
 func startArmsPassOut(left: bool = true, right: bool = true) -> void:
+	if left and _dropExtraArm(currentLeftArmPosition, true):
+		left = false
+	if right and _dropExtraArm(currentRightArmPosition, false):
+		right = false
 	if left:
 		if armPositions[currentLeftArmPosition] == "On Legs":
 			leftArmIK.startDropping(5)
@@ -1265,8 +1379,9 @@ func tapHands(extra: float = 0.0) -> void:
 		var power := randf() + (1.0 - passOutFactor / passOutMax) * 8.0 + extra
 		if power > 2:
 			if randf() > 0.2:
-				rightArmIK.tap(power / 9.0)
-			else:
+				if _armCanTap(currentRightArmPosition):
+					rightArmIK.tap(power / 9.0)
+			elif _armCanTap(currentLeftArmPosition):
 				leftArmIK.tap(power / 9.0)
 
 

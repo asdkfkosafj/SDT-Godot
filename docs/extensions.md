@@ -141,6 +141,19 @@ The vanilla game has four moods (`Her.currentMood`). Extensions that add moods (
 Everyone else reads `mood()` (or `Moods.current()`): the extended mood while one is active, else the vanilla one.
 The `mood_changed` event reports every change with the mood name.
 
+## Arm positions
+
+`Her.armPositions` starts with the game's five (Back, On Legs, On His Legs, Hand Job, Loose); extensions add more
+with `Her.addArmPosition(name, left, right, id, spec)`, and `Her.removeArmPositions(id)` takes them out again (an arm
+in one goes behind her back). `left` / `right` are `Callable(her)`s that set the arm up when she takes the position
+(`her.leftArmIK.newTarget(point, space, true)`, `setEndRotationTarget`, layers, `her.leftHandClosed = true` for a
+fist); an empty `Callable()` keeps the position out of that arm's list. `spec`: `"tap"` (false: that hand doesn't tap
+him while she's held), `"slip"` (ticks the arm takes to drop when she passes out, default 15), `"pass_out"`
+(`Callable(her, left)` run instead of the drop). The menu's Left arm / Right arm lists, the "arms:" character code
+field and dialogue triggers use the names. `Her.armPositionsFor(left)`, `Her.armPositionAllowed(i, left)` and
+`Her.stepArmPosition(from, dir, left)` list and step through the positions one arm can take. The armoverhaul plugin
+(`Mods/Plugins/armoverhaul`) adds 18.
+
 ## Hooks
 
 GDScript cannot replace a method at runtime (the Loader's `lProxy` did this for Loader mods), so each game method
