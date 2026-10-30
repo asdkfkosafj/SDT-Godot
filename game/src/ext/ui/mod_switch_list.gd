@@ -2,7 +2,8 @@ class_name ModSwitchList
 extends RefCounted
 ## Port extension: a new-menu control listing the mods of one mod catalog list (ModCatalog.add_picker), each with an
 ## on / off switch, so several can be on at once (ExtraMod's face mods, ExtraModHim's body mods).
-## on_toggle(on: bool, entry) applies or removes the mod.
+## on_toggle(on: bool, entry) applies or removes the mod; the list then saves her, as the game does after every change
+## in its menus (the mods she wears are part of her character, restored at the next start).
 
 
 ## A "custom" control spec's build(): the list, refreshed while the menu is open.
@@ -36,7 +37,7 @@ static func _refresh(box: VBoxContainer, list_key: String, on_toggle: Callable, 
 			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var b := CheckButton.new()
 			b.focus_mode = Control.FOCUS_NONE
-			b.toggled.connect(func(on: bool): on_toggle.call(on, e))
+			b.toggled.connect(func(on: bool): on_toggle.call(on, e); g.saveData.saveCharData())
 			row.add_child(l)
 			row.add_child(b)
 			row.set_meta("switch", b)
