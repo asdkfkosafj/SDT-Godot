@@ -615,7 +615,8 @@ func _show() -> void:
 
 ## One section's (or the search results') cards, added to the content and kept for the next visit. The cards are
 ## made now; their rows are built a few per frame (_pump), so opening a big section never stalls a frame. A section
-## with "fold" ({group title: folded at first}) gets a fold button on each card (MenuFold; not in search results).
+## with "fold" ({group title: folded at first}) gets a fold button and a reset button on each card (MenuFold; not in
+## search results).
 func _build_view(groups: Array, empty_text: String, sec := {}) -> Control:
 	var view := VBoxContainer.new()
 	view.add_theme_constant_override("separation", 6)
@@ -641,7 +642,7 @@ func _build_view(groups: Array, empty_text: String, sec := {}) -> Control:
 		view.add_child(card)
 		var body: VBoxContainer = cv
 		if sec.has("fold"):
-			body = MenuFold.card(h, hl, cv, sec, grp, specs)
+			body = MenuFold.card(h, hl, cv, sec, grp, specs, _refresh_rows)
 		for spec in specs:
 			pending.append([body, spec])
 	if pending.is_empty() and empty_text != "":

@@ -280,6 +280,35 @@ func _fold_checks() -> void:
 		and PortSettings.get_value("menu_fold", "behaviour/Reactions", false) == true)
 	_check("fold: a folded card shows how many settings it holds", (cards["REACTIONS"][0].get_child(2) as Label).visible
 		and (cards["REACTIONS"][0].get_child(2) as Label).text.begins_with("("))
+	# a card's reset: change a game checkbox, a game slider and extension settings in Reactions and the collar's
+	# stiffness in Resistance; ↺ once only asks, twice sets Reactions back and leaves Resistance as it is
+	var x = Extensions.get_extension("throatcumbulge")
+	var om = g.inGameMenu.optionsMenu
+	if g.breathing:
+		g.inGameMenu.cbBreathingClicked()
+	x.set_setting("queue", 3)
+	x.set_setting("speed", 1.5)
+	g.inGameMenu.mbDefaultThroatBulgeClicked()
+	var bulge0: float = g.throatBulgeAmount
+	om.throatBulgeSlider.setPos(0.9)
+	g.inGameMenu.throatBulgeSliderChanged()
+	ThroatRings.set_stiffness(0.9)
+	var hx: HBoxContainer = cards["REACTIONS"][0]
+	var r: Button = hx.get_child(hx.get_child_count() - 1)
+	r.pressed.emit()
+	_check("card reset: the first press only asks", r.text == "Reset?" and not g.breathing and x.get_setting("queue") == 3)
+	r.pressed.emit()
+	_check("card reset: the second sets Reactions back (game checkbox, game slider, extension settings)", g.breathing
+		and x.get_setting("queue") == 0 and x.get_setting("speed") == 1.0 and is_equal_approx(g.throatBulgeAmount, bulge0)
+		and r.text == "↺", "breathing %s queue %s speed %s bulge %s/%s" % [g.breathing, x.get_setting("queue"),
+		x.get_setting("speed"), g.throatBulgeAmount, bulge0])
+	_check("card reset: the other cards stay", is_equal_approx(ThroatRings.stiffness, 0.9))
+	var hr: HBoxContainer = cards["RESISTANCE"][0]
+	var rr: Button = hr.get_child(hr.get_child_count() - 1)
+	rr.pressed.emit()
+	rr.pressed.emit()
+	_check("card reset: Resistance back, the collar's stiffness too", is_equal_approx(ThroatRings.stiffness,
+		ThroatRings.DEFAULT_STIFFNESS))
 	menu.query = "swallow queue"
 	menu._show()
 	var found := 0
