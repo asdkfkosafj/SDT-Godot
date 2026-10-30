@@ -48,8 +48,10 @@ func _default_help() -> String:
 	return DEV_HELP
 
 
-## Developer mode, Vanilla mode or the classic menu changed: hide the tab (and close) when it is off.
+## Developer mode, Vanilla mode or the classic menu changed: hide the tab (and close) when it is off; the behaviour
+## tabs' vetoes and observers only exist while it is on.
 func apply_mode() -> void:
+	DevBehaviour.sync(_enabled())
 	if _root == null:
 		return
 	if not _enabled():
@@ -57,6 +59,14 @@ func apply_mode() -> void:
 		_tab_t = 0.0
 		_tab.visible = false
 	_layout()
+
+
+## Behaviour rows have no label of their own (the row draws its name): the help line uses theirs.
+func _show_help(spec) -> void:
+	if spec != null and spec.has("label_text"):
+		spec = spec.duplicate()
+		spec["label"] = spec["label_text"]
+	super(spec)
 
 
 ## The classic menu's hotkeys and Options button belong to the menu.
