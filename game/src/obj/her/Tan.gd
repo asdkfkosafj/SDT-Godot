@@ -4,6 +4,7 @@ extends RefCounted
 
 var _standardTanItems: Array = []
 var _multiPartTanItems: Array = []
+var _armTanItems: Array = []        # port: the arm parts of _standardTanItems (see updateArms)
 var _skinAlphaScaling: Dictionary = {}
 var _tanNameList: Array = ["None", "Full", "Bikini", "Swimsuit", "Swimsuit-T"]
 var _currentTanID: int = 0
@@ -106,6 +107,21 @@ func setTanAlpha(v: float = -1.0) -> void:
 			item.visible = false
 
 
+## Port fix: an arm part changing frame (her hand closing or opening, an arm going free or behind her back) gets the
+## new frame's "tan" child, which shows the whole tan art (a hand turned orange with no tan picked); it takes her tan
+## again. CharacterControl.setArmSkin calls this after every arm frame change.
+func updateArms() -> void:
+	var a := _currentTanAlpha * _currentAlphaScaling
+	var show := a > 0 and _currentTanID != 0
+	for item in _armTanItems:
+		var t = item.get("tan")
+		if t:
+			CharacterControl.tryToSetFrameLabel(t, _tanNameList[_currentTanID])
+			t.visible = show
+			if show:
+				t.alpha = a
+
+
 ## Port fix (the Loader did this): body mod pieces' own "tan" children follow her tan lines like her own parts (the
 ## game left them on their first frame, fully shown).
 func _modTanItems() -> Array:
@@ -164,6 +180,10 @@ func prepItems() -> void:
 		h.rightForeArmContainer.upperArm.foreArm, h.leftArmContainer.upperArm.foreArm.hand,
 		h.leftArmContainer.upperArm.foreArm, h.leftArmContainer.upperArm, h.leftHandOver.hand.grip, h.head.neck,
 		h.torsoBack.backside, h.torso.backside]
+	_armTanItems = [h.torso.midLayer.leftArm, h.torso.behindBackRightArm, h.rightArmContainer.upperArm,
+		h.rightForeArmContainer.upperArm.foreArm.hand, h.rightForeArmContainer.upperArm.foreArm,
+		h.leftArmContainer.upperArm.foreArm.hand, h.leftArmContainer.upperArm.foreArm, h.leftArmContainer.upperArm,
+		h.leftHandOver.hand.grip]
 	h.torso.back.tan.blendMode = "overlay"
 	_multiPartTanItems = [h.head.headTan]
 

@@ -525,6 +525,8 @@ func setArmSkin(force: bool = false) -> void:
 	h.leftArmContainer.upperArmCostume.foreArmCostume.handCostume.nailPolish.visible = not h.leftHandClosed
 	h.rightForeArmContainer.upperArmCostume.foreArmCostume.handCostume.nailPolish.visible = not h.rightHandClosed
 	armwearControl.resetElement()
+	if h._tan:   # port fix, see Tan.updateArms
+		h._tan.updateArms()
 
 
 func setArmFrame(mc, free: bool, force: bool = false, grip: bool = false) -> void:

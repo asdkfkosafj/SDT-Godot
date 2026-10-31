@@ -259,7 +259,10 @@ func setPenisOut(out: bool = true) -> void:
 		penisOut = true
 	elif penisOut:
 		sceneLayer.addChildAt(frontLayer.removeChild(him), 0)
-		her.leftHandOverContainer.addChild(frontLayer.removeChild(her.leftHandOver))
+		# port fix: only if it is still where the penis put it (plugins move her hand overlay, e.g. armoverhaul's
+		# taps; Flash threw here and left the penis out)
+		if her.leftHandOver.parent == frontLayer:
+			her.leftHandOverContainer.addChild(frontLayer.removeChild(her.leftHandOver))
 		penisOut = false
 	if Hooks.has(&"g.setPenisOut"):   # HOOK
 		Hooks.after(&"g.setPenisOut", self, [out])
