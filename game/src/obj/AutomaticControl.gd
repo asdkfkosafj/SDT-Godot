@@ -281,7 +281,8 @@ func getPos() -> Vector2:
 		if modeRatio >= 1:
 			if waitingForSingleAction:
 				waitingForSingleAction = false
-				singleAction.call()
+				if singleAction.is_valid():   # none yet: Flash's TypeError, ignored (armoverhaul waits with no action)
+					singleAction.call()
 			else:
 				singleActionTime = 0
 			singleActionTimer = 0
