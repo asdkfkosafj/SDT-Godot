@@ -465,9 +465,13 @@ func _behaviour_checks() -> void:
 	air["Oxygen"]["set"].call(80.0)
 	_check("Air 100: out of breath at half of it; Oxygen 80", g.breathLevelMax == 100.0 and g.outOfBreathPoint == 50.0
 		and g.her.passOutMax == 80.0)
-	var mood_air := Hooks.add_modifier(&"Her.breathMax", {"phase": Hooks.MOOD, "op": "set", "value": 4.0}, "menu_checks")
+	# a mood's lowered breath, as moremoods does it: a share of her base air
+	var mood_air := Hooks.add_modifier(&"Her.breathMax", {"phase": Hooks.MOOD, "op": "fn",
+		"fn": func(v, _her): return v * 4.0 / g.BREATH_MAX}, "menu_checks")
 	g.resolveBreath()
-	_check("Air by hand wins over a mood's (moremoods' lowered breath)", g.breathLevelMax == 100.0, str(g.breathLevelMax))
+	_check("Air by hand is her base, a mood scales it (moremoods' lowered breath: 4 of 50)", g.breathLevelMax == 8.0,
+		str(g.breathLevelMax))
+	_check("The Air slider shows her base, not the mood's", air["Air"]["get"].call() == 100.0, str(air["Air"]["get"].call()))
 	DevBehaviour.set_all(false)
 	_check("Freeze all switches off every behaviour", DevBehaviour.off_count() == DevBehaviour.hooks().size())
 	DevBehaviour.set_all(true, "eyes")

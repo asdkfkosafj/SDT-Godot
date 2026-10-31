@@ -14,6 +14,9 @@ static var _mods := {}
 static var clench_s := 0.0
 static var clench_taps := true
 static var spam_j := false
+## Tools > Her's Air and Oxygen: her base breath, which a mood scales (moremoods' lowered breath)
+static var air := AIR
+static var last := LAST
 static var _spam_fn := Callable()
 
 
@@ -63,19 +66,22 @@ static func add_spurt() -> void:
 
 
 ## Tools > Her: her air (value point Her.breathMax, 50 in the game; out of breath at half of it) and how long she
-## lasts with none before passing out (Her.passOutMax, 40), set by hand in the OVERRIDE phase over a mood's (moremoods'
-## lowered breath); the game's again (no modifier) at its own number and with reset().
+## lasts with none before passing out (Her.passOutMax, 40), set by hand in the GENERATE phase: her base, which a mood
+## then scales (moremoods' lowered breath is a share of it); the game's again (no modifier) at its own number and with
+## reset().
 const AIR := 50.0   # g.BREATH_MAX
 const LAST := Her.PASS_OUT_MAX
 
 
 static func set_air(v: float) -> void:
-	_set_mod(&"Her.breathMax", v != AIR, {"phase": Hooks.OVERRIDE, "op": "set", "value": v})
+	air = v
+	_set_mod(&"Her.breathMax", v != AIR, {"phase": Hooks.GENERATE, "op": "set", "value": v})
 	g.resolveBreath()
 
 
 static func set_last(v: float) -> void:
-	_set_mod(&"Her.passOutMax", v != LAST, {"phase": Hooks.OVERRIDE, "op": "set", "value": v})
+	last = v
+	_set_mod(&"Her.passOutMax", v != LAST, {"phase": Hooks.GENERATE, "op": "set", "value": v})
 	g.resolveBreath()
 
 

@@ -163,7 +163,8 @@ func _breathing(m: String) -> void:
 		if not _breath_spent and not _breath_fright:
 			_prev_out_of_breath = g.outOfBreathPoint
 			_prev_quiet = sc.quietBreathingLevel
-			mm.modify(&"Her.breathMax", {"phase": Hooks.MOOD, "op": "set", "value": 4.0})
+			# the mod's 4 of the game's 50, as a share of her base air (Tools > Her's Air)
+			mm.modify(&"Her.breathMax", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, _her): return v * 4.0 / g.BREATH_MAX})
 			mm.modify(&"Her.outOfBreathPoint", {"phase": Hooks.MOOD, "op": "fn", "fn": func(_v, _her): return g.breathLevelMax})
 			sc.quietBreathingLevel = 5
 			g.resolveBreath()   # now, keeping how much of her breath is used
