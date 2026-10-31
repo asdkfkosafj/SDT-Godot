@@ -236,6 +236,8 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.lookTarget` | the point she looks at (scene coordinates) | `her.lookPoint` |
 | `Her.gazeAngle` | the angle her iris turns towards, before easing | `her.eyeMotion["target"]` |
 | `Her.eyelidShock` | how shocked her eyes are (wider, smaller iris; the game's `shock()` sets 10-85, counting down) | `her.eyelidShock` |
+| `Her.eyelidTarget` | the frame her eyelids ease towards while her eyes are open (not blinking, wincing, closed or passed out), after her movement, shock, cum and passing out terms; 2 open, 150 closed | `her.eyelidMotion["target"]` |
+| `Her.irisScale` | how big her irises are (the game: 0.9 less a share of her eyelid frame and shock), every tick | `her.eye.ball.irisContainer.iris.scaleX` / `scaleY` |
 | `Her.upperEyelid` | the upper eyelid's frame (2 open, 150 closed, up to 200 squeezed shut) | `her.upperLid` |
 | `Her.lowerEyelid` | the lower eyelid's frame (asked after the upper) | `her.lowerLid` |
 | `Her.jawAngle` | her jaw's angle this tick, after the game's easing (`Her.closedJawAngle` -12: closed, higher: open); lips, cheeks and `g.herMouthOpeness` follow it | `her.head.jaw.rotation_degrees` |

@@ -1888,10 +1888,14 @@ func updateElements() -> void:
 		eyelidMotion["target"] = maxf(2.0, minf(eyePosWince, eyelidMotion["target"]))
 		if passOutFactor > 0:
 			eyelidMotion["target"] = minf(eyePosBlink, eyelidMotion["target"] + floor(passOutFactor * 3.0))
+		if Hooks.has_value(&"Her.eyelidTarget"):   # HOOK value point: where her open eyelids head this tick
+			eyelidMotion["target"] = Hooks.value(&"Her.eyelidTarget", self, eyelidMotion["target"])
 		eyelidMotion["pos"] += (eyelidMotion["target"] - eyelidMotion["pos"]) * 0.2
 		tears.clearLowerEyelid(200 - eyelidMotion["pos"])
 	updateEyes()
 	var irisScale: float = 0.9 - (0.25 - eyelidMotion["pos"] / 400.0) - eyelidShock / 200.0
+	if Hooks.has_value(&"Her.irisScale"):   # HOOK value point: how big her irises are
+		irisScale = Hooks.value(&"Her.irisScale", self, irisScale)
 	eye.ball.irisContainer.iris.scaleX = irisScale
 	eye.ball.irisContainer.iris.scaleY = irisScale
 	if coughing:
