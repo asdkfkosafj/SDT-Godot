@@ -2,7 +2,7 @@ extends RefCounted
 ## armoverhaul's dynamic arms (the mod's DYNAMIC ARMS part of move(), addWeight, updateWeights and its event hooks):
 ## each arm keeps a positive, a negative and a neutral weight for every position; what happens in the scene adds
 ## to them, scaled by her mood's factors (values.cfg [mood_...]), they decay every tick, and the arm moves to the
-## heaviest one when it is heavy enough and the arm's cooldown is over. Spank reactions come with SpankAnywhere.
+## heaviest one when it is heavy enough and the arm's cooldown is over. Spank reactions: spank.gd.
 
 const POS := 0
 const NEG := 1
@@ -33,7 +33,7 @@ var f_pos := 1.0              # the mood's factors, with exhaustion
 var f_neg := 1.0
 var f_neu := 1.0
 
-var _after_spank := 0
+var after_spank := 0          # afterSpankFrames
 var _deepthroat := false
 var _look_down := -1
 var _look_face := -1
@@ -194,9 +194,9 @@ func tick() -> void:
 	add("On His Legs", V["onHisLegsBreathWeight"] * breath * f_neu, NEU)
 	add("On His Waist", V["onHisWaistBreathWeight"] * breath * f_neu, NEU)
 	add("On His Chest", V["onHisChestBreathWeight"] * breath * f_neu, NEU)
-	if her.breathing and _after_spank > V["onHipsPauseAfterSpankFrames"]:
+	if her.breathing and after_spank > V["onHipsPauseAfterSpankFrames"]:
 		add("On Hips", V["onHipsBreathWeight"] * breath * f_neu, NEU)
-	_after_spank += 1
+	after_spank += 1
 	# vigour
 	add("On His Legs", V["onHisLegsVigorWeight"] * vigour * f_neu, NEU)
 	add("On His Waist", V["onHisWaistVigorWeight"] * vigour * f_neu, NEU)
@@ -385,6 +385,7 @@ func _decide(her: Her) -> void:
 			if not awkward or not (cur == "On His Hand" and l[0] in ["Back", "On Legs", "On Her Ass", "On Hips", "Masturbating"]):
 				if not (l[0] != "Loose" and r[0] == "Loose"):
 					x.transition(true, l[0], smooth)
+					_spank_rub(0)
 					left_type = l[1]
 					wl[l[0]][_kind(l[1])] += V["extraWeightOnTransition"]
 			else:
@@ -396,6 +397,7 @@ func _decide(her: Her) -> void:
 				if not awkward or not (cur == "Back" and r[0] in ["Holding Breast", "Gripping Thigh", "Holding Stomach", "On Hips"]
 						or cur == "Holding Breast" and r[0] in ["Gripping Breast", "Holding Stomach"]):
 					x.transition(false, r[0], smooth)
+					_spank_rub(1)
 					right_type = r[1]
 					wr[r[0]][_kind(r[1])] += V["extraWeightOnTransition"]
 				else:
@@ -410,6 +412,13 @@ func _decide(her: Her) -> void:
 	if x._right_name() == "Hand Job" and right_type == "Negative" or x._left_name() == "Hand Job" and left_type == "Negative":
 		var p: Dictionary = her.pullOffPower
 		p["current"] = minf(p["max"], V["handJobNegativePullOffFactor"] * (p["current"] + p["increase"]))
+
+
+## An arm moved by a hit starts rubbing where it lands (spankRub)
+func _spank_rub(s: int) -> void:
+	if x.spank.hit_now and V["spankRub"] == 1 and V["dynamicRubbing"] == 1:
+		x.hands.rub_timer = int(V["spankRubTimeMin"] + randf() * (V["spankRubTimeMax"] - V["spankRubTimeMin"]))
+		x.hands.rubbing[s] = true
 
 
 static func _kind(t: String) -> int:

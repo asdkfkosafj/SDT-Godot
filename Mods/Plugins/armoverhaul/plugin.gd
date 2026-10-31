@@ -6,7 +6,7 @@ extends SDTExtension
 ## Dynamic arms (dynamic_arms.gd): her arms move by themselves, following what happens and her mood.
 ## Restrained mode (restrained.gd): her hands tied to her thighs or behind her back, and her struggling.
 ## Hands (hands.gd): tapping, rubbing, jitter, resistance, how her arms drop when she passes out.
-## Later: spank reactions (with SpankAnywhere).
+## Spank reactions (spank.gd, with the spankanywhere plugin): hits move her arms, by where they land.
 ## The mod's numbers are in values.cfg (its own key names); the menu has only the switches.
 
 ## animtools' positions, then the mod's own, in the Loader's order (animtools' "Custom" pose editor is not ported)
@@ -38,6 +38,7 @@ var mood_keys: Array = []     # a mood's keys, in the file's (and the character 
 var dyn                       # dynamic_arms.gd
 var res                       # restrained.gd
 var hands                     # hands.gd
+var spank                     # spank.gd
 var restrained := false       # restrained mode
 var restrained_type := 3      # 0 loose, 1 tight, 2 fixed, 3 off
 var _keys := {}               # Flash key code -> [[left: bool, position name]] (values.cfg [keys])
@@ -45,6 +46,7 @@ var _key_lists := {}          # values.cfg [keys] as read: the mod's key name ->
 
 var in_air := 0.0             # In Air: how far up her hands are (0..1)
 var mas_speed := 0.0          # Masturbating: her hand's speed
+var mas_pause := 0            # masPauseTimer: after a hit her hand doesn't speed up with passing out, his pleasure
 var mas_final := 0.0          # ... with her mood and the random bursts
 var _random_mas_speed := 0.0
 var _random_mas_interval := 0
@@ -101,6 +103,7 @@ func _enable() -> void:
 	dyn.update_mood()
 	res = load_script("restrained.gd").new(self)
 	hands = load_script("hands.gd").new(self)
+	spank = load_script("spank.gd").new(self)
 	restrained_type = clampi(int(V["restrainedType"]), 0, 3)
 	on_tick(_tick)
 	hook_before(&"Her.wakeUp", func(_c): dyn.before_wake())
@@ -164,6 +167,9 @@ func _enable() -> void:
 
 
 func _disable() -> void:
+	var sp = _spank_plugin(false)
+	if sp != null and spank != null and sp.hit.is_connected(spank.on_hit):
+		sp.hit.disconnect(spank.on_hit)
 	if dyn != null and dyn._auto_on:
 		g.autoModeOn = dyn._auto_before
 	if leg_on_top:
@@ -425,6 +431,7 @@ func _tick() -> void:
 		return
 	var her: Her = g.her
 	dyn.update_mood()
+	spank.tick(_spank_plugin(true))
 	dyn.hand_job_tick()
 	_arrivals(her)
 	# In Air
@@ -487,11 +494,14 @@ func _mas_tick(her: Her) -> void:
 			_random_mas_speed = 0.0
 		_random_mas_interval -= 1
 		_random_mas_duration -= 1
+	mas_pause -= 1
 	mas_speed -= V["passiveMasSpeedLoss"]
 	mas_speed += V["vigorMasSpeed"] * her.vigour / 1050.0
 	var peak: float = V["passOutMasSpeedPeak"]
 	var diff: float = her.passOutFactor / her.passOutMax - peak
-	if diff <= 0:
+	if mas_pause > 0:
+		pass
+	elif diff <= 0:
 		mas_speed += V["passOutMasSpeed"] * (1.0 + diff / peak)
 	else:
 		mas_speed -= V["passOutMasSpeed"] * (diff / (1.0 - peak)) * (1.0 / (1.0 - peak))
@@ -534,9 +544,19 @@ func _coughed(c: Hooks.Call, open: bool) -> void:
 
 
 func _pleasure(c: Hooks.Call) -> void:
-	if c.args[0] > 0 and g.handJobMode:
+	if c.args[0] > 0 and g.handJobMode and mas_pause <= 0:
 		mas_speed += c.args[0] * V["hjPleasureMasSpeed"]
 	dyn.pleasure()
+
+
+## The spankanywhere plugin when it is on (connect: its hits reach spank.gd)
+func _spank_plugin(connect: bool):
+	var sp = Extensions.get_extension("spankanywhere")
+	if sp == null or not sp.enabled:
+		return null
+	if connect and not sp.hit.is_connected(spank.on_hit):
+		sp.hit.connect(spank.on_hit)
+	return sp
 
 
 ## Dynamic arms: 0 off, 1 both arms, 2 left arm, 3 right arm (hotkey, menu, [DYNAMIC_ARMS_MODE_n])
