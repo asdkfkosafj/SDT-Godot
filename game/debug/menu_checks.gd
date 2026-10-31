@@ -259,7 +259,7 @@ func _fold_checks() -> void:
 			continue
 		var cv: VBoxContainer = card.get_child(0)
 		var h: HBoxContainer = cv.get_child(0)
-		cards[(h.get_child(1) as Label).text] = [h, cv.get_child(1)]
+		cards[(h.get_child(1).get_child(0) as Label).text] = [h, cv.get_child(1)]   # fold, title box (title, count, tag), reset
 	_check("fold: Behaviour cards have a fold button", cards.has("RESISTANCE") and cards.has("REACTIONS")
 		and (cards["REACTIONS"][0].get_child(0) as Button).text in ["▸", "▾"], str(cards.keys()))
 	var all_open := true
@@ -271,8 +271,8 @@ func _fold_checks() -> void:
 	fold_btn.pressed.emit()
 	_check("fold: the button folds it, and it is kept", not cards["REACTIONS"][1].visible and fold_btn.text == "▸"
 		and PortSettings.get_value("menu_fold", "behaviour/Reactions", false) == true)
-	_check("fold: a folded card shows how many settings it holds", (cards["REACTIONS"][0].get_child(2) as Label).visible
-		and (cards["REACTIONS"][0].get_child(2) as Label).text.begins_with("("))
+	var count: Label = cards["REACTIONS"][0].get_child(1).get_child(1)
+	_check("fold: a folded card shows how many settings it holds", count.visible and count.text.begins_with("("))
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.pressed = true

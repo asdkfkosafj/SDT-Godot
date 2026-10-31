@@ -40,13 +40,15 @@ static func reset(specs: Array) -> void:
 				s["set"].call(s["default"])
 
 
-## Adds the fold and reset buttons to a card's heading `h` (title label `hl`) and returns the box its rows go in.
+## Adds the fold and reset buttons to a card's heading `h` (title label `hl`, in `h` or in a box that fills it) and
+## returns the box its rows go in.
 static func card(h: HBoxContainer, hl: Label, cv: VBoxContainer, sec: Dictionary, grp: Dictionary, specs: Array,
 		refresh_all: Callable) -> VBoxContainer:
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", 3)
 	cv.add_child(body)
 	var fold := MenuWidgets._icon_button("▾", "Show or hide this card's settings.")
+	fold.size_flags_vertical = Control.SIZE_SHRINK_BEGIN   # (a heading whose tag wrapped is two lines high)
 	h.add_child(fold)
 	h.move_child(fold, 0)
 	h.add_theme_constant_override("separation", 5)
@@ -54,8 +56,8 @@ static func card(h: HBoxContainer, hl: Label, cv: VBoxContainer, sec: Dictionary
 	count.text = "(%d)" % specs.size()
 	count.add_theme_font_size_override("font_size", MenuTheme.HEADING)
 	count.add_theme_color_override("font_color", MenuTheme.MUTED)
-	h.add_child(count)
-	h.move_child(count, hl.get_index() + 1)
+	hl.get_parent().add_child(count)
+	hl.get_parent().move_child(count, hl.get_index() + 1)
 	var apply := func(folded: bool):
 		body.visible = not folded
 		count.visible = folded
@@ -71,11 +73,13 @@ static func card(h: HBoxContainer, hl: Label, cv: VBoxContainer, sec: Dictionary
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 			toggle.call())
 	if specs.any(resettable):
-		var spacer := Control.new()
-		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		h.add_child(spacer)
+		if hl.get_parent() == h:   # (a title box that fills the heading already pushes the button to the right)
+			var spacer := Control.new()
+			spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			h.add_child(spacer)
 		var r := MenuWidgets._icon_button("↺", "Back to the defaults: every setting in this card (the other cards stay). Press twice.")
+		r.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		var armed := [false]
 		r.pressed.connect(func():
 			if not armed[0]:

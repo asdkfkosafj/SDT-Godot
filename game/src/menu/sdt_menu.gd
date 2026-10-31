@@ -396,6 +396,8 @@ func _layout() -> void:
 	_dock.anchor_right = 0 if left else 1
 	_dock.offset_left = 0 if left else -WIDTH
 	_dock.offset_right = WIDTH if left else 0
+	# content wider than WIDTH widens the dock towards the scene, never past the window's edge
+	_dock.grow_horizontal = Control.GROW_DIRECTION_END if left else Control.GROW_DIRECTION_BEGIN
 	var r := MenuTheme.box(MenuTheme.PANEL, Color(0, 0, 0, 0), 0, 3, 6)
 	if left:
 		r.corner_radius_top_right = 6
@@ -631,13 +633,20 @@ func _build_view(groups: Array, empty_text: String, sec := {}) -> Control:
 		cv.add_theme_constant_override("separation", 3)
 		card.add_child(cv)
 		var h := HBoxContainer.new()
+		# title, count and tag wrap (the tag goes to a second line) instead of widening the dock past the window
+		var title := HFlowContainer.new()
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		title.add_theme_constant_override("h_separation", 5)
+		title.add_theme_constant_override("v_separation", 2)
+		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		h.add_child(title)
 		var hl := Label.new()
 		hl.text = str(grp["title"]).to_upper()
 		hl.add_theme_font_size_override("font_size", MenuTheme.HEADING)
 		hl.add_theme_color_override("font_color", MenuTheme.MUTED)
-		h.add_child(hl)
+		title.add_child(hl)
 		if grp["owner"] != "":
-			h.add_child(MenuWidgets.tag(grp["owner"]))
+			title.add_child(MenuWidgets.tag(grp["owner"]))
 		cv.add_child(h)
 		view.add_child(card)
 		var body: VBoxContainer = cv
