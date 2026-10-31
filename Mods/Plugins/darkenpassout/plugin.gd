@@ -1,6 +1,7 @@
 extends SDTExtension
 ## Port of sby's darkenpassoutV1 Loader mod: dark rings close in and the screen darkens as she starts to pass out.
-## A button next to the breath option (Options menu) switches it on (green) and off.
+## A button next to the breath option of the classic menu's Options switches it on (green) and off; Behaviour >
+## Darkening has the switch and the settings.
 
 var on := true
 var _blackover: FlashSprite
@@ -15,13 +16,20 @@ func _init() -> void:
 
 
 func _setup() -> void:
-	setting("defaultmode", true, {"label": "On for new characters"})
-	setting("fadetarget", 0.12, {"label": "Darkening while fading", "min": 0.0, "max": 1.0})
-	setting("fadepassouttarget", 0.15, {"label": "Darkening while passed out", "min": 0.0, "max": 1.0})
-	setting("darkringalpha", 1.0, {"label": "Ring opacity", "min": 0.0, "max": 1.0})
-	setting("darkringpulsealpha", 0.3, {"label": "Ring pulse opacity", "min": 0.0, "max": 1.0})
-	setting("pulseonpassedout", true, {"label": "Pulse when she passes out"})
-	setting("pulseonpassoutcough", false, {"label": "Pulse on coughs while fading"})
+	setting("defaultmode", true, {"label": "On for new characters", "desc": "Darkening starts on for a character "
+		+ "without it in her code."})
+	setting("fadetarget", 0.12, {"label": "Darkening while fading", "min": 0.0, "max": 1.0, "step": 0.01, "desc":
+		"How dark the whole screen gets just before she passes out (it grows as she runs out of air)."})
+	setting("fadepassouttarget", 0.15, {"label": "Darkening while passed out", "min": 0.0, "max": 1.0, "step": 0.01,
+		"desc": "How dark the whole screen is while she is passed out."})
+	setting("darkringalpha", 1.0, {"label": "Ring opacity", "min": 0.0, "max": 1.0, "step": 0.01, "desc": "How dark "
+		+ "the rings that close in from the edges are."})
+	setting("darkringpulsealpha", 0.3, {"label": "Ring pulse opacity", "min": 0.0, "max": 1.0, "step": 0.01, "desc":
+		"How strongly the rings pulse, growing as she runs out of air."})
+	setting("pulseonpassedout", true, {"label": "Pulse when she passes out", "desc": "The rings pulse once when she "
+		+ "passes out."})
+	setting("pulseonpassoutcough", false, {"label": "Pulse on coughs while fading", "desc": "The rings pulse when she "
+		+ "coughs while running out of air."})
 	setting("enablevanillasaving", false, {"label": "Save on/off in the character code"})
 
 
@@ -43,7 +51,14 @@ func _enable() -> void:
 	c.addChildAt(_flash, c.getChildIndex(g.screenEffects))
 	_flash.whiteout.alpha = get_setting("darkringalpha")
 	_match_screen()
-	_button = menu_button("optionsMenu", 90, -38, "☀", func(): on = not on; _match_screen(); g.saveData.saveCharData())
+	_button = menu_button("optionsMenu", 90, -38, "☀", func(): _set_on(not on))
+	menu_control("behaviour", "Darkening", MenuSchema.toggle("Darken pass out", "Dark rings close in and the whole "
+		+ "screen darkens as she runs out of air (this character; also the ☀ button in the classic menu's Options).",
+		func(): return on, _set_on))
+	for k in ["fadetarget", "fadepassouttarget", "darkringalpha", "darkringpulsealpha"]:
+		menu_control("behaviour", "Darkening", MenuSchema.setting_control(self, k, {"wide": true}))
+	for k in ["pulseonpassedout", "pulseonpassoutcough", "defaultmode"]:
+		menu_control("behaviour", "Darkening", MenuSchema.setting_control(self, k))
 	on_late_tick(_tick)
 	hook_after(&"Her.passOut", func(_c): _passed_out())
 	if get_setting("enablevanillasaving"):
@@ -86,6 +101,12 @@ func _tick() -> void:
 		_flash.whiteFlash.alpha = 0
 		_flash.showWhiteout(1)
 	_blackover.alpha = _blackover.alpha + (_target - _blackover.alpha) / 5.0
+
+
+func _set_on(v: bool) -> void:
+	on = v
+	_match_screen()
+	g.saveData.saveCharData()
 
 
 func _passed_out() -> void:
