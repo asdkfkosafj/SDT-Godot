@@ -209,6 +209,8 @@ func _tick() -> void:
 	sum += _decay("openCough")
 	sum += minf(S["vigorMax"], her.vigour / 1050.0 * S["vigorMax"] * S["vigorFactor"])
 	sum += _ramp("pleasure", him.pleasure / 150.0 * S["pleasureMax"] > cur["pleasure"])
+	if Hooks.has_value(&"Her.blushEffects"):   # HOOK value point: the effects' sum, before her blush factor
+		sum = Hooks.value(&"Her.blushEffects", her, sum)
 	var base: float = g.characterControl.blushRGB.a
 	var v := minf(S["maxBlush"], maxf(base, base + sum * (S["maxBlush"] - base) * blush_factor))
 	if absf(her.blush.alpha - v) > 0.002:   # a new alpha re-renders her blush: only when it shows

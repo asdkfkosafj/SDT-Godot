@@ -251,6 +251,7 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.breathMax` | how much breath she has (50), once per tick; a change keeps how much of it is used. After changing its modifiers, `g.resolveBreath()` applies them at once | `g.breathLevelMax` |
 | `Her.outOfBreathPoint` | past this she is out of breath (half of `Her.breathMax`), right after it | `g.outOfBreathPoint` |
 | `Her.passOutMax` | how long she lasts with no air before passing out (40), right after it; a change keeps how close she is | `her.passOutMax` |
+| `Her.blushEffects` | with Dynamic blushing on: the sum of what makes her blush this tick, before her blush factor and the cap (the spankanywhere plugin adds its spank blush here) | `her.blush.alpha` |
 | `Him.penisTiltTarget` | the angle his penis eases towards (bukkake mode's mouse aim and her push already in), before easing | `him.penisTiltTarget` |
 | `Him.penisAngle` | his penis's angle this tick, after easing and the game's -10..25 limits (`him.penisTilt`: the eased angle before them) | `him.penis.rotation_degrees` |
 | `Her.resistance` | what holds him back as he pushes in, per tick (`checkPosition`'s throat resistance zones) | (subtracted from her speed) |
@@ -267,6 +268,15 @@ The value points in the game, with the field that keeps the result for code that
 Rule: for behaviour that has value points, change the targets through modifiers; do not cancel the method. One-off
 actions (a blink, a cough) keep their before-hooks, which may cancel (veto) them. Code that writes a target field
 directly (an older plugin) still works, as part of the game's base value: modifiers apply on top of it.
+
+## Painting onto her skin
+
+A plugin can lay a texture over her skin that every shape under a display object composites onto its own pixels
+with hardlight, clipped to each shape and moving with it, under her clothes (spankanywhere's marks):
+`obj.paint = texture` (null: none) and `obj.paint_transform` (stage coordinates -> the texture's UV; update it each
+tick if the texture follows the screen). The nearest object's paint applies, only to shapes drawn with normal blend
+and no colour matrix filter. Draw the texture into a `SubViewport` and pass it to `Flash.draw_early(vp)` so masked
+and grouped parts show this tick's paint, not last tick's.
 
 ## Testing
 

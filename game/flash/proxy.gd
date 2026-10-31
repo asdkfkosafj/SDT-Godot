@@ -114,7 +114,7 @@ func _release_children() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_PREDELETE:
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(Flash):   # at quit the runtime can go first
 		Flash.unregister_mask_proxy(self)
 
 

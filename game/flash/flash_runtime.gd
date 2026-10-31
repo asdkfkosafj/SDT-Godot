@@ -17,6 +17,7 @@ const SHAPE_SHADERS := {
 	"alpha": preload("res://flash/shaders/shape_alpha.gdshader"),
 	"screen_read": preload("res://flash/shaders/shape_screen.gdshader"),
 	"none": preload("res://flash/shaders/shape_none.gdshader"),
+	"paint": preload("res://flash/shaders/shape_paint.gdshader"),
 }
 const SCREEN_BLEND_MODES := {"overlay": 0, "hardlight": 1, "screen": 2, "lighten": 3, "darken": 4,
 	"difference": 5, "invert": 6}
@@ -53,6 +54,7 @@ var _playing: Dictionary = {}          # FlashMovieClip -> true (insertion order
 var _mask_proxies: Dictionary = {}
 var _groups: Dictionary = {}
 var _material_pool: Dictionary = {}
+var _painted: Dictionary = {}   # FlashShape -> the object whose paint it shows (own material, see update_paints)
 
 var _mouse_over: FlashDisplayObject = null
 var _mouse_down_target: FlashDisplayObject = null
@@ -79,6 +81,9 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	FlashLibrary.drain_streaming()
+	for v in _early_chain:
+		RenderingServer.free_rid(v)
+	_early_chain.clear()
 	if stage != null and stage.get_parent() == null:
 		stage.free()
 
@@ -458,6 +463,7 @@ func _physics_process(_delta: float) -> void:
 		cb.call()
 		_perf_add("after:" + cb.get_method(), Time.get_ticks_usec() - ts)
 	var t2 := Time.get_ticks_usec()
+	update_paints()
 	# 3. Masks follow the (possibly moved) objects.
 	for p in _mask_proxies.keys():
 		if is_instance_valid(p):
@@ -886,6 +892,42 @@ func _owns_godot_subtree(root: FlashDisplayObject, n: Node) -> bool:
 
 # ---------------------------------------------------------------- materials
 
+## A viewport drawn before every render target of the scene (masks, groups), for a texture other objects show in
+## the same frame (a paint: marks on her skin). Godot draws nested viewports first, the deepest first; drawn after a
+## mask nested two deep, a paint would show there as it was the tick before, a tick behind her other parts. So the
+## viewport hangs below a chain of empty viewports deeper than any nesting of render targets.
+const EARLY_DEPTH := 32
+var _early_chain: Array[RID] = []
+
+
+func draw_early(vp: SubViewport) -> void:
+	if _early_chain.is_empty():
+		var parent := get_viewport().get_viewport_rid()
+		for i in EARLY_DEPTH:
+			var v := RenderingServer.viewport_create()
+			RenderingServer.viewport_set_parent_viewport(v, parent)
+			RenderingServer.viewport_set_update_mode(v, RenderingServer.VIEWPORT_UPDATE_DISABLED)
+			RenderingServer.viewport_set_active(v, true)
+			_early_chain.append(v)
+			parent = v
+	RenderingServer.viewport_set_parent_viewport(vp.get_viewport_rid(), _early_chain[-1])
+
+
+## Painted shapes (FlashDisplayObject.paint) take this tick's place: shape-local -> paint UV
+func update_paints() -> void:
+	for s in _painted.keys():
+		if not is_instance_valid(s) or not is_instance_valid(_painted[s]) or not (s.material is ShaderMaterial):
+			_painted.erase(s)
+		elif s.is_visible_in_tree():
+			_update_paint(s, s.material, _painted[s])
+
+
+func _update_paint(s: FlashShape, m: ShaderMaterial, owner: FlashDisplayObject) -> void:
+	var t: Transform2D = owner.paint_transform * s.flash_global_transform()
+	m.set_shader_parameter("paint_row0", Vector3(t.x.x, t.y.x, t.origin.x))
+	m.set_shader_parameter("paint_row1", Vector3(t.x.y, t.y.y, t.origin.y))
+
+
 ## Shared material for a shape given its inherited colour offsets, blend mode and colour-matrix filters.
 func shape_material(s: FlashShape) -> Material:
 	var off := s.effective_color_offset()
@@ -896,7 +938,13 @@ func shape_material(s: FlashShape) -> Material:
 	var o: FlashDisplayObject = s
 	var blend_open := true
 	var grouped := false   # an offscreen group above the object the blend mode comes from
+	var paint: Texture2D = null
+	var paint_owner: FlashDisplayObject = null
+	_painted.erase(s)
 	while o != null:
+		if paint == null and o.paint != null:
+			paint = o.paint
+			paint_owner = o
 		# An offscreen group composites its whole content with its own blend mode (group_display), so blend
 		# modes at or above a grouped ancestor do not apply to the shapes inside it.
 		if o != s and o._proxy is FlashGroupProxy:
@@ -913,12 +961,23 @@ func shape_material(s: FlashShape) -> Material:
 				cm = b * cm
 				has_cm = true
 		o = o._flash_parent
-	if off == Color(0, 0, 0, 0) and blend == "normal" and not has_cm:
+	if blend != "normal" or has_cm:
+		paint = null   # painted shapes are plain ones (her skin)
+	if off == Color(0, 0, 0, 0) and blend == "normal" and not has_cm and paint == null:
 		return null
 	# ERASE / ALPHA need a LAYER parent; without one Flash draws nothing (a mod part with ERASE moved out of its
 	# mod onto her layers, e.g. the shibari over-top's breast, which only cut the mod's own ropes)
 	if (blend == "erase" or blend == "alpha") and not grouped:
 		blend = "none"
+	if paint != null:
+		# its own material: the paint is found from the shape's own coordinates (update_paints, every tick)
+		var pm := ShaderMaterial.new()
+		pm.shader = SHAPE_SHADERS["paint"]
+		pm.set_shader_parameter("paint", paint)
+		pm.set_shader_parameter("offset", Vector4(off.r, off.g, off.b, off.a) / 255.0)
+		_painted[s] = paint_owner
+		_update_paint(s, pm, paint_owner)
+		return pm
 	var key := "%s|%s|%s|%s" % [blend, off, cm if has_cm else "", cm_off if has_cm else ""]
 	var mat: ShaderMaterial = _material_pool.get(key)
 	if mat != null:

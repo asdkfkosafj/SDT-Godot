@@ -332,10 +332,10 @@ def convert(swf_path, out_dir, scale, ffdec, scripts_dir=None):
 
         dst = os.path.join(out_dir, 'shapes')
         for f in os.listdir(os.path.join(tmp, 'shapes')):
-            cid = int(f.split('.')[0])
+            cid = int(re.match(r'\d+', f).group())  # FFDec adds _ClassName to a shape with a class
             shutil.move(os.path.join(tmp, 'shapes', f), os.path.join(dst, 's%d.png' % cid))
         for f in os.listdir(os.path.join(tmp, 'synth')):
-            sid = int(f.split('.')[0])
+            sid = int(re.match(r'\d+', f).group())
             if sid in shape_jobs:
                 shutil.move(os.path.join(tmp, 'synth', f), os.path.join(dst, shape_jobs[sid] + '.png'))
         _move_prefixed(os.path.join(tmp, 'sounds'), os.path.join(out_dir, 'sounds'), chars, 'sound')
