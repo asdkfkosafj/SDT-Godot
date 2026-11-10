@@ -67,7 +67,7 @@ const CONFIG_FILE := "extensions.cfg"
 ## plugin.cfg api_version, 1 when missing). Raise API_VERSION when adding to it: a plugin that uses the addition
 ## sets that number and an older game refuses it. Raise MIN_API_VERSION when changing or removing something
 ## plugins may use: plugins written for an older API are refused instead of failing during play.
-const API_VERSION := 1
+const API_VERSION := 2   # 2: FlashGroupProxy.of / render_texture / render_rect / set_cut
 const MIN_API_VERSION := 1
 
 static var all: Array[SDTExtension] = []

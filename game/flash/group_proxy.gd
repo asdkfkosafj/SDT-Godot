@@ -99,6 +99,45 @@ func add_child_content(n: Node) -> void:
 	_vp.add_child(n)
 
 
+## Port (for extensions): the group that renders `obj` offscreen, or null when it is drawn directly.
+static func of(obj: FlashDisplayObject) -> FlashGroupProxy:
+	var p: CanvasItem = obj._proxy
+	while p != null:
+		if p is FlashGroupProxy:
+			return p
+		p = p.get(&"_proxy")
+	return null
+
+
+## The render target (updated every frame while the group shows) and the area of the object's local space it covers
+## (empty while nothing of it shows): an extension may draw it again elsewhere (the x-ray plugin).
+func render_texture() -> Texture2D:
+	return _vp.get_texture()
+
+
+func render_rect() -> Rect2:
+	return _rect
+
+
+## Leaves out of what this group draws on screen whatever lies inside rect `a` and outside rect `b` (each in its own
+## space, reached from the object's local space by `to_a` / `to_b`; no `b`: all of `a`). It is still rendered into
+## the target, so render_texture() keeps it. Not with a shader filter (that filter owns the material).
+func set_cut(to_a: Transform2D, a: Rect2, to_b := Transform2D.IDENTITY, b := Rect2()) -> void:
+	_mat.set_shader_parameter("cut_on", true)
+	_mat.set_shader_parameter("cut_a_x", to_a.x)
+	_mat.set_shader_parameter("cut_a_y", to_a.y)
+	_mat.set_shader_parameter("cut_a_o", to_a.origin)
+	_mat.set_shader_parameter("cut_a", Vector4(a.position.x, a.position.y, a.end.x, a.end.y))
+	_mat.set_shader_parameter("cut_b_x", to_b.x)
+	_mat.set_shader_parameter("cut_b_y", to_b.y)
+	_mat.set_shader_parameter("cut_b_o", to_b.origin)
+	_mat.set_shader_parameter("cut_b", Vector4(b.position.x, b.position.y, b.end.x, b.end.y))
+
+
+func clear_cut() -> void:
+	_mat.set_shader_parameter("cut_on", false)
+
+
 func _apply_filter(f: FlashFilter) -> void:
 	if f.type == "Shader":
 		_mat.shader = f.shader

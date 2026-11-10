@@ -16,6 +16,18 @@ uniform bool hide_object = false;
 // 10 subtract.
 uniform int blend_mode = 0;
 uniform sampler2D backdrop : hint_screen_texture, filter_linear;
+// Port: a cut (FlashGroupProxy.set_cut): what lies inside rect A and outside rect B is not drawn here (it stays in
+// the render target, which an extension may draw elsewhere). Each rect (x0, y0, x1, y1) is in its own space, reached
+// from the group's local space by the affine map (columns x, y, origin).
+uniform bool cut_on = false;
+uniform vec2 cut_a_x = vec2(1.0, 0.0);
+uniform vec2 cut_a_y = vec2(0.0, 1.0);
+uniform vec2 cut_a_o = vec2(0.0);
+uniform vec4 cut_a = vec4(0.0);
+uniform vec2 cut_b_x = vec2(1.0, 0.0);
+uniform vec2 cut_b_y = vec2(0.0, 1.0);
+uniform vec2 cut_b_o = vec2(0.0);
+uniform vec4 cut_b = vec4(0.0);
 
 float overlay1(float b, float s) {
 	return b < 0.5 ? 2.0 * b * s : 1.0 - 2.0 * (1.0 - b) * (1.0 - s);
@@ -37,12 +49,25 @@ vec3 blend_rgb(vec3 b, vec3 s) {
 
 // Fragment COLOR starts as texture * modulate; keep the modulate alone from the vertex stage.
 varying vec4 modulate;
+varying vec2 local_pos;
 
 void vertex() {
 	modulate = COLOR;
+	local_pos = VERTEX;
+}
+
+bool inside(vec2 p, vec4 r) {
+	return p.x >= r.x && p.y >= r.y && p.x <= r.z && p.y <= r.w;
 }
 
 void fragment() {
+	if (cut_on) {
+		vec2 a = cut_a_x * local_pos.x + cut_a_y * local_pos.y + cut_a_o;
+		vec2 b = cut_b_x * local_pos.x + cut_b_y * local_pos.y + cut_b_o;
+		if (inside(a, cut_a) && !inside(b, cut_b)) {
+			discard;
+		}
+	}
 	vec2 px = TEXTURE_PIXEL_SIZE;
 	vec4 c = texture(TEXTURE, UV);
 	vec4 r = c;

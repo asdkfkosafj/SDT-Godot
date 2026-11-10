@@ -66,6 +66,13 @@ func _passed_out(call: Hooks.Call) -> void:
 | `menu_add(menu, obj, x, y)` | Any display object (an ExtList, ...) in a game menu; removed when the extension is disabled. |
 | `on_key(keycode, fn, label, id = "")` | `fn()` when a key is pressed during play (Flash key codes; not while typing). It is a rebindable action in Settings › Hotkeys: `keycode` is the default (`\| Hotkeys.SHIFT / CTRL / ALT` for a combination, 0 for none), `label` names it there, `id` (default: the label) keeps the player's key when the label changes. Keys several actions share are marked there; all of them run. |
 
+Objects drawn as an offscreen group (Flash blend mode "layer", filters; him, for one) can be drawn again elsewhere:
+`FlashGroupProxy.of(obj)` is the object's group (or null), `render_texture()` its render (premultiplied alpha,
+updated every frame) and `render_rect()` the area of the object's local space it covers. `set_cut(to_a, a, to_b, b)`
+leaves out of the on-screen drawing what lies inside rect `a` and outside rect `b` (each in the space `to_a` / `to_b`
+maps the object's local space to) while it stays in the render; `clear_cut()` undoes it. The x-ray plugin
+(`Mods/Plugins/xray`) uses them to show his whole penis inside her (API version 2).
+
 Settings and on/off choices are stored in `extensions.cfg` next to the save files. Test runs with `--save-dir` use
 their own copy.
 
