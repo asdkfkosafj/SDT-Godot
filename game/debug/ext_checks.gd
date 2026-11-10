@@ -58,6 +58,8 @@ class TestExt:
 		enabled_calls += 1
 		on_late_tick(_late)
 		on_tick(_early)
+		declare_hook_point(&"Probe.calc")   # the test's own points (not in the game)
+		declare_value_point(&"T.ext")
 		hook_before(&"Probe.calc", func(c): c.args[0] += 100)
 		charcode_field("testField", func(): return value,
 			func(v, l): value = v; loads.append([v, l.kind]),
@@ -1736,6 +1738,22 @@ func _plugin_checks() -> void:
 	_check("class_name plugin refused", P["classname"]["error"] != "" and Extensions.get_extension("classname") == null
 		and g.her.get_script() == Her)
 	_check("missing dependency reported", "missing dependency" in P["missing_dep"]["error"] and Extensions.get_extension("missing_dep") == null)
+	_check("plugin api_version read", P["example"]["api_version"] == 1 and P["needs_example"]["api_version"] == 1)
+	_check("plugin for a newer extension API refused", "newer game" in P["newer_api"]["error"]
+		and Extensions.get_extension("newer_api") == null, P["newer_api"]["error"])
+	var up = Extensions.get_extension("unknown_point")
+	_check("unknown hook / value point names reported once each", up != null and up.unknown_points
+		== ["hook point Her.noSuchMethod", "value point Her.noSuchValue"], str(up.unknown_points if up else null))
+	var own_before: int = up.own_calls if up != null else 0
+	Hooks.after(&"UnknownPoint.own", self)
+	_check("declared hook point of a plugin runs", up != null and up.own_calls == own_before + 1
+		and Hooks.is_hook_point(&"UnknownPoint.own"), str(up.own_calls if up != null else null))
+	_check("plugin with known names reports none", ex.unknown_points.is_empty())
+	var unknown := []
+	for e in Extensions.all:
+		if e.builtin and not e.unknown_points.is_empty():
+			unknown.append("%s: %s" % [e.id, e.unknown_points])
+	_check("built-in extensions that are on use only existing points", unknown.is_empty(), str(unknown))
 	var crashy = Extensions.get_extension("crashy")
 	_check("plugin that crashed last start is off", crashy != null and not crashy.enabled)
 	var dt = Flash.stage.getChildAt(0)

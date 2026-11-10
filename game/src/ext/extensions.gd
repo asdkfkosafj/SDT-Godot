@@ -61,6 +61,13 @@ const BUILTIN: Array[String] = [
 
 const CONFIG_FILE := "extensions.cfg"
 
+## The extension API (SDTExtension, hook points, value points, events) that plugins are checked against (their
+## plugin.cfg api_version, 1 when missing). Raise API_VERSION when adding to it: a plugin that uses the addition
+## sets that number and an older game refuses it. Raise MIN_API_VERSION when changing or removing something
+## plugins may use: plugins written for an older API are refused instead of failing during play.
+const API_VERSION := 1
+const MIN_API_VERSION := 1
+
 static var all: Array[SDTExtension] = []
 static var by_id: Dictionary = {}
 static var vanilla_mode := false
@@ -254,9 +261,18 @@ static func load_plugins(dir: String) -> void:
 		if plugins.has(pid) or by_id.has(pid):
 			push_warning("extensions: plugin id '%s' (%s) is already used, skipped" % [pid, folder])
 			continue
+		var api := int(cfg.get_value("plugin", "api_version", 1))
 		plugins[pid] = {"folder": folder, "name": str(cfg.get_value("plugin", "name", pid)),
 			"author": str(cfg.get_value("plugin", "author", "")),
-			"version": str(cfg.get_value("plugin", "version", "")), "error": ""}
+			"version": str(cfg.get_value("plugin", "version", "")), "api_version": api, "error": ""}
+		if api > API_VERSION:
+			plugins[pid]["error"] = "needs a newer game (extension API %d, this game has %d)" % [api, API_VERSION]
+		elif api < MIN_API_VERSION:
+			plugins[pid]["error"] = "written for an older game (extension API %d, this game needs %d or later)" \
+				% [api, MIN_API_VERSION]
+		if plugins[pid]["error"] != "":
+			push_warning("extensions: plugin '%s' not loaded: %s" % [pid, plugins[pid]["error"]])
+			continue
 		found.append([pid, folder, cfg])
 	found.sort_custom(func(a, b): return a[0] < b[0])
 	# a plugin loads after the plugins it depends on

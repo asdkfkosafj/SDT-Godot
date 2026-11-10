@@ -81,11 +81,18 @@ A plugin is a folder in `Mods/Plugins/` with a `plugin.cfg` and a main script:
 id="myplugin"                 ; unique; also the name of its settings section
 name="My plugin"
 author="me"
-version="1"
+version="1"                   ; the plugin's own version
+api_version=1                 ; the extension API it was written for (see below); missing = 1
 main="plugin.gd"              ; extends SDTExtension
 depends=["otherplugin"]       ; optional: loaded after these
 enabled_by_default=true       ; optional
 ```
+
+`api_version` is checked against the game's `Extensions.API_VERSION` and `Extensions.MIN_API_VERSION`. A plugin
+that needs a newer API than the game has, or that was written for an API the game no longer supports, is not
+loaded, and the Extensions list says why. The game raises `API_VERSION` when it adds to the API (hooks, value
+points, `SDTExtension` calls): a plugin that uses an addition sets that number, so an older game refuses it instead
+of failing during play. It raises `MIN_API_VERSION` when it changes or removes something plugins may rely on.
 
 - Scripts are compiled from the folder at startup. They must not use `class_name`, and they load their other
   scripts with `load_script("other.gd")` and files with `file_path("art.png")` instead of `res://` paths.
@@ -159,6 +166,13 @@ field and dialogue triggers use the names. `Her.armPositionsFor(left)`, `Her.arm
 GDScript cannot replace a method at runtime (the Loader's `lProxy` did this for Loader mods), so each game method
 that an extension needs gets a hook point: two guarded blocks named after the original `Class.method`, marked
 `# HOOK`. `grep -rn "# HOOK" game/src` lists them all. Hook points are added when an extension needs them.
+
+`game/src/ext/hook_points.gd` lists every hook point and value point name; it is generated from the game's code by
+`sh tools/gen_hook_points.sh` (rerun it after adding or removing a point; `tools/check_all.sh` reports when it is out
+of date, and value points missing from the table below). `hook_before`, `hook_after` and `modify` warn once when a
+name is not in that list, a typo or a point that no longer exists: the handler would never run. A plugin that runs
+hook points or value points of its own declares their names first with `declare_hook_point(name)` /
+`declare_value_point(name)`, so other plugins can use them without a warning.
 
 ```gdscript
 func lookAt(target: Vector2) -> void:
@@ -275,6 +289,9 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.coughDue` | whether a cough that is due while he holds her happens (true; false: she waits as long as after a cough) | `her.nextCoughTime` |
 | `Her.coughForce` / `Her.openCoughForce` | how hard a cough / an open-mouthed cough is as it starts (0.5..2 / 0.25..1.25 at random; it eases off by itself) | `her.coughFactor` |
 | `BreastController.kick` | how much a push (a cough, a spank, a dialogue trigger) speeds a breast up | |
+| `BreastController.firmness` | how firmly a breast springs back (0.2 + (60 - her breast size) x 0.01, at least 0.2; 0.1 more with a top on), when her breast size or top changes | `BreastController._breastFirmness` |
+| `BreastController.push` | the force her movement gives a breast this tick | |
+| `BreastController.damping` | how much of its speed a breast keeps this tick (0.7; up to 0.1 more at random) | |
 | `SoundControl.herSoundVolume` | the volume of her cough, open cough, gag or pass-out sound as it starts; `soundControl.herSound` says which (`&"cough"`, `&"openCough"`, `&"gag"`, `&"passOut"`) | |
 | `IKController.tapPower` | how hard a tap of her hand is (its multiplier x `maxTapPower`; the grab sound's volume stays the multiplier) | `ik.tapPower` |
 | `IKController.tapSpeed` | how fast that tap starts (-6 x its power) | `ik.tapSpeed` |

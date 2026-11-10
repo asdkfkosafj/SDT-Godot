@@ -44,6 +44,13 @@ static func build_list() -> Control:
 			d.add_theme_font_size_override("font_size", MenuTheme.SMALL + 1)
 			d.add_theme_color_override("font_color", MenuTheme.MUTED)
 			row.add_child(d)
+		if not ext.unknown_points.is_empty():
+			var w := Label.new()
+			w.text = "Uses what this game does not have (never runs): " + ", ".join(ext.unknown_points)
+			w.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			w.add_theme_font_size_override("font_size", MenuTheme.SMALL + 1)
+			w.add_theme_color_override("font_color", MenuTheme.WARN)
+			row.add_child(w)
 		v.add_child(row)
 		switches.append([ext, sw, settings])
 	for pid in Extensions.plugins:

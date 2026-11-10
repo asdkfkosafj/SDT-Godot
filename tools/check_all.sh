@@ -18,3 +18,5 @@ for f in $(find flash src scenes debug -name '*.gd' 2>/dev/null | sed 's|^|res:/
 done
 # plugins and built-in extensions writing the game's state directly instead of through value points (see the script)
 sh ../tools/check_plugin_writes.sh Mods/Plugins game/src/ext
+# the generated list of hook points and value points, and the names extensions and plugins use (see the script)
+sh ../tools/gen_hook_points.sh --check

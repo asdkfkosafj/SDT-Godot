@@ -79,17 +79,45 @@ func on_late_tick(fn: Callable) -> void:
 
 ## Runs `fn(call: Hooks.Call)` before the game method `name` ("Class.method"); see Hooks.
 func hook_before(name: StringName, fn: Callable, priority := 0, target: Object = null) -> void:
+	_check_point(name, false)
 	Hooks.add_before(name, fn, id, priority, target)
 
 
 func hook_after(name: StringName, fn: Callable, priority := 0, target: Object = null) -> void:
+	_check_point(name, false)
 	Hooks.add_after(name, fn, id, priority, target)
 
 
 ## Adds a modifier to the value point `name` ("Class.target"); see Hooks (value points). Returns its id for
 ## Hooks.remove_modifier(); all of an extension's modifiers go when it is switched off.
 func modify(name: StringName, spec: Dictionary) -> int:
+	_check_point(name, true)
 	return Hooks.add_modifier(name, spec, id)
+
+
+## Names this extension registered that the game has no hook point / value point for ("hook point X", "value point
+## Y"): their handlers never run. Shown in the Extensions list and logged once each.
+var unknown_points: Array[String] = []
+
+
+## Declares a hook point / value point this extension runs itself (see Hooks.declare_hook_point), so other
+## extensions can use it without a warning.
+func declare_hook_point(name: StringName) -> void:
+	Hooks.declare_hook_point(name)
+
+
+func declare_value_point(name: StringName) -> void:
+	Hooks.declare_value_point(name)
+
+
+func _check_point(name: StringName, value: bool) -> void:
+	if Hooks.is_value_point(name) if value else Hooks.is_hook_point(name):
+		return
+	var what := "%s %s" % ["value point" if value else "hook point", name]
+	if what in unknown_points:
+		return
+	unknown_points.append(what)
+	push_warning("extension %s: the game has no %s (a typo, or a point that was removed): it never runs" % [id, what])
 
 
 ## Removes this extension's modifiers from the value point `name`, or from every point when no name is given (e.g.
