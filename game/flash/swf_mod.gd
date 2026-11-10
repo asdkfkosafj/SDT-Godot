@@ -9,14 +9,19 @@ extends RefCounted
 static var cache_root := "user://modcache"
 ## Bump when the converter output changes, so cached conversions are redone.
 ## 2: "ma" (a shape's most opaque alpha, masks use the geometry); 3: COSTUME_FILL_GROW; 4: shape images are lossless
-## WebP with their transparent edges already filled in (half the size of PNG, and no fix_alpha_edges when loading).
-const CONVERTER_VERSION := 4
+## WebP with their transparent edges already filled in (half the size of PNG, and no fix_alpha_edges when loading);
+## 6: the colour fills also as drawn (an entry's "drawn" flag: the image <img><DRAWN_SUFFIX>).
+const CONVERTER_VERSION := 6
 ## Costume colour fills (the shapes inside sprites named rgbFill / rgbFill2) are grown outward by this many pixels
 ## (at 1x, solid parts only, see SWFFile.render): where a piece's edge lies exactly on her outline or on the next
 ## piece's edge, the two anti-aliased edges otherwise let what is underneath show through as a light line, much more
 ## than in Flash (whose renderer anti-aliases within a screen pixel; here the 2x textures are filtered down).
+## They are also kept as drawn (entry "drawn": the image named with DRAWN_SUFFIX, same size and position): hair has no
+## such seams, and its grown fills poke past the outline at the thin tips, so hair mods use those
+## (FlashLibrary.use_drawn_fills).
 const COSTUME_FILL_GROW := 1.5
 const COSTUME_FILLS := ["rgbFill", "rgbFill2"]
+const DRAWN_SUFFIX := "d"
 ## Classes of the SDT mod kit implemented natively (the mod's compiled copies are ignored).
 const KIT_CLASSES := {"SDTMods.ModPackage": "res://src/SDTMods/ModPackage.gd"}
 
@@ -327,21 +332,35 @@ static func convert_swf(bytes: PackedByteArray, out_dir: String, scale: float) -
 
 	var fills := _costume_fill_shapes(chars, root)
 	var blob := PackedByteArray()
+	# what Godot's importer does for the game's own art, done once here instead of at every load: transparent pixels
+	# take their neighbours' colour, so filtering draws no dark seams where two pieces meet. Lossless WebP keeps those
+	# pixels exactly.
+	var save := func(r: Dictionary, img_name: String) -> void:
+		var image: Image = r["image"]
+		image.fix_alpha_edges()
+		image.save_webp(out_dir.path_join("shapes/%s.webp" % img_name))
 	var render := func(cid: int, ratio: int, img_name: String) -> Dictionary:
 		var r: Dictionary = swf.render(cid, ratio, scale, COSTUME_FILL_GROW if fills.has(cid) else 0.0)
 		if r.is_empty() or r["empty"]:
 			return {}
-		# what Godot's importer does for the game's own art, done once here instead of at every load: transparent
-		# pixels take their neighbours' colour, so filtering draws no dark seams where two pieces meet. Lossless WebP
-		# keeps those pixels exactly.
-		var image: Image = r["image"]
-		image.fix_alpha_edges()
-		image.save_webp(out_dir.path_join("shapes/%s.webp" % img_name))
+		save.call(r, img_name)
 		var entry := {"img": img_name, "x": r["x"], "y": r["y"], "w": r["w"], "h": r["h"],
 			"hm": [blob.size(), r["hw"], r["hh"]]}
 		if r.has("ma"):
 			entry["ma"] = r["ma"]
 		blob.append_array(r["hit"])
+		if fills.has(cid):
+			# as drawn, placed in an image the size of the grown one: the entry (bounds, hit mask) stays the same and
+			# only the picture changes, so a shape can never show one image at the other's position
+			var d: Dictionary = swf.render(cid, ratio, scale, 0.0)
+			if not d.is_empty() and not d["empty"]:
+				var grown: Image = r["image"]
+				var drawn: Image = d["image"]
+				var padded := Image.create_empty(grown.get_width(), grown.get_height(), false, drawn.get_format())
+				padded.blit_rect(drawn, Rect2i(Vector2i.ZERO, drawn.get_size()),
+					Vector2i(roundi((d["x"] - r["x"]) * scale), roundi((d["y"] - r["y"]) * scale)))
+				save.call({"image": padded}, img_name + DRAWN_SUFFIX)
+				entry["drawn"] = true
 		return entry
 	for cid in all_chars:
 		if stop_converting:

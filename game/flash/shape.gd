@@ -117,6 +117,12 @@ func _set_entry(e: Dictionary) -> void:
 	_show(e, _library.get_texture(e["img"]) if e.has("img") else null)
 
 
+## The library switched the file of the entry's picture (FlashLibrary.use_drawn_fills): load it again.
+func _picture_changed() -> void:
+	if _entry.has("img"):
+		_show(_entry, _library.get_texture(_entry["img"]))
+
+
 func _show(e: Dictionary, t: Texture2D) -> void:
 	if t == _texture and e == _draw_entry:
 		return

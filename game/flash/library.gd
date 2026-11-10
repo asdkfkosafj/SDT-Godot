@@ -22,6 +22,8 @@ var mod: Object = null
 var image_format := "png"
 var edges_fixed := false
 var _cutouts: Dictionary = {}    # char id -> has_cutout result
+var drawn_fills := false         # use_drawn_fills has run
+var _drawn_imgs: Dictionary = {} # images whose drawn file shape_path picks then
 
 var _textures: Dictionary = {}
 var _decoded: Dictionary = {}    # img -> Image, ready for get_texture (decode_all)
@@ -66,6 +68,8 @@ static func load_from(dir: String) -> FlashLibrary:
 
 ## The file of a shape image.
 func shape_path(img: String) -> String:
+	if drawn_fills and _drawn_imgs.has(img):
+		img += FlashSwfMod.DRAWN_SUFFIX
 	return path.path_join("shapes/%s.%s" % [img, image_format])
 
 
@@ -139,22 +143,76 @@ func decode_all() -> void:
 		return
 	_all_decoded = true
 	var ext := "." + image_format
-	var files: Array = Array(DirAccess.get_files_at(dir)).filter(func(f: String):
-		return f.ends_with(ext) and not f.begins_with("m") and _textures.get(f.get_basename()) == null)
-	if files.is_empty():
+	# image names, not files: shape_path picks the drawn file of a colour fill (use_drawn_fills)
+	var names: Array = Array(DirAccess.get_files_at(dir)).filter(func(f: String):
+		return f.ends_with(ext) and not f.begins_with("m") and not f.get_basename().ends_with(FlashSwfMod.DRAWN_SUFFIX) \
+			and _textures.get(f.get_basename()) == null).map(func(f: String): return f.get_basename())
+	_decode_into(names)
+
+
+## Decodes the named images on worker threads into _decoded (for get_texture).
+func _decode_into(names: Array) -> void:
+	if names.is_empty():
 		return
 	var images: Array = []
-	images.resize(files.size())
+	images.resize(names.size())
 	var fix := not edges_fixed
-	var id := WorkerThreadPool.add_group_task(func(i: int): images[i] = _decode(dir.path_join(files[i]), fix), files.size(), -1, true)
+	var id := WorkerThreadPool.add_group_task(func(i: int): images[i] = _decode(shape_path(names[i]), fix),
+		names.size(), -1, true)
 	WorkerThreadPool.wait_for_group_task_completion(id)
-	for i in files.size():
+	for i in names.size():
 		if images[i] != null:
-			_decoded[files[i].get_basename()] = images[i]
+			_decoded[names[i]] = images[i]
 
 
 func forget_decoded() -> void:
 	_decoded.clear()
+
+
+## Mods only: the colour fills are drawn as the mod drew them, not grown (FlashSwfMod.COSTUME_FILL_GROW). Hair mods
+## switch when they are registered (CustomElementLoader.parseMod): grown, the thin tips of the fills poke out past the
+## hair's outline. The drawn images have the grown ones' size and position, so only the pictures change: the shapes
+## already made (under `tree` or in the scene) are given theirs now, the others load them when they are made.
+func use_drawn_fills(tree: Node = null) -> void:
+	if drawn_fills:
+		return
+	var stills: Array = []
+	for k in chars:
+		var c = chars[k]
+		if not c is Dictionary:
+			continue
+		if c.get("drawn", false) and c.has("img"):
+			_drawn_imgs[c["img"]] = true
+			stills.append(c["img"])
+		elif c.get("t") == "morph":
+			for r in c["ratios"].values():
+				if r is Dictionary and r.get("drawn", false):
+					_drawn_imgs[r["img"]] = true
+	if _drawn_imgs.is_empty():
+		return
+	drawn_fills = true
+	for img in _drawn_imgs:   # loaded or decoded from the grown files
+		_textures.erase(img)
+		_decoded.erase(img)
+		_images.erase(img)
+		if _lru.has(img):
+			_lru_bytes -= _lru[img]
+			_lru.erase(img)
+	_decode_into(stills)
+	var done := {}
+	for root in [tree, Flash.get_tree().current_scene if Flash.get_tree() else null]:
+		if root != null:
+			_redraw_shapes(root, done)
+	for img in stills:
+		_decoded.erase(img)
+
+
+func _redraw_shapes(n: Node, done: Dictionary) -> void:
+	if n is FlashShape and n._library == self and not done.has(n):
+		done[n] = true
+		n._picture_changed()
+	for c in n.get_children():
+		_redraw_shapes(c, done)
 
 
 ## Non-blocking get for morph frames: returns the texture if it is cached, otherwise starts loading it on a worker

@@ -227,6 +227,9 @@ func parseMod(m) -> void:
 	var mt = _p(m, "modType")
 	if mt != null and normalModType(str(mt)) != str(mt):
 		m.set("modType", normalModType(str(mt)))
+	if str(_p(m, "modType")) in [ModTypes.HAIR, ModTypes.DYNAMIC_HAIR] and m is FlashDisplayObject \
+			and m._library is FlashLibrary and m._library.is_mod:
+		m._library.use_drawn_fills(m)   # port: hair is drawn without the costume fills' growth (FlashSwfMod)
 	match str(_p(m, "modType")):
 		ModTypes.MOD_PACKAGE:
 			if _p(m, "charData") and not blockSwfCharData:
