@@ -5,7 +5,7 @@ extends Node2D
 ## (x < 0 and x > 700 in the side areas). The background draws as wide as it is: the game's own are 700 wide, a
 ## wide custom image or a SWF background may reach into the side areas. Behind it, filling the window: a blurred,
 ## darkened copy of the background (Settings > Window > Blurred sides). Her, him and the strands may reach into the
-## side areas too (the game's screen masks are widened to the window).
+## side areas too (the game's screen masks are widened to the window), and the screen effects cover it all.
 ## Based on the widescreen shell contributed by @Nuengtoppin (issue #1).
 
 const STAGE_SIZE := Vector2(700, 600)
@@ -196,6 +196,7 @@ func _process(delta: float) -> void:
 	else:
 		_sides_tick = -1
 	_fit_masks()
+	_fit_screen_effects()
 	_fit_title()
 
 
@@ -253,6 +254,23 @@ func _cover(o: FlashDisplayObject, rect: Rect2) -> void:
 	var want: Transform2D = parent.flash_global_transform().affine_inverse() * Flash.stage.flash_global_transform() * in_stage
 	if not o.transform.is_equal_approx(want):
 		o.transform = want
+
+
+## The transform, in `parent`'s space, that stretches something drawn for the 700x600 game field over the whole window
+## (screen effects: white flash, whiteout, the darkening of the darkenpassout plugin).
+static func field_fit(parent: FlashDisplayObject) -> Transform2D:
+	var r: Rect2 = Flash.presentation_rect
+	var fit := Transform2D(Vector2(r.size.x / STAGE_SIZE.x, 0), Vector2(0, r.size.y / STAGE_SIZE.y), r.position)
+	return parent.flash_global_transform().affine_inverse() * Flash.stage.flash_global_transform() * fit
+
+
+## The game's white flash and whiteout (ScreenEffects, drawn for the game field) cover the whole window.
+func _fit_screen_effects() -> void:
+	if not is_instance_valid(g.screenEffects) or g.screenEffects._flash_parent == null:
+		return
+	var want := field_fit(g.screenEffects._flash_parent)
+	if not g.screenEffects.transform.is_equal_approx(want):
+		g.screenEffects.transform = want
 
 
 ## The game's screen masks (ScreenMask, 700x600) are widened to the window, so her, him and the strands are not

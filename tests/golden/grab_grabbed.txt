@@ -209,7 +209,7 @@ alpha=1.000
 _had_offsets=false
 blendMode=normal
 _mask_hidden=false
-_gxf_epoch=19941
+_gxf_epoch=19942
 mouseX=-129.209
 mouseY=-55.434
 _gclean=false
@@ -313,7 +313,7 @@ alpha=1.000
 _had_offsets=false
 blendMode=layer
 _mask_hidden=false
-_gxf_epoch=19941
+_gxf_epoch=19942
 mouseX=-669.467
 mouseY=58.764
 _gclean=false
@@ -997,7 +997,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                    [FlashShape#492] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [FlashMovieClip#2053] f=1/1 pos=(-0.0,-50.0) sc=(1.00,1.17) rot=0.0
          [FlashShape#2052] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-       [ScreenEffects#116] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
+       [ScreenEffects#116] f=1/1 pos=(0.0,-50.0) sc=(1.00,1.17) rot=0.0
         whiteout [FlashMovieClip#106] f=1/100 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#104] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
         whiteFlash [FlashMovieClip#115] f=1/41 'normal' pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0

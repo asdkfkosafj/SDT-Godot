@@ -38,7 +38,7 @@ func _enable() -> void:
 	var c: FlashSprite = g.container
 	_blackover = FlashSprite.new()
 	_blackover.graphics.beginFill(0x000000, 1.0)
-	_blackover.graphics.drawRect(0, 0, 900, 700)
+	_blackover.graphics.drawRect(0, 0, 700, 600)   # the game field; _match_screen stretches it over the window
 	_blackover.graphics.endFill()
 	_blackover.alpha = 0
 	_blackover.mouseEnabled = false
@@ -81,6 +81,7 @@ func _setting_changed(key: String, value) -> void:
 
 
 func _tick() -> void:
+	_match_screen()
 	var her = g.her
 	if on:
 		_button.set_color(0x00FF00)
@@ -115,12 +116,12 @@ func _passed_out() -> void:
 		_flash.stopPulse()
 
 
-## The game's screen effects are scaled to the screen size; match them.
+## The rings and the darkening are drawn for the 700x600 game field; like the game's own screen effects they are
+## stretched over the whole window, which may be wider or taller than the field.
 func _match_screen() -> void:
-	var se: ScreenEffects = g.screenEffects
-	_flash.whiteFlash.scaleX = se.whiteFlash.scaleX
-	_flash.whiteFlash.x = se.whiteFlash.x
-	_flash.whiteout.scaleX = se.whiteout.scaleX
-	_flash.whiteout.x = se.whiteout.x
-	_blackover.scaleX = se.whiteFlash.scaleX
-	_blackover.x = se.whiteFlash.x
+	if _flash == null or _flash._flash_parent == null:
+		return
+	var want := Presentation.field_fit(_flash._flash_parent)
+	if not _flash.transform.is_equal_approx(want):
+		_flash.transform = want
+		_blackover.transform = want
