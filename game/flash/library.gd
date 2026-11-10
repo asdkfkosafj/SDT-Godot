@@ -17,6 +17,10 @@ var fps: float = 30.0
 ## GDScript classes, and their ActionScript runs through `mod`.
 var is_mod := false
 var mod: Object = null
+## Shape image files: "png" (the game's own, imported by Godot; older mod conversions) or "webp" (mods converted
+## since FlashSwfMod.CONVERTER_VERSION 4). `edges_fixed`: the transparent edges are filled in already.
+var image_format := "png"
+var edges_fixed := false
 var _cutouts: Dictionary = {}    # char id -> has_cutout result
 
 var _textures: Dictionary = {}
@@ -55,7 +59,14 @@ static func load_from(dir: String) -> FlashLibrary:
 	lib.width = data.get("width", 700.0)
 	lib.height = data.get("height", 600.0)
 	lib.fps = data.get("fps", 30.0)
+	lib.image_format = str(data.get("imageFormat", "png"))
+	lib.edges_fixed = bool(data.get("edgesFixed", false))
 	return lib
+
+
+## The file of a shape image.
+func shape_path(img: String) -> String:
+	return path.path_join("shapes/%s.%s" % [img, image_format])
 
 
 func get_char(id: int) -> Dictionary:
@@ -86,30 +97,35 @@ func get_texture(img: String) -> Texture2D:
 	if t != null:
 		_touch(img)
 		return t
-	var p := path.path_join("shapes/%s.png" % img)
+	var p := shape_path(img)
 	if p.begins_with("res://"):
 		Flash.prof_count("#texture loads (blocking)")
 		Flash.hitch_note("blocking texture load")
 		t = load(p)   # waits for an in-flight background load of the same file
+	elif _jobs.has(img):
+		Flash.hitch_note("blocking texture load")
+		t = _finish_job(img)   # waits for its worker
+		return t
 	else:
-		# Mods converted at runtime / outside the project are plain PNG files.
+		# Mods converted at runtime are plain image files.
 		var image: Image = _decoded.get(img)
 		if image != null:
 			_decoded.erase(img)
 		else:
-			image = _decode(p)
+			image = _decode(p, not edges_fixed)
 		if image != null:
 			t = ImageTexture.create_from_image(image)
 	_cache(img, t)
 	return t
 
 
-static func _decode(p: String) -> Image:
+static func _decode(p: String, fix_edges: bool) -> Image:
 	var image := Image.load_from_file(p)
 	if image != null:
-		# what Godot's importer does for the game's own art: transparent pixels take their neighbours' colour,
-		# so filtering does not draw dark seams where two mod pieces meet
-		image.fix_alpha_edges()
+		if fix_edges:
+			# what Godot's importer does for the game's own art: transparent pixels take their neighbours' colour,
+			# so filtering does not draw dark seams where two mod pieces meet (newer conversions have it done)
+			image.fix_alpha_edges()
 		image.generate_mipmaps()
 	return image
 
@@ -122,13 +138,15 @@ func decode_all() -> void:
 	if dir.begins_with("res://") or _all_decoded:
 		return
 	_all_decoded = true
+	var ext := "." + image_format
 	var files: Array = Array(DirAccess.get_files_at(dir)).filter(func(f: String):
-		return f.ends_with(".png") and not f.begins_with("m") and _textures.get(f.get_basename()) == null)
+		return f.ends_with(ext) and not f.begins_with("m") and _textures.get(f.get_basename()) == null)
 	if files.is_empty():
 		return
 	var images: Array = []
 	images.resize(files.size())
-	var id := WorkerThreadPool.add_group_task(func(i: int): images[i] = _decode(dir.path_join(files[i])), files.size(), -1, true)
+	var fix := not edges_fixed
+	var id := WorkerThreadPool.add_group_task(func(i: int): images[i] = _decode(dir.path_join(files[i]), fix), files.size(), -1, true)
 	WorkerThreadPool.wait_for_group_task_completion(id)
 	for i in files.size():
 		if images[i] != null:
@@ -148,11 +166,16 @@ func request_texture(img: String, waiter: Object = null) -> Texture2D:
 	if t != null:
 		_touch(img)
 		return t
-	var p := path.path_join("shapes/%s.png" % img)
-	if not p.begins_with("res://") or not _threaded:
+	var p := shape_path(img)
+	if not _threaded or _decoded.has(img):   # decoded already (decode_all): only the texture is left to make
 		return get_texture(img)
 	if not _pending.has(img):
-		if ResourceLoader.load_threaded_request(p, "Texture2D") != OK:
+		if not p.begins_with("res://"):
+			# a mod's image: decoded on a worker thread (port: decoding them here took 3-4 ms per morph frame)
+			var holder := [null]
+			var fix := not edges_fixed
+			_jobs[img] = [WorkerThreadPool.add_task(func(): holder[0] = _decode(p, fix)), holder]
+		elif ResourceLoader.load_threaded_request(p, "Texture2D") != OK:
 			return get_texture(img)
 		Flash.prof_count("#texture loads (background)")
 		_pending[img] = []
@@ -171,7 +194,11 @@ func is_texture_cached(img: String) -> bool:
 static func drain_streaming() -> void:
 	for lib in _streaming:
 		for img in lib._pending.keys():
-			ResourceLoader.load_threaded_get(lib.path.path_join("shapes/%s.png" % img))
+			if lib._jobs.has(img):
+				WorkerThreadPool.wait_for_task_completion(lib._jobs[img][0])
+			else:
+				ResourceLoader.load_threaded_get(lib.shape_path(img))
+		lib._jobs.clear()
 		lib._pending.clear()
 	_streaming.clear()
 
@@ -190,7 +217,12 @@ static func poll_streaming() -> void:
 
 
 func _poll_one(img: String) -> bool:
-	var p := path.path_join("shapes/%s.png" % img)
+	if _jobs.has(img):
+		if not WorkerThreadPool.is_task_completed(_jobs[img][0]):
+			return false
+		_finish_job(img)
+		return true
+	var p := shape_path(img)
 	var st := ResourceLoader.load_threaded_get_status(p)
 	if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
 		return false
@@ -204,6 +236,26 @@ func _poll_one(img: String) -> bool:
 		if is_instance_valid(w):
 			w._texture_ready(img, t)
 	return true
+
+
+## A mod image's worker decode (request_texture): waits for it if it is still running, makes the texture, hands it to
+## the shapes waiting for it.
+var _jobs: Dictionary = {}   # img -> [WorkerThreadPool task id, [Image]]
+
+
+func _finish_job(img: String) -> Texture2D:
+	var job: Array = _jobs[img]
+	_jobs.erase(img)
+	WorkerThreadPool.wait_for_task_completion(job[0])
+	var image: Image = job[1][0]
+	var t: Texture2D = ImageTexture.create_from_image(image) if image != null else null
+	_cache(img, t)
+	var waiters: Array = _pending.get(img, [])
+	_pending.erase(img)
+	for w in waiters:
+		if is_instance_valid(w):
+			w._texture_ready(img, t)
+	return t
 
 
 # ---------------------------------------------------------------- warm-up list (port)
@@ -250,7 +302,7 @@ func warm_up(dir: String) -> int:
 	var n := 0
 	_warming = true
 	for img in FileAccess.get_file_as_string(p).split("\n", false):
-		if _textures.get(img) == null and ResourceLoader.exists(path.path_join("shapes/%s.png" % img)):
+		if _textures.get(img) == null and ResourceLoader.exists(shape_path(img)):
 			request_texture(img)
 			n += 1
 	_warming = false
@@ -292,7 +344,7 @@ var _images: Dictionary = {}
 func get_image(img: String) -> Image:
 	var im: Image = _images.get(img)
 	if im == null:
-		var p := path.path_join("shapes/%s.png" % img)
+		var p := shape_path(img)
 		if p.begins_with("res://"):
 			var tex: Texture2D = load(p)
 			im = tex.get_image() if tex != null else null

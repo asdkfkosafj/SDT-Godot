@@ -8,7 +8,9 @@ extends RefCounted
 ## Folder of the converted mods (main.gd --mod-cache=<folder> points tests elsewhere).
 static var cache_root := "user://modcache"
 ## Bump when the converter output changes, so cached conversions are redone.
-const CONVERTER_VERSION := 3   # 2: "ma" (a shape's most opaque alpha, masks use the geometry); 3: COSTUME_FILL_GROW
+## 2: "ma" (a shape's most opaque alpha, masks use the geometry); 3: COSTUME_FILL_GROW; 4: shape images are lossless
+## WebP with their transparent edges already filled in (half the size of PNG, and no fix_alpha_edges when loading).
+const CONVERTER_VERSION := 4
 ## Costume colour fills (the shapes inside sprites named rgbFill / rgbFill2) are grown outward by this many pixels
 ## (at 1x, solid parts only, see SWFFile.render): where a piece's edge lies exactly on her outline or on the next
 ## piece's edge, the two anti-aliased edges otherwise let what is underneath show through as a light line, much more
@@ -134,9 +136,12 @@ static func convert_swf(bytes: PackedByteArray, out_dir: String, scale: float) -
 		return false
 	for sub in ["shapes", "sounds", "bitmaps", "binary"]:
 		DirAccess.make_dir_recursive_absolute(out_dir.path_join(sub))
+	# an older conversion's images (other names or another format) would stay behind otherwise
+	for f in DirAccess.get_files_at(out_dir.path_join("shapes")):
+		DirAccess.remove_absolute(out_dir.path_join("shapes").path_join(f))
 	var info: Dictionary = swf.get_info()
 	var lib := {"version": 1, "converterVersion": CONVERTER_VERSION, "width": info["width"], "height": info["height"],
-		"fps": info["fps"], "scale": scale, "classes": {}, "chars": {}}
+		"fps": info["fps"], "scale": scale, "classes": {}, "chars": {}, "imageFormat": "webp", "edgesFixed": true}
 	var chars: Dictionary = lib["chars"]
 	var symbols: Dictionary = swf.get_symbol_classes()
 	for cid in symbols:
@@ -175,7 +180,12 @@ static func convert_swf(bytes: PackedByteArray, out_dir: String, scale: float) -
 		var r: Dictionary = swf.render(cid, ratio, scale, COSTUME_FILL_GROW if fills.has(cid) else 0.0)
 		if r.is_empty() or r["empty"]:
 			return {}
-		(r["image"] as Image).save_png(out_dir.path_join("shapes/%s.png" % img_name))
+		# what Godot's importer does for the game's own art, done once here instead of at every load: transparent
+		# pixels take their neighbours' colour, so filtering draws no dark seams where two pieces meet. Lossless WebP
+		# keeps those pixels exactly.
+		var image: Image = r["image"]
+		image.fix_alpha_edges()
+		image.save_webp(out_dir.path_join("shapes/%s.webp" % img_name))
 		var entry := {"img": img_name, "x": r["x"], "y": r["y"], "w": r["w"], "h": r["h"],
 			"hm": [blob.size(), r["hw"], r["hh"]]}
 		if r.has("ma"):
