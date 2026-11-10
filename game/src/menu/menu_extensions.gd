@@ -51,6 +51,13 @@ static func build_list() -> Control:
 			w.add_theme_font_size_override("font_size", MenuTheme.SMALL + 1)
 			w.add_theme_color_override("font_color", MenuTheme.WARN)
 			row.add_child(w)
+		if ext.fault != "":
+			var fl := Label.new()
+			fl.text = "Switched off: " + ext.fault
+			fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			fl.add_theme_font_size_override("font_size", MenuTheme.SMALL + 1)
+			fl.add_theme_color_override("font_color", MenuTheme.WARN)
+			row.add_child(fl)
 		v.add_child(row)
 		switches.append([ext, sw, settings])
 	for pid in Extensions.plugins:

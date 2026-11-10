@@ -98,6 +98,16 @@ of failing during play. It raises `MIN_API_VERSION` when it changes or removes s
   scripts with `load_script("other.gd")` and files with `file_path("art.png")` instead of `res://` paths.
 - A plugin with errors is skipped; the rest of the game and the other plugins still load.
 - If the game crashes or hangs while a plugin loads, that plugin is switched off at the next start.
+- Errors during play are contained. The game notes which extension's code it is running (ticks, hooks, value
+  points, events, keys, character code fields, settings, its menu widgets; `guarded(fn)` wraps any other callback
+  the game's UI calls directly). A plugin whose code raises an error is switched off for the rest of the session,
+  and the Extensions list shows the error with its file and line. The player's on/off choice is kept, so the plugin
+  is tried again at the next start, or at once when they switch it on again. Its own `push_error()` lines and
+  warnings do not count. Debug builds also find plugin code through the script backtrace (its own nodes and signals).
+- Release builds report far fewer script errors: there are no null checks, so a call on `null` crashes the game,
+  and an index out of range goes by silently. On Windows the native library notes which plugin was running when the
+  game crashed (`SDTCrashNote`, file `extensions/crashed_plugin.txt` next to the save), and the next start switches
+  that plugin off and says why. Test plugins in a debug build (the editor binary) to see their errors.
 - Plugins can do anything a program can, as Loader mods could: only install plugins you trust.
 
 `tests/plugins/example` is a small working plugin.

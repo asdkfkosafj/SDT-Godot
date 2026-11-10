@@ -82,15 +82,17 @@ for s in $scenarios; do
 	[ $images = 1 ] && (run_pictures "$s"; echo $? > "$WORK/img_$s.status") &
 done
 # Extension system checks (game/debug/ext_checks.gd); not in Vanilla mode, they switch extensions on and off.
-# They load the test plugins from tests/plugins; "crashy" is marked as having crashed the previous start.
+# They load the test plugins from tests/plugins; "crashy" is marked as having crashed the previous start while it
+# loaded, "crashed" as having crashed the game while its code ran (the native crash note).
 mkdir -p "$WORK/mods_ext/Plugins" "$WORK/save_ext/extensions" "$WORK/mods_da"
 cp -r tests/plugins/*/ "$WORK/mods_ext/Plugins/"
 printf crashy > "$WORK/save_ext/extensions/loading_plugin.txt"
+printf crashed > "$WORK/save_ext/extensions/crashed_plugin.txt"
 godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_ext.log" -- --save-dir="$WORK/save_ext" --mods-dir="$WORK/mods_ext" \
 	--driver=res://debug/ext_checks.gd > "$WORK/ext_checks.log" 2>&1 &
 ext_pid=$!
 # Built-in DialogueActions checks (game/debug/da_checks.gd)
-godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_da.log" -- --save-dir="$WORK/save_da" --mods-dir="$WORK/mods_da" \
+godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_da.log" -- --deterministic --save-dir="$WORK/save_da" --mods-dir="$WORK/mods_da" \
 	--driver=res://debug/da_checks.gd > "$WORK/da_checks.log" 2>&1 &
 da_pid=$!
 # New in-game menu checks (game/debug/menu_checks.gd)
@@ -136,7 +138,7 @@ done
 # Script errors fail the checks too, except the deliberate ones (the broken test plugins, a duplicate id).
 script_errors() {   # each error line with the "at:" line after it
 	awk '/SCRIPT ERROR|^ERROR/ { e = $0; getline n; print e " | " n }' "$1" \
-		| grep -v -E "at exit|gdscript://|mods_ext/Plugins|missing or duplicate id|already used|contains ';'|has errors|uses class_name" | head -5
+		| grep -v -E "at exit|gdscript://|mods_ext/Plugins|missing or duplicate id|a problem it reports itself|already used|contains ';'|has errors|uses class_name" | head -5
 }
 if [ -n "$(script_errors "$WORK/ext_checks.log")" ] || [ -n "$(script_errors "$WORK/da_checks.log")" ] 		|| [ -n "$(script_errors "$WORK/menu_checks.log")" ]; then
 	echo "FAIL script errors in the checks:"

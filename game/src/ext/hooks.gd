@@ -176,7 +176,14 @@ static func _run(name: StringName, phase: String, obj: Object, args: Array, resu
 		var fn: Callable = h[2]
 		if not fn.is_valid():
 			continue
+		# the guard (Extensions.enter), inline: built-in code called from the game itself needs no tracking
+		var prev := Extensions.running
+		var track: bool = prev != "" or Extensions.plugins.has(h[4])
+		if track:
+			Extensions.enter(h[4])
 		fn.call(c)
+		if track:
+			Extensions.leave(prev)
 		if c.cancelled:
 			c.cancelled_by = h[4]
 			break
@@ -315,12 +322,26 @@ static func value(name: StringName, obj: Object, v):
 		while i < n and list[i].phase == phase:
 			var m: Modifier = list[i]
 			i += 1
-			if m.when.is_valid() and not m.when.call(obj):
-				m.holding = false
-				continue
+			if m.when.is_valid():
+				var prev := Extensions.running
+				var track: bool = prev != "" or Extensions.plugins.has(m.owner)
+				if track:
+					Extensions.enter(m.owner)
+				var on: bool = m.when.call(obj)
+				if track:
+					Extensions.leave(prev)
+				if not on:
+					m.holding = false
+					continue
 			match m.op:
 				"fn":
+					var prev := Extensions.running
+					var track: bool = prev != "" or Extensions.plugins.has(m.owner)
+					if track:
+						Extensions.enter(m.owner)
 					v = m.fn.call(v, obj)
+					if track:
+						Extensions.leave(prev)
 					entering = v
 				"set":
 					if set_by != null and set_by.owner != m.owner and set_by.value != m.value:

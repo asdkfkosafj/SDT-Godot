@@ -99,6 +99,11 @@ func modify(name: StringName, spec: Dictionary) -> int:
 ## Y"): their handlers never run. Shown in the Extensions list and logged once each.
 var unknown_points: Array[String] = []
 
+## Why this plugin was stopped ("" while it is fine): an error in its code switches it off for the session, a crash
+## of the game while its code ran switches it off at the next start (see Extensions, "guard"). Shown in the
+## Extensions list; cleared when the player switches it on again.
+var fault := ""
+
 
 ## Declares a hook point / value point this extension runs itself (see Hooks.declare_hook_point), so other
 ## extensions can use it without a warning.
@@ -161,7 +166,7 @@ func menu_button(menu: String, x: float, y: float, text: String, on_click: Calla
 	var b := ExtButton.new(w, h, text)
 	b.x = x
 	b.y = y
-	b.on_click = on_click
+	b.on_click = guarded(on_click)
 	parent.addChild(b)
 	Extensions._add_widget(self, b)
 	return b
@@ -185,7 +190,7 @@ func menu_add(menu: String, obj: FlashDisplayObject, x: float, y: float) -> Flas
 func menu_slider(menu: String, x: float, y: float, w: float, h: float, value: float, on_change: Callable) -> ExtSlider:
 	var sl := ExtSlider.new(w, h)
 	sl.set_value(value)
-	sl.on_change = on_change
+	sl.on_change = guarded(on_change)
 	return menu_add(menu, sl, x, y)
 
 
@@ -264,7 +269,24 @@ func set_setting(key: String, value) -> void:
 		return
 	s["value"] = value
 	Extensions._save_setting(self, key, value)
+	var prev := Extensions.enter(id)
 	_setting_changed(key, value)
+	Extensions.leave(prev)
+
+
+## `fn` wrapped so that errors in it count as this extension's (see `fault`): for callbacks the game's UI calls
+## directly, such as a widget's. The menu helpers here already do it; up to two arguments.
+func guarded(fn: Callable) -> Callable:
+	var eid := id
+	return func(a = null, b = null):
+		var prev := Extensions.enter(eid)
+		var r
+		match fn.get_argument_count():
+			0: r = fn.call()
+			1: r = fn.call(a)
+			_: r = fn.call(a, b)
+		Extensions.leave(prev)
+		return r
 
 
 ## Setting keys in declaration order, with their info ("value", "default", "label", ...).

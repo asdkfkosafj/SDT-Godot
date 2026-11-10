@@ -89,7 +89,9 @@ func run_addon(owner: String, setup: Callable) -> void:
 	var before := _owner
 	_owner = owner
 	vars.owner = owner
+	var prev := Extensions.enter(owner)
 	setup.call(self)
+	Extensions.leave(prev)
 	_owner = before
 	vars.owner = before
 

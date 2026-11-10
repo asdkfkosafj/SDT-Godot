@@ -86,7 +86,9 @@ static func pressed(keycode: int, shift: bool, ctrl: bool, alt: bool) -> void:
 		hits = _bound_to(keycode)
 	for a in hits.filter(func(x): return x["owner"] != GAME):
 		if a["fn"].is_valid():
+			var prev := Extensions.enter(a["owner"])
 			a["fn"].call()
+			Extensions.leave(prev)
 	for a in hits.filter(func(x): return x["owner"] == GAME):
 		if a["fn"].is_valid():
 			a["fn"].call()

@@ -9,6 +9,8 @@ extends RefCounted
 ## - "Vanilla mode" (setting, or --vanilla on the command line) keeps every extension off.
 ## - Tick callbacks run at two fixed points of the game tick (Flash.tick_before / tick_after), in extension load
 ##   order; their time shows in --profile and in HITCH lines as "ext:<id>".
+## - Plugin errors are contained (see "guard" below): a plugin whose code raises an error is switched off for the
+##   session, and one that crashed the game is switched off at the next start.
 
 ## Built-in extensions (script paths), in load order.
 const BUILTIN: Array[String] = [
@@ -100,6 +102,7 @@ static func start() -> void:
 	_load_config()
 	vanilla_mode = "--vanilla" in OS.get_cmdline_user_args() or bool(_config.get_value("extensions", "vanilla_mode", false))
 	_install_tick()
+	_install_guard()
 	for path in BUILTIN:
 		var scr = load(path)
 		if scr == null:
@@ -158,6 +161,7 @@ static func set_enabled(ext_id: String, on: bool) -> void:
 		return
 	_config.set_value("enabled", ext_id, on)
 	_save_config()
+	ext.fault = ""   # the player tries it again
 	if vanilla_mode:
 		return
 	if on and not ext.enabled:
@@ -188,8 +192,10 @@ static func data_root() -> String:
 
 static func _enable(ext: SDTExtension) -> void:
 	ext.enabled = true
+	var prev := enter(ext.id)
 	ext._enable()
 	CharCode.adopt_kept(ext.id)
+	leave(prev)
 
 
 static func _disable(ext: SDTExtension) -> void:
@@ -211,7 +217,9 @@ static func _disable(ext: SDTExtension) -> void:
 		_events[name] = _events[name].filter(func(e): return e[0] != ext)
 	_ticks = _ticks.filter(func(t): return t[0] != ext)
 	_late_ticks = _late_ticks.filter(func(t): return t[0] != ext)
+	var prev := enter(ext.id)
 	ext._disable()
+	leave(prev)
 
 
 ## Releases every extension when the game quits (main scene _exit_tree). Plugin scripts are compiled at runtime;
@@ -220,6 +228,7 @@ static func shutdown() -> void:
 	for ext in all.duplicate():
 		if ext.enabled:
 			_disable(ext)
+	_uninstall_guard()
 	all.clear()
 	by_id.clear()
 	_ticks.clear()
@@ -248,6 +257,14 @@ static func load_plugins(dir: String) -> void:
 			_config.set_value("enabled", bad, false)
 			_save_config()
 		DirAccess.remove_absolute(marker)
+	var note := data_root().path_join(CRASH_NOTE)
+	if FileAccess.file_exists(note):
+		crashed_last_time = FileAccess.get_file_as_string(note).strip_edges()
+		DirAccess.remove_absolute(note)
+		if crashed_last_time != "":
+			push_warning("extensions: plugin '%s' crashed the game last time; it has been switched off" % crashed_last_time)
+			_config.set_value("enabled", crashed_last_time, false)
+			_save_config()
 	var da := DirAccess.open(dir)
 	if da == null:
 		return
@@ -310,6 +327,11 @@ static func _load_plugin(pid: String, folder: String, cfg: ConfigFile, marker: S
 		ext.author = plugins[pid]["author"]
 		ext.version = plugins[pid]["version"]
 		ext.default_enabled = bool(cfg.get_value("plugin", "enabled_by_default", true))
+		if pid == crashed_last_time:
+			ext.fault = "it crashed the game last time, so it was switched off"
+		_note_numbers[pid] = _note_numbers.size() + 1
+		if _note != null:
+			_note.name_plugin(_note_numbers[pid], pid)
 		add(ext)
 	DirAccess.remove_absolute(marker)
 
@@ -327,6 +349,7 @@ static func compile_script(path: String) -> GDScript:
 			return null
 	var scr := GDScript.new()
 	scr.source_code = src
+	scr.resource_path = path   # errors and backtraces name the file (the guard finds the plugin by it)
 	if scr.reload() != OK:
 		push_warning("extensions: %s has errors" % path)
 		return null
@@ -372,7 +395,9 @@ static func emit(name: String, args: Array = []) -> void:
 	for e in _events.get(name, []).duplicate():
 		var fn: Callable = e[1]
 		if fn.is_valid():
+			var prev := enter(e[0].id)
 			fn.callv(args)
+			leave(prev)
 
 
 static func _add_event(ext: SDTExtension, name: String, fn: Callable) -> void:
@@ -416,7 +441,13 @@ static func _run_ticks(list: Array, phase: String) -> void:
 		if not fn.is_valid():
 			continue
 		var ts := Time.get_ticks_usec()
+		var prev := running
+		var track: bool = prev != "" or not t[0].builtin
+		if track:
+			enter(t[0].id)
 		fn.call()
+		if track:
+			leave(prev)
 		Flash.account_listener("ext:%s.%s" % [t[0].id, phase], Time.get_ticks_usec() - ts)
 
 
@@ -439,3 +470,145 @@ static func _save_setting(ext: SDTExtension, key: String, value) -> void:
 		_load_config()
 	_config.set_value(ext.id, key, value)
 	_save_config()
+
+
+# ---------------------------------------------------------------- guard (port)
+
+## Plugin errors are contained. The game notes which extension's code runs (`running`, set around every call it
+## makes into one: ticks, hooks, value points, events, keys, character code fields, settings, menu widgets), and a
+## Logger puts the errors reported meanwhile down to it; in debug builds the script backtrace also finds plugin code
+## the game did not call directly (its own nodes and signals). A plugin whose code raised an error is switched off
+## for the rest of the session (`fault` says why, in Mods > Extensions); the player's choice is kept, so it is tried
+## again at the next start. Its own push_error() lines and warnings do not count.
+## Release builds report far fewer script errors (no null checks: a call on null crashes the game), so the native
+## crash note (SDTCrashNote, Windows) writes the running plugin's id to CRASH_NOTE when the game crashes; the next
+## start switches that plugin off. Built-in extensions are tracked too, but never switched off.
+const CRASH_NOTE := "crashed_plugin.txt"
+## The extension whose code runs now (its id), or "" while the game's own code runs.
+static var running := ""
+## The plugin switched off at this start because it crashed the game last time, or "".
+static var crashed_last_time := ""
+static var _guard: Logger = null
+static var _note: Object = null   # SDTCrashNote, when the native library has it
+static var _note_numbers := {}    # plugin id -> its number for the crash note
+static var _note_running := 0     # the number the crash note has now
+static var _faults: Array = []    # [extension id, message], applied at the next frame
+static var _applying := false
+
+
+## Marks `owner`'s code as running; returns what ran before, for leave(). The hot loops (hooks, value points,
+## ticks) skip it for built-in code the game calls directly (nothing to put an error down to), inline.
+static func enter(owner: String) -> String:
+	var prev := running
+	if owner != prev:
+		running = owner
+		if _note != null:
+			var n: int = _note_numbers.get(owner, 0)
+			if n != _note_running:
+				_note_running = n
+				_note.set_running(n)
+	return prev
+
+
+static func leave(prev: String) -> void:
+	if running != prev:
+		running = prev
+		if _note != null:
+			var n: int = _note_numbers.get(prev, 0)
+			if n != _note_running:
+				_note_running = n
+				_note.set_running(n)
+
+
+## The plugin whose folder holds this script file, or "".
+static func plugin_of_file(file: String) -> String:
+	if file == "":
+		return ""
+	var f := file.replace("\\", "/")
+	for pid in plugins:
+		var folder := str(plugins[pid]["folder"]).replace("\\", "/")
+		if folder != "" and f.begins_with(folder.trim_suffix("/") + "/"):
+			return pid
+	return ""
+
+
+static func _install_guard() -> void:
+	if _guard == null:
+		_guard = _Guard.new()
+		OS.add_logger(_guard)
+	if _note == null and ClassDB.class_exists(&"SDTCrashNote"):
+		DirAccess.make_dir_recursive_absolute(data_root())
+		_note = ClassDB.instantiate(&"SDTCrashNote")
+		if not _note.install(ProjectSettings.globalize_path(data_root().path_join(CRASH_NOTE))):
+			_note = null
+
+
+static func _uninstall_guard() -> void:
+	if _guard != null:
+		OS.remove_logger(_guard)
+		_guard = null
+	if _note != null:
+		_note.uninstall()
+		_note = null
+		_note_running = 0
+		# a clean exit: a note written for an exception that was handled after all goes
+		var note := data_root().path_join(CRASH_NOTE)
+		if FileAccess.file_exists(note):
+			DirAccess.remove_absolute(note)
+	running = ""
+
+
+## An error was reported while `owner`'s code ran (main thread): its extension is switched off at the next frame.
+static func _report_fault(owner: String, message: String) -> void:
+	if _applying:
+		return
+	var ext: SDTExtension = by_id.get(owner)
+	if ext == null or ext.builtin or ext.fault != "":
+		return
+	for f in _faults:
+		if f[0] == owner:
+			return
+	_faults.append([owner, message])
+	if _faults.size() == 1:
+		var tree := Engine.get_main_loop() as SceneTree
+		if tree != null:
+			tree.process_frame.connect(_apply_faults, CONNECT_ONE_SHOT)
+
+
+static func _apply_faults() -> void:
+	_applying = true
+	for f in _faults:
+		var ext: SDTExtension = by_id.get(f[0])
+		if ext == null or ext.fault != "":
+			continue
+		ext.fault = "stopped after an error: " + f[1]
+		push_warning("extensions: plugin '%s' %s" % [ext.id, ext.fault])
+		if ext.enabled:
+			_disable(ext)
+	_faults.clear()
+	_applying = false
+
+
+## Puts errors down to the extension that was running (or, in debug builds, to the plugin in the backtrace).
+class _Guard extends Logger:
+	func _log_error(function: String, file: String, line: int, code: String, rationale: String,
+			_editor_notify: bool, error_type: int, script_backtraces: Array[ScriptBacktrace]) -> void:
+		if error_type == ERROR_TYPE_WARNING or function == "push_error":
+			return
+		if OS.get_thread_caller_id() != OS.get_main_thread_id():
+			return
+		var owner := Extensions.running
+		if not Extensions.plugins.has(owner):
+			owner = Extensions.plugin_of_file(file)
+			for bt in script_backtraces:
+				if owner != "":
+					break
+				for i in bt.get_frame_count():
+					owner = Extensions.plugin_of_file(bt.get_frame_file(i))
+					if owner != "":
+						break
+		if owner == "" or not Extensions.plugins.has(owner):
+			return
+		var where := file.get_file() + ":" + str(line) if file != "" else function
+		var what := rationale if rationale != "" else code
+		Extensions._report_fault(owner, "%s (%s)" % [what.strip_edges(), where])

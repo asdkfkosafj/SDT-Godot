@@ -69,7 +69,7 @@ static func add_field(key: String, owner: String, getter: Callable, setter: Call
 static func remove_owner(owner: String) -> void:
 	for key in _order.duplicate():
 		if _fields[key]["owner"] == owner:
-			var v = _fields[key]["get"].call()
+			var v = _field_value(key)
 			if v != null and not ";" in str(v):
 				_unknown[key] = str(v)
 			_fields.erase(key)
@@ -116,7 +116,7 @@ static func save_fields(vanilla: String) -> String:
 		present[p.get_slice(":", 0)] = true
 	var s := ""
 	for key in _order:
-		var v = _fields[key]["get"].call()
+		var v = _field_value(key)
 		if v == null:
 			continue
 		v = str(v)
@@ -184,7 +184,17 @@ static func mods_loaded() -> void:
 static func _apply(l: Load, keys: Array) -> void:
 	for key in keys:
 		var f: Dictionary = _fields[key]
+		var prev := Extensions.enter(f["owner"])
 		if l.pairs.has(key):
 			f["set"].call(l.pairs[key], l)
 		elif l.is_full() and f["reset"].is_valid():
 			f["reset"].call(l)
+		Extensions.leave(prev)
+
+
+## A field's value from its extension's getter.
+static func _field_value(key: String):
+	var prev := Extensions.enter(_fields[key]["owner"])
+	var v = _fields[key]["get"].call()
+	Extensions.leave(prev)
+	return v

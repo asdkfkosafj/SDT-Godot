@@ -151,9 +151,73 @@ func step(_frame: int) -> void:
 				_loadershortcuts_checks()
 				_disable_checks()
 				_plugin_checks()
-				print("EXT CHECKS: %d passed, %d failed" % [_pass, _fail])
-				Flash.get_tree().quit(1 if _fail > 0 else 0)
+				_guard_start()
 				_phase = 4
+		4, 5, 6:
+			_guard_step()
+		7:
+			print("EXT CHECKS: %d passed, %d failed" % [_pass, _fail])
+			Flash.get_tree().quit(1 if _fail > 0 else 0)
+			_phase = 8
+
+
+## The guard (Extensions, "guard"): the test plugin "faulty" raises a script error from its tick, then from a
+## hook; each time it is switched off at the next frame, the game goes on, and switching it on again clears it.
+## Its own push_error() does not count. "crashed" was named in a crash note, so it starts switched off.
+var _faulty: SDTExtension = null
+var _guard_frame := 0
+
+
+func _guard_start() -> void:
+	var crashed = Extensions.get_extension("crashed")
+	_check("plugin named in the crash note is off, with the reason", crashed != null and not crashed.enabled
+		and "crashed the game" in crashed.fault and Extensions.crashed_last_time == "crashed",
+		str(crashed.fault if crashed != null else null))
+	_check("crash note read once", not FileAccess.file_exists(Extensions.data_root().path_join(Extensions.CRASH_NOTE)))
+	_check("native crash note installed", Extensions._note != null or not ClassDB.class_exists(&"SDTCrashNote"))
+	_faulty = Extensions.get_extension("faulty")
+	_check("faulty plugin loaded and on", _faulty != null and _faulty.enabled and _faulty.fault == "")
+	if _faulty == null:
+		_phase = 7
+		return
+	_faulty.report()
+	_check("nothing is running between calls", Extensions.running == "", Extensions.running)
+	_faulty.boom = "tick"
+	_faulty.set_meta("ticks_at_boom", _faulty.ticks)
+	_guard_frame = Flash.tick_count
+
+
+func _guard_step() -> void:
+	if Flash.tick_count < _guard_frame + 3:
+		return
+	match _phase:
+		4:
+			_check("plugin stopped after an error in its tick", not _faulty.enabled and "plugin.gd" in _faulty.fault
+				and "stopped after an error" in _faulty.fault, _faulty.fault)
+			_check("its push_error did not count", not "reports itself" in _faulty.fault, _faulty.fault)
+			var ran: int = _faulty.ticks - int(_faulty.get_meta("ticks_at_boom"))
+			_check("its ticks no longer run", ran <= 2, str(ran))
+			_check("the player's choice is kept", Extensions.is_on("faulty"))
+			_check("other plugins go on", Extensions.get_extension("needs_example").enabled)
+			_check("nothing is left marked as running", Extensions.running == "", Extensions.running)
+			_faulty.boom = "hook"
+			Extensions.set_enabled("faulty", true)
+			_check("switching it on again clears the fault", _faulty.enabled and _faulty.fault == "")
+			g.her.passOut()
+			_guard_frame = Flash.tick_count
+			_phase = 5
+		5:
+			_check("plugin stopped after an error in a hook", not _faulty.enabled and "plugin.gd" in _faulty.fault,
+				_faulty.fault)
+			_faulty.boom = ""
+			Extensions.set_enabled("faulty", true)
+			var before: int = _faulty.ticks
+			_guard_frame = Flash.tick_count
+			_faulty.set_meta("ticks_before", before)
+			_phase = 6
+		6:
+			_check("a fixed plugin runs again", _faulty.enabled and _faulty.ticks > int(_faulty.get_meta("ticks_before")))
+			_phase = 7
 
 
 ## AS3 int() / uint(): truncation towards 0 and 32-bit wrapping, as in Flash (the character code's uint() fields).

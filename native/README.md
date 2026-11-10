@@ -13,6 +13,8 @@ Currently native:
 - `SDTFluids` (fluids.cpp) - the spit / cum strands simulated as plain data and drawn as one mesh per strand layer
   (used by StrandControl, with NativeStrand handles for the game).
 - `SDTSweat` (sweat.cpp) - the sweat droplets, drawn by one SweatBatch node per body part (used by Sweat.gd).
+- `SDTCrashNote` (crash_note.cpp) - notes which plugin's code was running when the game crashed (Windows: a
+  vectored exception handler), so the next start can switch it off (game/src/ext/extensions.gd, "guard").
 
 Objects are built per target in `build/template_debug` and `build/template_release`.
 
