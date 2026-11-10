@@ -2039,7 +2039,7 @@ func loadData(param1, param2 = true, param3 = false, param4 = null):
 				"ear":
 					g.characterControl.findEar(_loc8_[1])
 				"breasts":
-					g.characterControl.setBreasts(max(1,min(149,AS3.toInt(_loc8_[1]))))
+					g.characterControl.setBreasts(max(1,min(149,AS3.toUint(_loc8_[1]))))
 				"skin":
 					g.characterControl.findSkin(_loc8_[1])
 				"sclera":
@@ -2119,7 +2119,7 @@ func loadData(param1, param2 = true, param3 = false, param4 = null):
 				_loc24_ = Array(_loc8_[1].split(","))
 				checkAndLoadRGB(",".join(PackedStringArray(_loc24_.slice(0,4))),g.characterControl.setMascara)
 				if _loc24_.size() > 4 and _loc24_[4]:
-					_loc26_ = AS3.toInt(_loc24_[4])
+					_loc26_ = AS3.toUint(_loc24_[4])
 					_loc26_ = min(100,_loc26_)
 					g.mascaraAmount = _loc26_
 					updateMascaraSlider()
@@ -2214,7 +2214,7 @@ func loadData(param1, param2 = true, param3 = false, param4 = null):
 			_loc31_.contentLoaderInfo.addEventListener(FlashEvent.IO_ERROR,modIOError)
 	elif _loc12_ != "":
 		g.customElementLoader.clearCustomBackground()
-		_loc32_ = AS3.toInt(_loc12_)
+		_loc32_ = AS3.toUint(_loc12_)
 		_loc32_ = min(g.bgNum,_loc32_)
 		g.bg.gotoAndStop(_loc32_)
 		g.bgID = _loc32_

@@ -102,6 +102,7 @@ func step(_frame: int) -> void:
 			_hook_checks()
 			_value_checks()
 			_listener_order_checks()
+			_as3_int_checks()
 			_lifecycle_start()
 			_ext.modify(&"T.ext", {"op": "set", "value": 1.0})
 			_phase = 1
@@ -153,6 +154,14 @@ func step(_frame: int) -> void:
 				print("EXT CHECKS: %d passed, %d failed" % [_pass, _fail])
 				Flash.get_tree().quit(1 if _fail > 0 else 0)
 				_phase = 4
+
+
+## AS3 int() / uint(): truncation towards 0 and 32-bit wrapping, as in Flash (the character code's uint() fields).
+func _as3_int_checks() -> void:
+	var got := [AS3.toInt("4294967295"), AS3.toInt(2147483648), AS3.toInt(-1.9), AS3.toInt("abc"), AS3.toInt("0x10"),
+		AS3.toUint("-1"), AS3.toUint(-0.5), AS3.toUint(4294967297.0), AS3.toUint(NAN), AS3.toUint("7.9")]
+	var want := [-1, -2147483648, -1, 0, 16, 4294967295, 0, 1, 0, 7]
+	_check("AS3 int() / uint() wrap like Flash", got == want, str(got))
 
 
 ## Flash event listeners: higher priority first, equal priorities in the order they were added (also for many of

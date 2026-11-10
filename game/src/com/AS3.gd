@@ -69,9 +69,19 @@ static func looseEquals(a, b) -> bool:
 	return str(a) == str(b)
 
 
-## AS3 int(v) / uint(v) for strings and numbers: NaN and non-numeric become 0, fractions truncate.
+## AS3 int(v): NaN, infinities and non-numeric become 0, fractions truncate towards 0, and the result wraps to a
+## signed 32-bit number (int(4294967295) is -1).
 static func toInt(v) -> int:
+	var u := toUint(v)
+	return u - 4294967296 if u >= 2147483648 else u
+
+
+## AS3 uint(v): as int(v), but wrapping to an unsigned 32-bit number (uint(-1) is 4294967295).
+static func toUint(v) -> int:
 	var n := Number(v)
 	if is_nan(n) or is_inf(n):
 		return 0
-	return int(n)
+	var m := fmod(signf(n) * floorf(absf(n)), 4294967296.0)
+	if m < 0.0:
+		m += 4294967296.0
+	return int(m)
