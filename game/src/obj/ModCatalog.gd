@@ -49,7 +49,9 @@ var picker_merge: Dictionary = {}
 const COSTUME := "*costume"
 var _seen: Array = []         # [path, catalog] of every mod looked at, for lists added later
 var _queue: Array = []        # paths still to inspect
-var _converting: Dictionary = {}  # task id -> [path, bytes]
+var _converting: Dictionary = {}  # cache dir -> [path, bytes] (the conversion runs in FlashSwfMod)
+## New mods handed to the converter at once (it runs FlashSwfMod.converter_threads of them, her mods first)
+var _slots: int = FlashSwfMod.converter_threads + 1
 var _waiting: Array = []          # [path, cache dir] of new mods waiting for a free conversion slot
 ## Main-thread time per tick for reading cached catalogs (the file read and hash of each .swf are most of it)
 const TICK_BUDGET_US := 3000
@@ -127,14 +129,13 @@ func _scan(dir: String) -> void:
 ## seen before is done in a few frames); new mods are converted on worker threads (two at a time) and then inspected
 ## on the main thread one per tick (their frame scripts must run to know what they contain).
 func _tick() -> void:
-	for id in _converting.keys():
-		if WorkerThreadPool.is_task_completed(id):
-			WorkerThreadPool.wait_for_task_completion(id)
-			var job: Array = _converting[id]
-			_converting.erase(id)
+	for dir in _converting.keys():
+		if not FlashSwfMod.converting(dir):
+			var job: Array = _converting[dir]
+			_converting.erase(dir)
 			_inspect(job[0], job[1])
 			return
-	while not _waiting.is_empty() and _converting.size() < 2:
+	while not _waiting.is_empty() and _converting.size() < _slots:
 		_convert(_waiting.pop_front())
 	var t0 := Time.get_ticks_usec()
 	while not _queue.is_empty() and Time.get_ticks_usec() - t0 < TICK_BUDGET_US:
@@ -164,7 +165,7 @@ func _step(path: String) -> bool:
 	if FlashSwfMod.is_converted(dir):
 		_inspect(path, bytes)
 		return false
-	if _converting.size() < 2:
+	if _converting.size() < _slots:
 		_convert([path, dir], bytes)
 	else:
 		_waiting.append([path, dir])   # not its bytes: a large new collection would hold them all in memory
@@ -176,20 +177,16 @@ func _convert(job: Array, bytes := PackedByteArray()) -> void:
 		bytes = FileAccess.get_file_as_bytes(job[0])
 	if bytes.is_empty():
 		return
-	var dir: String = job[1]
-	var scale: float = Flash.base_library.scale
-	var id := WorkerThreadPool.add_task(func(): FlashSwfMod.convert_swf(bytes, dir, scale), false, "convert mod")
-	_converting[id] = [job[0], bytes]
+	if not FlashSwfMod.async_conversion:
+		_inspect(job[0], bytes)   # converts it (headless runs: tests repeat exactly)
+		return
+	_converting[FlashSwfMod.convert_async(bytes, job[0])] = [job[0], bytes]
 
 
 ## The game quits: mods still converting on worker threads stop and are waited for (a worker thread still running
 ## GDScript while the engine shuts down crashes it).
 func shutdown() -> void:
-	if _converting.is_empty():
-		return
-	FlashSwfMod.stop_converting = true
-	for id in _converting.keys():
-		WorkerThreadPool.wait_for_task_completion(id)
+	FlashSwfMod.stop_all()
 	_converting.clear()
 	_waiting.clear()
 	_queue.clear()
@@ -197,9 +194,7 @@ func shutdown() -> void:
 
 ## The scan's progress, for the loading notice: {finished, done, total, converting: file names}.
 func progress() -> Dictionary:
-	var names: Array = []
-	for job in _converting.values():
-		names.append(str(job[0]).get_file())
+	var names: Array = FlashSwfMod.converting_names()
 	return {"finished": _scanned, "done": _total - _queue.size() - _waiting.size() - _converting.size(), "total": _total,
 		"converting": names}
 
@@ -353,6 +348,27 @@ func remove_entry(e: Dictionary) -> void:
 
 ## Adds a mod's items to the pickers they belong to (only_key: just to that extension list).
 func _add(path: String, cat: Dictionary, only_key = null, remember := true) -> void:
+	var first_new := entries.size()
+	_add_entries(path, cat, only_key, remember)
+	if not _wanted.is_empty() and entries.size() > first_new:
+		_answer_wanted(first_new)
+
+
+## A character waiting for a mod by name (find_named) gets it as soon as the scan has added it, not after the whole
+## collection: the first entry that answers, as after a full scan (entries are added in the same order).
+func _answer_wanted(first_new: int) -> void:
+	for w in _wanted.duplicate():
+		var n := g.dataName(w[1])
+		for i in range(first_new, entries.size()):
+			var e: Dictionary = entries[i]
+			if n in e.get("names", []) and (w[0] == null or is_same(e.get("helper", e.get("picker")), w[0])):
+				_wanted.erase(w)
+				_due += 1
+				_answer.call_deferred(w[2], e)
+				break
+
+
+func _add_entries(path: String, cat: Dictionary, only_key = null, remember := true) -> void:
 	if only_key == null and remember:
 		_seen.append([path, cat])
 	var rel := _relative(path)

@@ -164,6 +164,10 @@ func modSelectHandler(_e = null) -> void:
 
 
 func loadNextModFile() -> void:
+	if loadingMod == 0 and modFileList.fileList.size() > 1:
+		# port: the mods that still need converting start converting together on worker threads (one after the
+		# other here, they kept the screen black for as long as all of them took)
+		FlashSwfMod.prefetch(modFileList.fileList.map(func(f): return f._path))
 	if loadingMod < modFileList.fileList.size():
 		parsingModFile = modFileList.fileList[loadingMod]
 		loadingModPackage = LoadedModPackage.new("swfMod", parsingModFile)

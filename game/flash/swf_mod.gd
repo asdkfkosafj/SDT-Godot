@@ -26,11 +26,16 @@ var abc: Array[FlashAbc] = []
 
 static func register() -> void:
 	if ClassDB.class_exists(&"SWFFile"):
+		FlashLoader.preparers.append(_loader_prepare)
 		FlashLoader.handlers.append(_loader_handler)
 
 
+static func is_swf(bytes: PackedByteArray) -> bool:
+	return bytes.size() >= 8 and bytes[1] == 0x57 and bytes[2] == 0x53 and (bytes[0] == 0x43 or bytes[0] == 0x46)
+
+
 static func _loader_handler(path: String, bytes: PackedByteArray) -> FlashDisplayObject:
-	if bytes.size() < 8 or not (bytes[1] == 0x57 and bytes[2] == 0x53 and (bytes[0] == 0x43 or bytes[0] == 0x46)):
+	if not is_swf(bytes):
 		return null  # not CWS / FWS
 	var mod := load_mod(bytes, path)
 	if mod == null:
@@ -42,6 +47,150 @@ static func _loader_handler(path: String, bytes: PackedByteArray) -> FlashDispla
 ## conversion writes no library.json, so the mod is converted again next time.
 static var stop_converting := false
 static var _loaded: Dictionary = {}   # digest -> FlashSwfMod (each file's library is loaded once)
+
+## Conversions run on the converter's own threads, shared by the mod scan (ModCatalog) and the Loader, so a mod is
+## converted once. Not Godot's WorkerThreadPool: a thread waiting there for one of its tasks (the main thread loading
+## a texture) may run a queued task itself, and a conversion takes up to a minute. Not in headless runs (tests):
+## there a mod converts when it is loaded, so runs repeat exactly.
+static var async_conversion: bool = DisplayServer.get_name() != "headless"
+## How many mods convert at once in the background (the scan of the collection), and how many more for the mods the
+## player waits for (her character's): those never wait behind a big mod of the collection.
+static var converter_threads: int = clampi(OS.get_processor_count() / 4, 2, 8)
+static var _jobs: Dictionary = {}    # cache dir -> {"name", "bytes", "scale", "done"}; done is set by its thread
+## Per kind (0 background, 1 urgent): cache dirs waiting for a thread (next first), the threads, one semaphore post
+## per queued job (and one per thread to stop them).
+static var _queues: Array = [[], []]
+static var _threads: Array = [[], []]
+static var _work: Array = [Semaphore.new(), Semaphore.new()]
+static var _lock := Mutex.new()      # the queues and the jobs' "done"
+
+
+## Starts converting a mod on a converter thread unless it is converted or converting already; returns its cache
+## dir. urgent: a mod the player waits for (her character's) goes ahead of the scan of the whole collection.
+static func convert_async(bytes: PackedByteArray, source_path: String, urgent := false) -> String:
+	var dir := cache_root.path_join(_sha256(bytes))
+	if _jobs.has(dir):
+		if urgent:   # queued by the scan and not started yet: it moves to the urgent threads
+			_lock.lock()
+			var moved: bool = _queues[0].has(dir)
+			if moved:
+				_queues[0].erase(dir)
+			_lock.unlock()
+			if moved:
+				_enqueue(dir, 1)
+		return dir
+	if is_converted(dir):
+		return dir
+	_jobs[dir] = {"name": source_path.get_file() if source_path != "" else dir.get_file(), "bytes": bytes,
+		"scale": Flash.base_library.scale if Flash.base_library else 2.0, "done": false}
+	_enqueue(dir, 1 if urgent else 0)
+	return dir
+
+
+static func _enqueue(dir: String, kind: int) -> void:
+	_lock.lock()
+	_queues[kind].push_back(dir)
+	_lock.unlock()
+	while _threads[kind].size() < converter_threads:
+		var t := Thread.new()
+		t.start(_thread_main.bind(kind), Thread.PRIORITY_LOW)
+		_threads[kind].append(t)
+	_work[kind].post()
+
+
+static func _thread_main(kind: int) -> void:
+	while true:
+		_work[kind].wait()
+		_lock.lock()
+		var q: Array = _queues[kind]
+		var dir = q.pop_front() if not q.is_empty() else null
+		var job: Dictionary = _jobs.get(dir, {}) if dir != null else {}
+		_lock.unlock()
+		if stop_converting:
+			return
+		if job.is_empty():
+			continue
+		var t0 := Time.get_ticks_msec()
+		if convert_swf(job["bytes"], dir, job["scale"]):
+			print("SWF mod converted: %s (%d ms, converter thread)" % [job["name"], Time.get_ticks_msec() - t0])
+		_lock.lock()
+		job["done"] = true
+		_lock.unlock()
+
+
+## Whether the conversion into `dir` is still running or waiting; a finished one is collected here (once).
+static func converting(dir: String) -> bool:
+	var job = _jobs.get(dir)
+	if job == null:
+		return false
+	_lock.lock()
+	var done: bool = job["done"]
+	_lock.unlock()
+	if not done:
+		return true
+	_jobs.erase(dir)
+	return false
+
+
+## Waits for the conversion into `dir` (load_mod needs it now): a queued one is converted here, on this thread.
+static func _wait_for(dir: String) -> void:
+	_lock.lock()
+	var queued := false
+	for q in _queues:
+		if q.has(dir):
+			q.erase(dir)
+			queued = true
+	_lock.unlock()
+	if queued:
+		var job: Dictionary = _jobs[dir]
+		convert_swf(job["bytes"], dir, job["scale"])
+		_jobs.erase(dir)
+		return
+	while converting(dir):
+		OS.delay_msec(5)
+
+
+## File names of the mods converting or waiting now.
+static func converting_names() -> Array:
+	var names: Array = []
+	for dir in _jobs:
+		names.append(_jobs[dir]["name"])
+	return names
+
+
+## The game quits: running conversions stop at their next symbol and their threads are waited for (a thread still
+## running GDScript while the engine shuts down crashes it).
+static func stop_all() -> void:
+	stop_converting = true
+	for kind in 2:
+		for t in _threads[kind]:
+			_work[kind].post()
+	for kind in 2:
+		for t in _threads[kind]:
+			t.wait_to_finish()
+		_threads[kind].clear()
+		_queues[kind].clear()
+	_jobs.clear()
+
+
+## Starts converting these mod files now, all at once and ahead of the scan (her character's mods, as soon as her
+## code names them), so the Loader finds them done or nearly.
+static func prefetch(paths: Array) -> void:
+	if not async_conversion:
+		return
+	for p in paths:
+		var bytes := FileAccess.get_file_as_bytes(p)
+		if is_swf(bytes):
+			convert_async(bytes, p, true)
+
+
+## FlashLoader preparer: a SWF mod that is not converted yet converts on a worker thread, and the Loader finishes
+## when it is done (port: converting on the main thread kept the screen black, 20 s and more for a big mod).
+static func _loader_prepare(path: String, bytes: PackedByteArray) -> Callable:
+	if not async_conversion or not is_swf(bytes):
+		return Callable()
+	var dir := convert_async(bytes, path, true)
+	return func(): return converting(dir)
 
 
 ## True if 'dir' holds a conversion made by the current converter.
@@ -58,6 +207,8 @@ static func load_mod(bytes: PackedByteArray, source_path: String = "") -> FlashS
 	if _loaded.has(digest):
 		return _loaded[digest]
 	var dir := cache_root.path_join(digest)
+	if _jobs.has(dir):
+		_wait_for(dir)   # converting on a thread, or waiting for one
 	if not is_converted(dir):
 		var t0 := Time.get_ticks_msec()
 		if not convert_swf(bytes, dir, Flash.base_library.scale if Flash.base_library else 2.0):

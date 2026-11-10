@@ -16,6 +16,10 @@ var contentLoaderInfo: LoaderInfo = LoaderInfo.new()
 
 ## Handlers tried in order: func(path: String, bytes: PackedByteArray) -> FlashDisplayObject (null = not mine).
 static var handlers: Array[Callable] = []
+## Port: work a handler needs done first, without blocking the game: func(path, bytes) -> Callable that returns
+## true while it is still busy (or an invalid Callable when there is nothing to wait for). The content and its
+## events then come on the frame after it is done (FlashSwfMod: converting a new mod on a worker thread).
+static var preparers: Array[Callable] = []
 
 
 func _init() -> void:
@@ -51,6 +55,13 @@ func _fail(msg: String) -> void:
 
 
 func _finish(path: String, bytes: PackedByteArray) -> void:
+	for p in preparers:
+		var busy: Callable = p.call(path, bytes)
+		if busy.is_valid() and busy.call():
+			while busy.call():
+				await Flash.get_tree().process_frame
+			if not is_instance_valid(self):
+				return
 	contentLoaderInfo.bytes = bytes
 	var c: FlashDisplayObject = null
 	for h in handlers:
