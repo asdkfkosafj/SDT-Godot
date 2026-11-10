@@ -96,10 +96,14 @@ godot --headless --path game -- --save-dir=/tmp/sdt-test --driver=res://debug/st
 `tools/regress.sh` runs the regression tests (Git Bash or any POSIX shell, with `GODOT` set). It plays fixed
 scenarios headless (menu, idle, grab and stroking, costume changes, every character, cumming) with sound and timers
 following game time, so runs repeat exactly. It compares dumps of the display list and character state with the
-references in `tests/golden/`. It runs without mods and with a throwaway save. Options:
+references in `tests/golden/`. It runs without mods and with a throwaway save. On Windows it also takes pictures
+of the same scenarios in a 1280 x 720 window on a hidden desktop (nothing shows on the screen) and compares them
+pixel by pixel with `tests/golden/images/`; a difference leaves a picture of the changed pixels in the work folder.
+The references come from one GPU, so another GPU or driver may differ slightly. Options:
 - `--update` accepts the current output as the new reference; check `git diff tests/golden` first;
 - `--stress` adds the costume stress test and reports memory per round;
-- `--mods=<folder>` load-tests every `.swf` mod in a folder.
+- `--mods=<folder>` load-tests every `.swf` mod in a folder;
+- `--no-images` skips the pictures.
 
 An intended change to the game's behaviour shows up as a difference: review it, then run `--update`.
 

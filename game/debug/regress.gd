@@ -4,13 +4,20 @@ extends RefCounted
 ## list (names, frames, transforms, colours) and the scalar state of Her and Him. tools/regress.sh compares them
 ## with the reference dumps in tests/golden/. Run with --deterministic --seed=1 --fixed-fps 30 so a tick is a frame.
 ## Actions are keyed on Flash.tick_count (game ticks), not on rendered frames.
+## --images=<folder> (windowed runs only, tools/regress.sh starts them on a hidden desktop): also saves a picture of
+## the window at the dumps listed in IMAGES, for the image goldens in tests/golden/images/. Textures then load on
+## the main thread, so a picture never misses one that was still loading.
 
 const SCENARIOS := ["menu", "idle", "grab", "costumes", "characters", "cum"]
+## Dumps that also get a picture with --images.
+const IMAGES := ["menu_menu", "idle_start", "idle_idle", "grab_grabbed", "grab_stroking", "costumes_dressed",
+	"characters_char02", "characters_char05", "characters_char08", "cum_spurt", "cum_after"]
 
 var _steps: Array = []   # [tick, Callable]
 var _next := 0
 var _out := ""
 var _name := ""
+var _images := ""
 
 
 func _init() -> void:
@@ -19,11 +26,16 @@ func _init() -> void:
 			_name = a.substr(11)
 		elif a.begins_with("--out="):
 			_out = a.substr(6)
+		elif a.begins_with("--images="):
+			_images = a.substr(9)
 	if not _name in SCENARIOS:
 		push_error("regress: unknown --scenario=%s (one of %s)" % [_name, SCENARIOS])
 		_at(1, func(): Flash.get_tree().quit(1))
 		return
 	DirAccess.make_dir_recursive_absolute(_out)
+	if _images != "":
+		DirAccess.make_dir_recursive_absolute(_images)
+		FlashLibrary._threaded = false
 	call("_scenario_" + _name)
 	_steps.sort_custom(func(a, b): return a[0] < b[0])
 
@@ -116,6 +128,21 @@ func _quit(tick: int) -> void:
 
 func _dump(tick: int, label: String) -> void:
 	_at(tick, func(): _write("%s_%s.txt" % [_name, label]))
+	if _images != "" and "%s_%s" % [_name, label] in IMAGES:
+		_at(tick, func(): _picture("%s_%s.webp" % [_name, label]))
+
+
+## Saves the window's picture once this frame (the tick just dumped) has been drawn.
+func _picture(file: String) -> void:
+	for n in Flash.get_tree().current_scene.get_children():   # the fps counter changes from run to run
+		if n is CanvasLayer and n.get_script() == preload("res://scenes/fps_counter.gd"):
+			n.visible = false
+	await RenderingServer.frame_post_draw
+	var img := Flash.get_viewport().get_texture().get_image()
+	if img == null or img.is_empty() or img.save_webp(_images.path_join(file)) != OK:   # lossless
+		push_error("regress: cannot save picture %s" % _images.path_join(file))
+		return
+	print("regress: pictured ", file)
 
 
 func _write(file: String) -> void:

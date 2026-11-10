@@ -8,6 +8,13 @@
 #   tools/regress.sh --update        accept the current output as the new reference (after checking the diff!)
 #   tools/regress.sh --stress        also run the costume stress test and report memory per round
 #   tools/regress.sh --mods=<dir>    also load every .swf mod in <dir> (and subfolders) and report failures
+#   tools/regress.sh --no-images     skip the image goldens
+#
+# Image goldens (tests/golden/images/): the same scenarios also run in a window, 1280 x 720, and pictures of the
+# window at the dumps listed in game/debug/regress.gd IMAGES are compared with the references pixel by pixel
+# (tools/image_compare.gd: tolerance, and a picture of what changed). Windows only: the windows open on a hidden
+# desktop (tools/hidden_desktop.ps1), so nothing shows on the screen. The references come from one GPU; another
+# GPU or driver may differ slightly: check the diff pictures, then --update.
 #
 # Needs GODOT (path to the Godot console executable) or godot on PATH. Each game run is stopped after REGRESS_TIMEOUT
 # seconds (default 300): a script that fails to compile leaves the game running without its driver's quit.
@@ -26,12 +33,15 @@ ALL="menu idle grab costumes characters cum"
 update=0
 stress=0
 mods=""
+images=0
+command -v powershell.exe > /dev/null && command -v cygpath > /dev/null && images=1
 scenarios=""
 for a in "$@"; do
 	case $a in
 		--update) update=1 ;;
 		--stress) stress=1 ;;
 		--mods=*) mods=${a#--mods=} ;;
+		--no-images) images=0 ;;
 		-*) echo "unknown option $a"; exit 2 ;;
 		*) scenarios="$scenarios $a" ;;
 	esac
@@ -53,9 +63,23 @@ run_game() {   # name, extra args...
 		--save-dir="$WORK/save_$name" --mods-dir="$WORK/mods" "$@" > "$WORK/$name.log" 2>&1
 }
 
+run_pictures() {   # name: the scenario in a window on a hidden desktop, its pictures into $WORK/img
+	local name=$1
+	mkdir -p "$WORK/save_img_$name"
+	printf '[window]\nsize="1280 x 720"\n' > "$WORK/save_img_$name/port.cfg"
+	local exe args
+	exe=$(cygpath -w "$(command -v "$GODOT")")
+	args="--audio-driver Dummy --fixed-fps 30 --path \"$(cygpath -m "$ROOT/game")\" --log-file \"$LOGS/godot_img_$name.log\""
+	args="$args -- --deterministic --seed=1 --vanilla --save-dir=\"$LOGS/save_img_$name\" --mods-dir=\"$LOGS/mods\""
+	args="$args --driver=res://debug/regress.gd --scenario=$name --out=\"$LOGS/out_img\" --images=\"$LOGS/img\""
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$ROOT/tools/hidden_desktop.ps1")" \
+		-TimeoutSec "$TIMEOUT" -Output "$LOGS/img_$name.log" -CommandLine "\"$exe\" $args"
+}
+
 echo "running:$scenarios (work folder $WORK)"
 for s in $scenarios; do
 	(run_game "$s" --driver=res://debug/regress.gd --scenario="$s" --out="$WORK/out"; echo $? > "$WORK/$s.status") &
+	[ $images = 1 ] && (run_pictures "$s"; echo $? > "$WORK/img_$s.status") &
 done
 # Extension system checks (game/debug/ext_checks.gd); not in Vanilla mode, they switch extensions on and off.
 # They load the test plugins from tests/plugins; "crashy" is marked as having crashed the previous start.
@@ -141,6 +165,31 @@ else
 	echo "FAIL menu checks, exit code $menu_status$(timed_out $menu_status) (see $WORK/menu_checks.log):"
 	grep -E "^CHECK FAIL|SCRIPT ERROR" -A1 "$WORK/menu_checks.log" | head -16
 	fail=1
+fi
+if [ $images = 1 ]; then
+	mkdir -p "$WORK/img" "$WORK/img_golden" "$WORK/img_diff" "$GOLDEN/images"
+	for s in $scenarios; do
+		st=$(cat "$WORK/img_$s.status" 2> /dev/null)
+		if [ "$st" != 0 ] || grep "ERROR" "$WORK/img_$s.log" | grep -v "at exit" > /dev/null; then
+			echo "FAIL $s pictures: exit code $st$(timed_out "$st") (see $WORK/img_$s.log):"
+			grep -A3 "ERROR" "$WORK/img_$s.log" | grep -v "at exit" | head -12
+			fail=1
+		fi
+		if [ $update = 1 ]; then
+			rm -f "$GOLDEN/images/${s}_"*.webp
+			cp "$WORK/img/${s}_"*.webp "$GOLDEN/images/" 2> /dev/null
+		else
+			cp "$GOLDEN/images/${s}_"*.webp "$WORK/img_golden/" 2> /dev/null
+		fi
+	done
+	if [ $update = 0 ]; then
+		"$GODOT" --headless --log-file "$LOGS/godot_compare.log" -s tools/image_compare.gd -- "$LOGS/img_golden" \
+			"$LOGS/img" "$LOGS/img_diff" 2>&1 | grep -E "^(ok|DIFF|NEW|MISSING)|ERROR" \
+			| sed -E 's/^(ok   |DIFF |NEW  |MISSING )/\1image /'
+		[ "${PIPESTATUS[0]}" = 0 ] || fail=1
+	fi
+else
+	echo "skip image goldens (Windows only, or --no-images)"
 fi
 [ $update = 1 ] && echo "references updated in tests/golden/ (review with git diff before committing)"
 
