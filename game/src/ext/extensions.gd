@@ -381,15 +381,23 @@ static func _add_event(ext: SDTExtension, name: String, fn: Callable) -> void:
 		return
 	if not _events.has(name):
 		_events[name] = []
-	_events[name].append([ext, fn])
-	_events[name].sort_custom(func(a, b): return all.find(a[0]) < all.find(b[0]))
+	_insert_in_load_order(_events[name], [ext, fn])
 
 
 static func _add_tick(ext: SDTExtension, fn: Callable, late: bool) -> void:
 	var list := _late_ticks if late else _ticks
-	list.append([ext, fn])
-	# keep extension load order, whatever order the callbacks were registered in
-	list.sort_custom(func(a, b): return all.find(a[0]) < all.find(b[0]))
+	_insert_in_load_order(list, [ext, fn])
+
+
+## Adds `entry` ([extension, ...]) to `list` in extension load order, whatever order the callbacks were registered in;
+## one extension's callbacks keep the order it registered them in (inserted, not sorted: Godot's sort_custom does not
+## keep the order of equal items).
+static func _insert_in_load_order(list: Array, entry: Array) -> void:
+	var rank := all.find(entry[0])
+	var at := list.size()
+	while at > 0 and all.find(list[at - 1][0]) > rank:
+		at -= 1
+	list.insert(at, entry)
 
 
 static func _install_tick() -> void:

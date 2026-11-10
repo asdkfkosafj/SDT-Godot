@@ -101,6 +101,7 @@ func step(_frame: int) -> void:
 		0:
 			_hook_checks()
 			_value_checks()
+			_listener_order_checks()
 			_lifecycle_start()
 			_ext.modify(&"T.ext", {"op": "set", "value": 1.0})
 			_phase = 1
@@ -152,6 +153,38 @@ func step(_frame: int) -> void:
 				print("EXT CHECKS: %d passed, %d failed" % [_pass, _fail])
 				Flash.get_tree().quit(1 if _fail > 0 else 0)
 				_phase = 4
+
+
+## Flash event listeners: higher priority first, equal priorities in the order they were added (also for many of
+## them: Godot's sort_custom reorders equal items once a list is long enough). Extension ticks: load order, and one
+## extension's callbacks in the order it registered them.
+func _listener_order_checks() -> void:
+	var seen: Array = []
+	var o := FlashSprite.new()
+	var d := FlashEventDispatcher.new()
+	for i in 40:
+		o.addEventListener("orderTest", func(_e): seen.append(i), false, 5 if i == 20 else 0)
+		d.addEventListener("orderTest", func(_e): seen.append(100 + i), false, 5 if i == 20 else 0)
+	o.dispatchEvent(FlashEvent.new("orderTest"))
+	d.dispatchEvent(FlashEvent.new("orderTest"))
+	var want: Array = [20]
+	for i in 40:
+		if i != 20:
+			want.append(i)
+	for i in want.duplicate():
+		want.append(100 + i)
+	_check("equal-priority listeners run in the order they were added", seen == want, str(seen))
+	o.free()
+	var ran: Array = []
+	var mine: Array = []
+	var ext: SDTExtension = Extensions.all[0]
+	for i in 30:
+		var fn := func(): ran.append(i)
+		mine.append(fn)
+		ext.on_late_tick(fn)
+	Extensions._run_ticks(Extensions._late_ticks.filter(func(t): return t[1] in mine), "late")
+	_check("one extension's ticks run in the order they were added", ran == range(30), str(ran))
+	Extensions._late_ticks = Extensions._late_ticks.filter(func(t): return not t[1] in mine)
 
 
 ## Her.swallow: a vetoed swallow restarts the wait with cum in her mouth (it would be retried every tick) and

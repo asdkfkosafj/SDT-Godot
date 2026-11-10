@@ -509,8 +509,12 @@ func addEventListener(type: String, listener: Callable, use_capture: bool = fals
 	for l in list:
 		if l[0] == listener and l[1] == use_capture:
 			return
-	list.append([listener, use_capture, priority])
-	list.sort_custom(func(a, b): return a[2] > b[2])
+	# higher priority first; equal priorities in the order they were added (Flash). Inserted, not sorted: Godot's
+	# sort_custom does not keep the order of equal items.
+	var at := list.size()
+	while at > 0 and list[at - 1][2] < priority:
+		at -= 1
+	list.insert(at, [listener, use_capture, priority])
 	_listeners[type] = list
 	_listener_types[type] = _listener_types.get(type, 0) + 1
 
