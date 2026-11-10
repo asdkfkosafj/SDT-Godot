@@ -496,13 +496,18 @@ func gaze_angle() -> float:
 		var iris = her.eye.ball.irisContainer.iris
 		var extra := clampf(iris.scaleY, 0, 1) / 0.9
 		extra = clampf(1 - extra, 0, 1)
-		var lid_target: float = her.eyelidMotion["target"]
+		# Port fix: the limit follows her upper eyelid as drawn. The mod took the more open of it and the game's
+		# eyelid target, which is far more open than the drawn lid when a mood lowers her lids (Numb, Depressed,
+		# ...) and another effect opens the target wide (ffbehavior): her irises then rolled up under the lid.
 		var upper_frame: float = her.eye.upperEyelid.currentFrame
-		var inc := maxf(em["target"] - raise * 0.5, s("eyelidslidereyeposbaselimit")
-			+ s("eyelidslidereyeposscalelimit") * minf(150, minf(upper_frame, lid_target)) / 150.0 + scale_y * extra)
+		var limit: float = s("eyelidslidereyeposbaselimit") \
+			+ s("eyelidslidereyeposscalelimit") * minf(150, upper_frame) / 150.0 + scale_y * extra
+		var inc := maxf(em["target"] - raise * 0.5, limit)
 		if not assigned and m != "Spent":
 			recenter = 0
-		em["target"] = inc - vibration + recenter
+		# Port fix: her eyes tremble as she runs out of air (up to half her pass-out factor), within the limit (the mod
+		# took the tremble off after limiting, so it rolled her irises up to 20 degrees past it)
+		em["target"] = maxf(inc - vibration + recenter, limit)
 	else:
 		em["target"] = em["target"] - (vibration + raise * 0.5)
 	return em["target"]
