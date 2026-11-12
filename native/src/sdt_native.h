@@ -22,7 +22,8 @@ protected:
 
 public:
 	// Strand.renderStrand (with generateInterpolationPoints): builds the strand's drawing as one vertex-coloured
-	// triangle mesh. Returns [points: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array].
+	// triangle mesh. Returns [points: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array,
+	// bounds: Rect2 of the points].
 	static Array build_strand(const PackedVector2Array &p_pos, const PackedFloat32Array &p_thickness,
 			const PackedFloat32Array &p_density, const PackedByteArray &p_has_stored,
 			const PackedVector2Array &p_stored, const Color &p_rgb, double p_alpha, double p_max_interp_dist);
@@ -58,6 +59,9 @@ struct StrandMesh {
 void sdt_append_strand_mesh(StrandMesh &mesh, const godot::Vector2 *pos, const float *thick, const float *dens,
 		const uint8_t *has_stored, const godot::Vector2 *stored, int n, const godot::Color &rgb, double alpha,
 		double max_interp_dist);
+
+// The points' bounding box, computed exactly like FlashGraphics._points_rect (so GDScript can skip that loop).
+godot::Rect2 sdt_points_rect(const std::vector<godot::Vector2> &points);
 
 // Shape hit test of obj at p (obj's local space) against obj's tree flattened once per tick, without Sweat.
 bool sdt_hit_flat(godot::Object *obj, const godot::Vector2 &p, int64_t tick);

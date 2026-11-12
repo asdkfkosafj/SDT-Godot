@@ -388,7 +388,7 @@ func _renderStrandNative() -> void:
 	var mesh: Array = ClassDB.class_call_static(&"SDTNative", &"build_strand", pos, thick, dens, has_stored, stored,
 		Color.hex((getRGB() << 8) | 0xFF), getAlpha(), maxInterpDist)
 	graphics.clear()
-	graphics.setMesh(mesh[0], mesh[1], mesh[2])
+	graphics.setMesh(mesh[0], mesh[1], mesh[2], mesh[3] if mesh.size() > 3 else null)
 
 
 func getAlpha() -> float:

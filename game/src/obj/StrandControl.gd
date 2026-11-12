@@ -22,6 +22,7 @@ var _container_objs: Array = []      # index -> display object
 var _layers: Array = []              # strandBackLayer, strandFrontLayer, cumLayer
 var _meshes: Array = []              # a FlashSprite per layer, drawing that layer's strands
 var _shown: Array = []               # per layer: it has strands now
+var _changed_only := false           # the library skips rebuilding unchanged meshes (get_mesh_changed)
 
 enum { EV_CUM_ON_FACE, EV_EYE_HIT, EV_EYE_CLEAR, EV_TONGUE_CUM_HIT, EV_TONGUE_CUM_REMOVED, EV_DROPLET }
 const IN_HEAD := 1
@@ -187,6 +188,7 @@ func _native() -> bool:
 	if not native_enabled or g.sceneLayer == null or g.strandBackLayer == null or g.her == null:
 		return false
 	fluids = ClassDB.instantiate(&"SDTFluids")
+	_changed_only = fluids.has_method(&"get_mesh_changed")
 	_layers = [g.strandBackLayer, g.strandFrontLayer, g.cumLayer]
 	for l in _layers:
 		var m := FlashSprite.new()
@@ -308,7 +310,7 @@ func _tick() -> void:
 	if g.gamePaused:
 		return
 	push_transforms()
-	fluids.set_targets(_targets(g.sceneLayer.flash_global_transform().affine_inverse()))
+	_push_targets()
 	_set_params()
 	_apply_events(fluids.tick())
 	if not FlashRectClip.smooth:
@@ -319,6 +321,15 @@ func _tick() -> void:
 	for i in _meshes.size():
 		if _shown[i]:
 			Flash.note_moved(_meshes[i].get_viewport())
+
+
+## Sends this tick's collision targets. Only fluids.tick() tests them, and only for the strands alive when it starts
+## (strands made later in the tick move from the next tick on, which sends its own targets): with none alive, building
+## them (0.25 ms) is skipped. The targets left from an earlier tick are then never used.
+func _push_targets() -> void:
+	if fluids.count(false) + fluids.count(true) == 0:
+		return
+	fluids.set_targets(_targets(g.sceneLayer.flash_global_transform().affine_inverse()))
 
 
 ## Redraws the strands every rendered frame, between ticks like the body they stick to.
@@ -334,7 +345,9 @@ class _Drawer:
 func _draw() -> void:
 	var f := Engine.get_physics_interpolation_fraction() if FlashRectClip.smooth and not g.gamePaused else 1.0
 	for i in _meshes.size():
-		var m: Array = fluids.get_mesh(i, f)
+		var m: Array = fluids.get_mesh_changed(i, f) if _changed_only else fluids.get_mesh(i, f)
+		if m.is_empty():
+			continue   # the same mesh as last time (settled strands, the same fraction): what is drawn stays
 		var any := not (m[0] as PackedVector2Array).is_empty()
 		if not any and not _shown[i]:
 			continue
@@ -342,7 +355,7 @@ func _draw() -> void:
 		gr.clear()
 		_shown[i] = any
 		if any:
-			gr.setMesh(m[0], m[1], m[2])
+			gr.setMesh(m[0], m[1], m[2], m[3] if m.size() > 3 else null)   # [3]: bounds (older libraries lack them)
 
 
 func _apply_events(events: Array) -> void:

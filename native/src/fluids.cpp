@@ -59,6 +59,7 @@ void SDTFluids::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("tick"), &SDTFluids::tick);
 	ClassDB::bind_method(D_METHOD("take_events"), &SDTFluids::take_events);
 	ClassDB::bind_method(D_METHOD("get_mesh", "layer", "fraction"), &SDTFluids::get_mesh);
+	ClassDB::bind_method(D_METHOD("get_mesh_changed", "layer", "fraction"), &SDTFluids::get_mesh_changed);
 	ClassDB::bind_method(D_METHOD("smear", "p", "radius"), &SDTFluids::smear);
 	ClassDB::bind_method(D_METHOD("detach_container", "container"), &SDTFluids::detach_container);
 	ClassDB::bind_method(D_METHOD("clear", "cum"), &SDTFluids::clear);
@@ -845,11 +846,29 @@ Array SDTFluids::take_events() {
 	return e;
 }
 
-Array SDTFluids::get_mesh(int layer, double fraction) const {
+namespace {
+template <typename T>
+bool same_bits(const std::vector<T> &a, const std::vector<T> &b) {
+	return a.size() == b.size() && (a.empty() || memcmp(a.data(), b.data(), a.size() * sizeof(T)) == 0);
+}
+} // namespace
+
+bool SDTFluids::MeshInput::operator==(const MeshInput &o) const {
+	if (strands.size() != o.strands.size()) {
+		return false;
+	}
+	for (size_t i = 0; i < strands.size(); i++) {
+		const MeshStrand &a = strands[i], &b = o.strands[i];
+		if (a.start != b.start || a.n != b.n || memcmp(&a.rgb, &b.rgb, sizeof(Color)) != 0 ||
+				memcmp(&a.alpha, &b.alpha, sizeof(float)) != 0 || memcmp(&a.max_interp, &b.max_interp, sizeof(float)) != 0) {
+			return false;
+		}
+	}
+	return same_bits(pos, o.pos) && same_bits(thick, o.thick) && same_bits(dens, o.dens);
+}
+
+void SDTFluids::mesh_input(int layer, double fraction, MeshInput &in) const {
 	float f = (float)std::clamp(fraction, 0.0, 1.0);
-	StrandMesh mesh;
-	std::vector<Vector2> pos;
-	std::vector<float> thick, dens;
 	Color white(1, 1, 1);
 	for (int id : order) {
 		const Strand &s = strands[id];
@@ -857,23 +876,53 @@ Array SDTFluids::get_mesh(int layer, double fraction) const {
 			continue;
 		}
 		int n = (int)s.links.size();
-		pos.resize(n);
-		thick.resize(n);
-		dens.resize(n);
+		in.strands.push_back({ (int)in.pos.size(), n, s.cum ? cum_rgb : white, alpha_of(s), s.max_interp });
 		for (int i = 0; i < n; i++) {
 			const Link &l = s.links[i];
-			pos[i] = l.prev_valid ? l.prev + (l.p - l.prev) * f : l.p;
-			thick[i] = thickness(s, i);
-			dens[i] = s.links[i].density;
+			in.pos.push_back(l.prev_valid ? l.prev + (l.p - l.prev) * f : l.p);
+			in.thick.push_back(thickness(s, i));
+			in.dens.push_back(l.density);
 		}
-		sdt_append_strand_mesh(mesh, pos.data(), thick.data(), dens.data(), nullptr, nullptr, n, s.cum ? cum_rgb : white,
-				alpha_of(s), s.max_interp);
+	}
+}
+
+Array SDTFluids::build_mesh(const MeshInput &in) {
+	StrandMesh mesh;
+	for (const MeshStrand &s : in.strands) {
+		sdt_append_strand_mesh(mesh, in.pos.data() + s.start, in.thick.data() + s.start, in.dens.data() + s.start,
+				nullptr, nullptr, s.n, s.rgb, s.alpha, s.max_interp);
 	}
 	Array r;
 	r.push_back(packed<PackedVector2Array>(mesh.points));
 	r.push_back(packed<PackedColorArray>(mesh.colors));
 	r.push_back(packed<PackedInt32Array>(mesh.indices));
+	r.push_back(sdt_points_rect(mesh.points));
 	return r;
+}
+
+Array SDTFluids::get_mesh(int layer, double fraction) const {
+	MeshInput in;
+	mesh_input(layer, fraction, in);
+	return build_mesh(in);
+}
+
+// Settled strands (or several frames at the same fraction) give the same input, so the same mesh: not rebuilt.
+Array SDTFluids::get_mesh_changed(int layer, double fraction) {
+	if (layer < 0) {
+		return get_mesh(layer, fraction);
+	}
+	if ((int)last_input.size() <= layer) {
+		last_input.resize(layer + 1);
+		last_valid.resize(layer + 1, 0);
+	}
+	MeshInput in;
+	mesh_input(layer, fraction, in);
+	if (last_valid[layer] && in == last_input[layer]) {
+		return Array();
+	}
+	last_input[layer] = std::move(in);
+	last_valid[layer] = 1;
+	return build_mesh(last_input[layer]);
 }
 
 // StrandLink.smear for every anchored link near p: it thins and is dragged along with the smearing point's

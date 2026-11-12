@@ -26,6 +26,8 @@ var _mat_state: Array = []  # per fill material: last parameters set, to skip un
 var _mesh_points := PackedVector2Array()
 var _mesh_colors := PackedColorArray()
 var _mesh_indices := PackedInt32Array()
+var _mesh_rect := Rect2()     # the mesh points' bounds when its maker passed them (no per-vertex loop for bounds)
+var _mesh_rect_ok := false
 var _mesh_item := RID()
 var _mesh_mat: ShaderMaterial = null
 var _mesh_state: Dictionary = {}
@@ -61,15 +63,20 @@ func clear() -> void:
 	_mesh_points = PackedVector2Array()
 	_mesh_colors = PackedColorArray()
 	_mesh_indices = PackedInt32Array()
+	_mesh_rect_ok = false
 	_mark()
 
 
 ## Adds a ready-made triangle mesh with per-vertex colours (drawn on top of this Graphics' fills). Used by native
-## code that builds whole drawings at once (Strand); not part of the Flash API.
-func setMesh(points: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array) -> void:
+## code that builds whole drawings at once (Strand); not part of the Flash API. rect: the points' bounds, exactly as
+## _points_rect computes them (native code returns them), or null to compute them when needed.
+func setMesh(points: PackedVector2Array, colors: PackedColorArray, indices: PackedInt32Array, rect = null) -> void:
 	_mesh_points = points
 	_mesh_colors = colors
 	_mesh_indices = indices
+	_mesh_rect_ok = rect != null
+	if _mesh_rect_ok:
+		_mesh_rect = rect
 	_mark()
 
 
@@ -165,6 +172,8 @@ func copyFrom(other: FlashGraphics) -> void:
 	_mesh_points = other._mesh_points
 	_mesh_colors = other._mesh_colors
 	_mesh_indices = other._mesh_indices
+	_mesh_rect = other._mesh_rect
+	_mesh_rect_ok = other._mesh_rect_ok
 	_mark()
 
 
@@ -266,7 +275,7 @@ func _compute_bounds() -> void:
 			else:
 				r = r.expand(p)
 	if not _mesh_points.is_empty():
-		var mb := _points_rect(_mesh_points)
+		var mb := _mesh_rect if _mesh_rect_ok else _points_rect(_mesh_points)
 		r = mb if first else r.merge(mb)
 	_bounds = r
 

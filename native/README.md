@@ -7,11 +7,12 @@ forces the GDScript paths (for A/B tests), `--checknative` cross-checks native h
 
 Currently native:
 - `SDTNative.build_strand` - Strand.renderStrand / generateInterpolationPoints as one vertex-coloured mesh (gradient
-  stops reproduced exactly by splitting triangles at the stop lines).
+  stops reproduced exactly by splitting triangles at the stop lines; indexed, bit-identical vertices shared).
 - `SDTNative.hit_shape` - shape-flag hit testing (FlashSprite / FlashShape `_hit_shape`) over the display tree;
   `hit_flat` tests against a tree flattened once per tick (many tests of the same body part).
 - `SDTFluids` (fluids.cpp) - the spit / cum strands simulated as plain data and drawn as one mesh per strand layer
-  (used by StrandControl, with NativeStrand handles for the game).
+  (used by StrandControl, with NativeStrand handles for the game); a layer whose mesh input did not change is not
+  rebuilt (`get_mesh_changed`).
 - `SDTSweat` (sweat.cpp) - the sweat droplets, drawn by one SweatBatch node per body part (used by Sweat.gd).
 - `SDTCrashNote` (crash_note.cpp) - notes which plugin's code was running when the game crashed (Windows: a
   vectored exception handler), so the next start can switch it off (game/src/ext/extensions.gd, "guard").

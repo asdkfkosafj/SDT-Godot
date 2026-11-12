@@ -97,6 +97,23 @@ private:
 		bool has = false, updated = false;
 	};
 	std::vector<Smudge> smudge;
+	// Everything a layer's mesh is built from (the build is a pure function of it), to skip identical rebuilds.
+	struct MeshStrand {
+		int start, n;
+		Color rgb;
+		float alpha, max_interp;
+	};
+	struct MeshInput {
+		std::vector<Vector2> pos;
+		std::vector<float> thick, dens;
+		std::vector<MeshStrand> strands;
+		bool operator==(const MeshInput &o) const; // bitwise
+	};
+	std::vector<MeshInput> last_input; // per layer, of the last get_mesh_changed build
+	std::vector<uint8_t> last_valid;
+
+	void mesh_input(int layer, double fraction, MeshInput &in) const;
+	static Array build_mesh(const MeshInput &in);
 
 	int alloc();
 	Link make_link(float mass, float density, Vector2 speed, int collision_free, bool slide) const;
@@ -146,8 +163,10 @@ public:
 
 	Array tick();                       // events of this tick (and of smear / clear since the last call)
 	Array take_events();
-	Array get_mesh(int layer, double fraction) const; // [points, colors, indices] of all strands in that layer,
-	                                                   // links at prev + (p - prev) * fraction
+	Array get_mesh(int layer, double fraction) const; // [points, colors, indices, bounds] of all strands in that
+	                                                   // layer, links at prev + (p - prev) * fraction
+	Array get_mesh_changed(int layer, double fraction); // get_mesh, or an empty Array when that would be bit for bit
+	                                                     // the mesh this returned last time for the layer
 	void smear(const Vector2 &p, double radius);
 	void detach_container(int container);
 	void clear(bool cum);

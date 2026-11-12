@@ -203,6 +203,49 @@ P to_packed(const std::vector<T> &v) {
 struct TV {
 	Vector2 p;
 	float t;
+	int id; // the corner's slot in VertexShare (-1: a point cut at a stop line)
+};
+
+// Shared vertices within one segment (one gradient: a point always gets the same colour there). Corners passed in
+// are shared by slot: the same point, bit for bit. Cut points are computed per triangle (and in another order by
+// the neighbour), so they are shared only with a recent cut point that is bit-identical in position and colour.
+// What is drawn stays the same triangles with the same corner values; only duplicate vertices go.
+struct VertexShare {
+	static constexpr int SLOTS = 104; // ribbon 0-49 (24 steps at most), caps 50-75 and 77-102
+	static constexpr int RECENT = 8;
+	int32_t slot[SLOTS];
+	int32_t recent[RECENT];
+	int nrecent = 0, next = 0;
+	void reset() {
+		std::fill(slot, slot + SLOTS, -1);
+		nrecent = 0;
+		next = 0;
+	}
+	int32_t vertex(StrandMesh &m, const Gradient &g, const TV &v) {
+		if (v.id >= 0 && slot[v.id] >= 0) {
+			return slot[v.id];
+		}
+		Color c = g.color_at(v.t);
+		if (v.id < 0) {
+			for (int i = 0; i < nrecent; i++) {
+				int32_t r = recent[i];
+				if (memcmp(&m.points[r], &v.p, sizeof(Vector2)) == 0 && memcmp(&m.colors[r], &c, sizeof(Color)) == 0) {
+					return r;
+				}
+			}
+		}
+		int32_t idx = (int32_t)m.points.size();
+		m.points.push_back(v.p);
+		m.colors.push_back(c);
+		if (v.id >= 0) {
+			slot[v.id] = idx;
+		} else {
+			recent[next] = idx;
+			next = (next + 1) % RECENT;
+			nrecent = std::min(nrecent + 1, RECENT);
+		}
+		return idx;
+	}
 };
 
 static int clip_side(const TV *in, int n, TV *out, float edge, bool keep_above) {
@@ -217,14 +260,15 @@ static int clip_side(const TV *in, int n, TV *out, float edge, bool keep_above) 
 		}
 		if (si != ei) {
 			float k = (edge - s.t) / (e.t - s.t);
-			out[m++] = { s.p + (e.p - s.p) * k, edge };
+			out[m++] = { s.p + (e.p - s.p) * k, edge, -1 };
 		}
 	}
 	return m;
 }
 
-void emit_triangle(StrandMesh &m, const Gradient &g, Vector2 a, Vector2 b, Vector2 c) {
-	TV tri[3] = { { a, g.t_at(a) }, { b, g.t_at(b) }, { c, g.t_at(c) } };
+void emit_triangle(StrandMesh &m, const Gradient &g, VertexShare &vs, int ia, Vector2 a, int ib, Vector2 b, int ic,
+		Vector2 c) {
+	TV tri[3] = { { a, g.t_at(a), ia }, { b, g.t_at(b), ib }, { c, g.t_at(c), ic } };
 	float tmin = std::min(tri[0].t, std::min(tri[1].t, tri[2].t));
 	float tmax = std::max(tri[0].t, std::max(tri[1].t, tri[2].t));
 	const float bands[4] = { -INFINITY, g.r0, g.r1, INFINITY };
@@ -247,15 +291,14 @@ void emit_triangle(StrandMesh &m, const Gradient &g, Vector2 a, Vector2 b, Vecto
 		if (n < 3) {
 			continue;
 		}
-		int base = (int)m.points.size();
+		int32_t vi[5];
 		for (int k = 0; k < n; k++) {
-			m.points.push_back(poly[k].p);
-			m.colors.push_back(g.color_at(poly[k].t));
+			vi[k] = vs.vertex(m, g, poly[k]);
 		}
 		for (int k = 1; k + 1 < n; k++) {
-			m.indices.push_back(base);
-			m.indices.push_back(base + k);
-			m.indices.push_back(base + k + 1);
+			m.indices.push_back(vi[0]);
+			m.indices.push_back(vi[k]);
+			m.indices.push_back(vi[k + 1]);
 		}
 	}
 }
@@ -339,14 +382,16 @@ void sdt_append_strand_mesh(StrandMesh &mesh, const Vector2 *pos, const float *t
 	auto steps = [](Vector2 p0, Vector2 c, Vector2 p1) {
 		return std::clamp((int)((p0.distance_to(c) + c.distance_to(p1)) / 3.0f), 2, 24);
 	};
-	// a cap: the region between the chord a-b and the curve a -> (via c) -> b, as a fan from the chord's midpoint
-	auto cap = [&](const Gradient &g, Vector2 a, Vector2 c, Vector2 b) {
+	VertexShare vs;
+	// a cap: the region between the chord a-b and the curve a -> (via c) -> b, as a fan from the chord's midpoint;
+	// its vertices use slots base (the midpoint), base + 1 (a) and base + 1 + j
+	auto cap = [&](const Gradient &g, int base, Vector2 a, Vector2 c, Vector2 b) {
 		int k = steps(a, c, b);
 		Vector2 m = (a + b) * 0.5f;
 		Vector2 prev = a;
 		for (int j = 1; j <= k; j++) {
 			Vector2 q = bez(a, c, b, (float)j / k);
-			emit_triangle(mesh, g, m, prev, q);
+			emit_triangle(mesh, g, vs, base, m, base + j, prev, base + 1 + j, q);
 			prev = q;
 		}
 	};
@@ -371,29 +416,43 @@ void sdt_append_strand_mesh(StrandMesh &mesh, const Vector2 *pos, const float *t
 		g.c1 = c_rgb;
 		g.c1.a = std::min(1.0, (double)dens[i]) * p_alpha;
 
+		vs.reset();
 		Vector2 a0 = in_off[i - 1], ac = in_ip[i - 1], a1 = in_off[i];
 		Vector2 b0 = out_off[i - 1], bc = out_ip[i - 1], b1 = out_off[i];
 		int k = std::max(steps(a0, ac, a1), steps(b0, bc, b1));
 		Vector2 pa = a0, pb = b0;
+		// ribbon slots: 2j for the inside curve's j-th point, 2j + 1 for the outside one's
 		for (int j = 1; j <= k; j++) {
 			float t = (float)j / k;
 			Vector2 qa = bez(a0, ac, a1, t), qb = bez(b0, bc, b1, t);
-			emit_triangle(mesh, g, pa, pb, qa);
-			emit_triangle(mesh, g, pb, qb, qa);
+			emit_triangle(mesh, g, vs, 2 * j - 2, pa, 2 * j - 1, pb, 2 * j, qa);
+			emit_triangle(mesh, g, vs, 2 * j - 1, pb, 2 * j + 1, qb, 2 * j, qa);
 			pa = qa;
 			pb = qb;
 		}
 		if (i == n - 1) {
-			cap(g, a1, bottom_cap, b1);
+			cap(g, 50, a1, bottom_cap, b1);
 		}
 		if (i == 1) {
-			cap(g, b0, top_cap, a0);
+			cap(g, 77, b0, top_cap, a0);
 		}
 	}
 }
 
-namespace {
-} // namespace
+Rect2 sdt_points_rect(const std::vector<Vector2> &points) {
+	if (points.empty()) {
+		return Rect2();
+	}
+	// the same comparisons as Vector2.min / max, so the box is bit-identical to the GDScript loop's
+	Vector2 lo = points[0], hi = points[0];
+	for (const Vector2 &p : points) {
+		lo.x = lo.x < p.x ? lo.x : p.x;
+		lo.y = lo.y < p.y ? lo.y : p.y;
+		hi.x = hi.x > p.x ? hi.x : p.x;
+		hi.y = hi.y > p.y ? hi.y : p.y;
+	}
+	return Rect2(lo, hi - lo);
+}
 
 Array SDTNative::build_strand(const PackedVector2Array &p_pos, const PackedFloat32Array &p_thickness,
 		const PackedFloat32Array &p_density, const PackedByteArray &p_has_stored, const PackedVector2Array &p_stored,
@@ -409,6 +468,7 @@ Array SDTNative::build_strand(const PackedVector2Array &p_pos, const PackedFloat
 	result.push_back(to_packed<PackedVector2Array>(mesh.points));
 	result.push_back(to_packed<PackedColorArray>(mesh.colors));
 	result.push_back(to_packed<PackedInt32Array>(mesh.indices));
+	result.push_back(sdt_points_rect(mesh.points));
 	return result;
 }
 
