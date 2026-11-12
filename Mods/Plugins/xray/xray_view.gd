@@ -24,10 +24,34 @@ const ROOM := 3.0          # her throat around him
 const EDGE := 3.0          # penis-local margin around his outline in the strip taken from his render
 const PAST_TIP := 12.0     # penis-local length taken past his tip point (the rounded end of the art)
 const FOLD := 0.85         # inside a bend, nothing reaches further than this times the bend's radius
-const LIPS_FADE := 8.0     # the cutaway fades in over this length behind her lips
 const FADE := 0.25         # per tick, in and out
+## The fade behind the start edge, per pixel (set per vertex, it would follow the strips' rows: a wide strip's
+## triangles blend it straight across, cut off where it reaches full). `behind` is linear in the position, so
+## interpolating it is exact; the clamp happens per pixel. Premultiplied, as his render is.
+const FADE_SHADER := """
+shader_type canvas_item;
+render_mode blend_premul_alpha;
+uniform vec2 edge_at;
+uniform vec2 edge_in;
+uniform float start_len;
+uniform float fade_len;
+varying float behind;
+// > 1: it builds up slowly at first, so it is half in further along (at 0.5 ^ (1 / FADE_CURVE) of fade_len)
+const float FADE_CURVE = 1.5;
+void vertex() {
+	behind = dot(VERTEX - edge_at, edge_in) - start_len;
+}
+void fragment() {
+	// COLOR already holds the texture (his render) times the vertex colour
+	COLOR *= pow(clamp(behind / fade_len, 0.0, 1.0), FADE_CURVE);
+}
+"""
+const START_OUT := 30.0    # the centre line starts this far outside her lips (a multiple of STEP): the cutaway's
+                           # start edge is turned along her face, so one side of it lies further out
 
 var opacity := 0.6
+var start_len := 0.0       # the cutaway begins this far behind her lips, along her face (the plugin's Start)
+var fade_len := 8.0        # and fades in over this length from there (the plugin's Fade setting)
 var shown := 0.0
 var _with_penis := false   # off while fading out: his render no longer matches the last shape
 var _painter := Node2D.new()
@@ -47,6 +71,10 @@ var _wid_scale := 1.0
 var _side := 1.0                     # which side of the line his penis-local +y goes
 var _penis_xf := Transform2D()       # penis-local -> his local space (UVs into his render)
 var _bounds := Rect2()
+var _half_px := 0.5                  # half a screen pixel in local units (_paint)
+var _edge_at := Vector2.ZERO         # the cutaway's start edge at Start 0: through here, along her lips,
+var _edge_in := Vector2.RIGHT        # and its unit normal into her
+var _fade_mat := ShaderMaterial.new()
 var _wall_col := Color(0.8, 0.45, 0.45)
 var _lumen_col := Color(0.42, 0.1, 0.14)
 var _glow_col := Color(0.85, 0.15, 0.2, 0.55)
@@ -55,9 +83,10 @@ var _glow_col := Color(0.85, 0.15, 0.2, 0.55)
 func _init() -> void:
 	super()
 	mouseEnabled = false
-	var m := CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA   # his render is premultiplied
-	_painter.material = m
+	var sh := Shader.new()
+	sh.code = FADE_SHADER
+	_fade_mat.shader = sh
+	_painter.material = _fade_mat
 	_painter.draw.connect(_paint)
 	add_child(_painter)
 
@@ -89,11 +118,22 @@ func update_shape(want: bool) -> void:
 	var pen_g := pen.flash_global_transform()
 	var pv := inv * pen_g
 	_penis_xf = him.flash_global_transform().affine_inverse() * pen_g
-	var lips: Vector2 = (her.localToGlobal(her.topLipA) + her.head.jaw.localToGlobal(her.bottomLipA)) * 0.5
-	_x_lips = pen.globalToLocal(lips).x
+	var top_lip: Vector2 = her.localToGlobal(her.topLipA)
+	var bottom_lip: Vector2 = her.head.jaw.localToGlobal(her.bottomLipA)
+	var x_at_lips: float = pen.globalToLocal((top_lip + bottom_lip) * 0.5).x
 	_tip_x = him.currentPenis._tip.x
 	_len_scale = pv.x.length()
 	_wid_scale = pv.y.length()
+	var start := pv * Vector2(x_at_lips, 0.0)
+	var dir := -pv.x.normalized()   # into her, towards his tip
+	# The cutaway's start edge runs along her lips (parallel to her face, whatever the angle he goes in at), through
+	# the point of the centre line between them; Start and Fade are measured from it, square to her face.
+	var along := inv * bottom_lip - inv * top_lip
+	_edge_at = start
+	_edge_in = Vector2(-along.y, along.x).normalized()
+	if _edge_in.dot(dir) < 0.0:
+		_edge_in = -_edge_in
+	_x_lips = x_at_lips + START_OUT / _len_scale   # the centre line begins START_OUT outside that point
 	_inside = maxf(0.0, (_x_lips - _tip_x) * _len_scale)
 	_drawn = _inside + PAST_TIP * _len_scale if _inside > 0.0 else 0.0
 	var throat := _throat(her, inv)
@@ -101,14 +141,12 @@ func update_shape(want: bool) -> void:
 		return
 	# one bend: from her lips along him, down into her chest along her neck (from her neck towards her torso) through
 	# the base of her throat; past its end it goes straight on
-	var start := pv * Vector2(_x_lips, 0.0)
-	var dir := -pv.x.normalized()   # into her, towards his tip
 	var neck_at: Vector2 = inv * her.head.localToGlobal(Vector2(her.head.neck.x, her.head.neck.y))
 	var axis: Vector2 = (inv * her.torso.localToGlobal(Vector2.ZERO) - neck_at).normalized()
 	var q: Vector2 = throat[int(JOIN * (throat.size() - 1))]
 	var e: Vector2 = q + axis * (q.distance_to(throat[-1]) + TAIL)
 	var d := start.distance_to(e)
-	var raw := PackedVector2Array()
+	var raw := PackedVector2Array([start - dir * START_OUT])   # straight on into the curve (its tangent there)
 	for k in 33:
 		raw.append(_cubic(start, start + dir * d * PULL_IN, e - axis * d * PULL_DOWN, e, k / 32.0))
 	_resample(raw)
@@ -235,6 +273,13 @@ func _colours() -> void:
 func _paint() -> void:
 	if shown <= 0.0 or _path.size() < 2:
 		return
+	# MSAA does not reach into a canvas group: the strips' edges fade out over one screen pixel instead
+	var screen := _painter.get_viewport().get_final_transform() * _painter.get_global_transform_with_canvas()
+	_half_px = 0.5 / maxf(maxf(screen.x.length(), screen.y.length()), 0.01)
+	_fade_mat.set_shader_parameter(&"edge_at", _edge_at)
+	_fade_mat.set_shader_parameter(&"edge_in", _edge_in)
+	_fade_mat.set_shader_parameter(&"start_len", start_len)
+	_fade_mat.set_shader_parameter(&"fade_len", maxf(fade_len, 2.0 * _half_px))
 	var ci := _painter.get_canvas_item()
 	_glow(ci, _e0, -WALL, -WALL - GLOW)
 	_glow(ci, _e1, WALL, WALL + GLOW)
@@ -243,39 +288,45 @@ func _paint() -> void:
 	_penis(ci)
 
 
-func _fade(i: int) -> float:
-	return clampf(i * STEP / LIPS_FADE, 0.0, 1.0)
+## A premultiplied colour (the fade behind the start edge is FADE_SHADER's).
+static func _pm(col: Color) -> Color:
+	return Color(col.r * col.a, col.g * col.a, col.b * col.a, col.a)
 
 
-## A strip along the centre line from his outline's e0 + lo to e1 + hi, in one colour (premultiplied).
+## A strip along the centre line from his outline's e0 + lo to e1 + hi, in one colour (premultiplied), its edges
+## fading out across one screen pixel centred on them.
 func _band(ci: RID, lo: float, hi: float, col: Color) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
+	var h := _half_px
+	var c := _pm(col)
 	for i in _path.size():
-		var a := _fade(i)
-		var c := Color(col.r * a, col.g * a, col.b * a, a)
-		pts.append(_at(i, _e0[i] + lo))
-		pts.append(_at(i, _e1[i] + hi))
-		cols.append(c)
-		cols.append(c)
+		var d0 := _e0[i] + lo
+		var d1 := _e1[i] + hi
+		var m0 := minf(d0 + h, (d0 + d1) * 0.5)   # a strip thinner than a pixel: no solid middle
+		var m1 := maxf(d1 - h, (d0 + d1) * 0.5)
+		pts.append_array([_at(i, d0 - h), _at(i, m0), _at(i, m1), _at(i, d1 + h)])
+		cols.append_array([Color(0, 0, 0, 0), c, c, Color(0, 0, 0, 0)])
 		if i > 0:
-			var b := (i - 1) * 2
-			idx.append_array([b, b + 1, b + 2, b + 1, b + 3, b + 2])
+			var b := (i - 1) * 4
+			for k in 3:   # the fade in, the solid middle, the fade out
+				idx.append_array([b + k, b + k + 1, b + k + 4, b + k + 1, b + k + 5, b + k + 4])
 	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
 
 
-## A strip from edge + inner (glow colour) to edge + outer (transparent).
+## A strip from edge + inner (glow colour) to edge + outer (transparent). It starts half a pixel under the wall,
+## so the wall's faded edge has the glow under it (no light seam between the two).
 func _glow(ci: RID, edge: PackedFloat32Array, inner: float, outer: float) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
 	var gc := _glow_col
+	var under := -signf(outer - inner) * _half_px
 	for i in _path.size():
-		var a := _fade(i) * gc.a
-		pts.append(_at(i, edge[i] + inner))
+		pts.append(_at(i, edge[i] + inner + under))
 		pts.append(_at(i, edge[i] + outer))
-		cols.append(Color(gc.r * a, gc.g * a, gc.b * a, a))
+		cols.append(_pm(gc))
 		cols.append(Color(0, 0, 0, 0))
 		if i > 0:
 			var b := (i - 1) * 2
@@ -297,16 +348,18 @@ func _penis(ci: RID) -> void:
 	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
 	var last := mini(int(ceil(_drawn / STEP)), _path.size() - 1)
+	var h := _half_px / _wid_scale   # half a screen pixel, penis-local
 	for i in last + 1:
 		var x := _x_lips - minf(i * STEP, _drawn) / _len_scale
-		var a := _fade(i)
-		var c := Color(a, a, a, a)
-		for y in [_y0[i], _y1[i]]:
-			pts.append(_at(i, _side * y * _wid_scale))
-			uvs.append((_penis_xf * Vector2(x, y) - rect.position) / rect.size)
-			cols.append(c)
+		# the strip's sides fade out across a pixel, like the bands
+		var ys := [_y0[i] - h, _y0[i] + h, _y1[i] - h, _y1[i] + h]
+		for j in 4:
+			pts.append(_at(i, _side * ys[j] * _wid_scale))
+			uvs.append((_penis_xf * Vector2(x, ys[j]) - rect.position) / rect.size)
+			cols.append(Color.WHITE if j == 1 or j == 2 else Color(0, 0, 0, 0))
 		if i > 0:
-			var b := (i - 1) * 2
-			idx.append_array([b, b + 1, b + 2, b + 1, b + 3, b + 2])
+			var b := (i - 1) * 4
+			for k in 3:
+				idx.append_array([b + k, b + k + 1, b + k + 4, b + k + 1, b + k + 5, b + k + 4])
 	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols, uvs, PackedInt32Array(), PackedFloat32Array(),
 		grp.render_texture().get_rid())

@@ -9,6 +9,8 @@ extends SDTExtension
 ## (FlashGroupProxy.set_cut), so the scene looks the same.
 
 const MASK_SHOWS_ALL := {"x": -100.0, "scale": 4.0}   # the mask's rect then covers any penis length
+const FADE_BASE := 8.0       # the length the cutaway fades in over behind her lips at Fade 0
+const FADE_PER_STEP := 3.0   # and how much each step of Fade adds to it
 
 var on := false
 var _view: FlashDisplayObject
@@ -28,6 +30,10 @@ func _setup() -> void:
 		+ "shows him inside her."})
 	setting("opacity", 0.8, {"label": "Opacity", "min": 0.1, "max": 1.0, "step": 0.01, "desc": "How strongly the "
 		+ "cutaway shows over her."})
+	setting("start", 0, {"label": "Start", "min": 0, "max": 100, "desc": "How far behind her lips the cutaway "
+		+ "begins: nothing of it shows before that point."})
+	setting("fade", 0, {"label": "Fade", "min": 0, "max": 100, "desc": "How far behind her lips the cutaway fades in: "
+		+ "more brings it in more gradually from where it begins (Start)."})
 
 
 func _enable() -> void:
@@ -36,6 +42,8 @@ func _enable() -> void:
 	menu_control("effects", "X-ray", MenuSchema.toggle("X-ray", "While he is in her mouth, a cutaway of her mouth "
 		+ "and throat shows him inside her.", func(): return on, func(v): set_setting("on", v)))
 	menu_control("effects", "X-ray", MenuSchema.setting_control(self, "opacity", {"wide": true}))
+	menu_control("effects", "X-ray", MenuSchema.setting_control(self, "start", {"wide": true}))
+	menu_control("effects", "X-ray", MenuSchema.setting_control(self, "fade", {"wide": true}))
 	on_key(0, func(): set_setting("on", not on), "X-ray on / off")
 	modify(&"Him.penisMask", {"phase": Hooks.FINAL, "op": "fn", "fn": _mask})
 	on_late_tick(_tick)
@@ -75,6 +83,8 @@ func _tick() -> void:
 		_view = _view_script.new()
 		_place_view()
 	_view.opacity = get_setting("opacity")
+	_view.start_len = float(get_setting("start"))
+	_view.fade_len = FADE_BASE + FADE_PER_STEP * float(get_setting("fade"))
 	_view.update_shape(on and her.mouthFull and not g.penisOut)
 	if _showing() or _lifted:
 		_set_cut()
