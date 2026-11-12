@@ -218,7 +218,8 @@ func _advance() -> void:
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_ENTER_TREE, NOTIFICATION_EXIT_TREE:
-			_update_play_registration()
+			if not FlashGroupProxy.moving:   # a group moving it in or out of its viewport keeps it playing in place
+				_update_play_registration()
 
 
 func _update_play_registration() -> void:

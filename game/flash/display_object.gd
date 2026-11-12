@@ -142,6 +142,7 @@ func _apply_color_transform() -> void:
 		# Offscreen group: multipliers apply to the composited image (Flash layer semantics).
 		_proxy.modulate = c
 		modulate = Color.WHITE
+		(_proxy as FlashGroupProxy).color_changed()
 	else:
 		modulate = c
 	if ct.has_offsets() or _had_offsets:
@@ -605,15 +606,26 @@ func _notification(what: int) -> void:
 		_gb_ok = false
 		return
 	if what == NOTIFICATION_EXIT_TREE:
+		if FlashGroupProxy.moving:   # a group moving its object to or from its viewport: nothing changed here
+			return
 		off_tree[get_instance_id()] = true
 	elif what == NOTIFICATION_PREDELETE:
 		off_tree.erase(get_instance_id())
+		FlashGroupProxy.blending.erase(self)
+	elif what == NOTIFICATION_VISIBILITY_CHANGED:
+		if FlashGroupProxy.blending.has(self):
+			FlashGroupProxy.blended_shown(self)
+		return
 	if what == NOTIFICATION_ENTER_TREE:
+		if FlashGroupProxy.moving:
+			return
 		off_tree.erase(get_instance_id())
 		set_notify_local_transform(true)
 		xf_epoch += 1
 		_bounds_changed()
 		_hb_invalidate()
+		if FlashGroupProxy.blending.has(self):
+			FlashGroupProxy.blended_shown(self)
 	# Debug guard: a display object must never be freed while a live Flash parent still lists it.
 	# (On shutdown whole trees are freed after leaving the scene tree, so only in-tree frees are reported.)
 	if what == NOTIFICATION_PREDELETE and is_inside_tree() and _flash_parent != null and is_instance_valid(_flash_parent) \

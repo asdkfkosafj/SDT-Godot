@@ -67,8 +67,11 @@ func _passed_out(call: Hooks.Call) -> void:
 | `on_key(keycode, fn, label, id = "")` | `fn()` when a key is pressed during play (Flash key codes; not while typing). It is a rebindable action in Settings › Hotkeys: `keycode` is the default (`\| Hotkeys.SHIFT / CTRL / ALT` for a combination, 0 for none), `label` names it there, `id` (default: the label) keeps the player's key when the label changes. Keys several actions share are marked there; all of them run. |
 
 Objects drawn as an offscreen group (Flash blend mode "layer", filters; him, for one) can be drawn again elsewhere:
-`FlashGroupProxy.of(obj)` is the object's group (or null), `render_texture()` its render (premultiplied alpha,
-updated every frame) and `render_rect()` the area of the object's local space it covers. `set_cut(to_a, a, to_b, b)`
+`FlashGroupProxy.of(obj)` is the object's group (or null), `render_texture()` its render (premultiplied alpha) and
+`render_rect()` the area of the object's local space it covers. A group that changes nothing on screen draws its
+object directly, without a render; reading either one keeps the render live, every frame, until 30 ticks after the
+last read. The first read from a group drawn directly gets an empty rect (and a texture not drawn yet): the render
+resumes before the frame is drawn and the next read gets it, so read them every tick you use them. `set_cut(to_a, a, to_b, b)`
 leaves out of the on-screen drawing what lies inside rect `a` and outside rect `b` (each in the space `to_a` / `to_b`
 maps the object's local space to) while it stays in the render; `clear_cut()` undoes it. The x-ray plugin
 (`Mods/Plugins/xray`) uses them to show his whole penis inside her (API version 2).

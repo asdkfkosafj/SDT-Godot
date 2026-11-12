@@ -944,6 +944,7 @@ func shape_material(s: FlashShape) -> Material:
 	var grouped := false   # an offscreen group above the object the blend mode comes from
 	var paint: Texture2D = null
 	var paint_owner: FlashDisplayObject = null
+	var first_group: FlashGroupProxy = null   # the group the shape is drawn into
 	_painted.erase(s)
 	while o != null:
 		if paint == null and o.paint != null:
@@ -954,6 +955,8 @@ func shape_material(s: FlashShape) -> Material:
 		if o != s and o._proxy is FlashGroupProxy:
 			blend_open = false
 			grouped = grouped or blend != "normal"
+			if first_group == null:
+				first_group = o._proxy as FlashGroupProxy
 		if blend_open and blend == "normal" and o._blend_mode != "normal" and o._blend_mode != "layer":
 			blend = o._blend_mode
 		for f in o._filters:
@@ -967,6 +970,9 @@ func shape_material(s: FlashShape) -> Material:
 		o = o._flash_parent
 	if blend != "normal":
 		paint = null   # painted shapes are plain ones (her skin; a colour matrix, her skin colour, is kept)
+	# the blend (found below the first group) applies inside that group: while the shape shows, the group may need
+	# its render target
+	FlashGroupProxy.note_blend(s, first_group if FlashGroupProxy.needs_group(blend) else null)
 	if off == Color(0, 0, 0, 0) and blend == "normal" and not has_cm and paint == null:
 		return null
 	# ERASE / ALPHA need a LAYER parent; without one Flash draws nothing (a mod part with ERASE moved out of its
