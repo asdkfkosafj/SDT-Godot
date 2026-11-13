@@ -9,6 +9,13 @@ extends FlashDisplayObject
 ##
 ## Drawn in the main pass as a canvas group (its opacity applies to the whole cutaway at once), not in a render
 ## target of its own: that one could be drawn before his render in a frame and show his previous frame.
+##
+## The stomach (stomach_part.gd) is a display object of its own, above her near arm; this one gives it her throat's
+## line every tick (update_stomach). While both show, its pipe takes over from this one a little past his tip, along
+## this one's centre line (this one fades out there as the pipe fades in), so the pipe goes on over her arm. Its part
+## low on her neck is then drawn by a second painter (_lower) in the stomach's layer, over her arm too (her
+## shoulder would cut him off); both draw the same row of the centre line there, so they meet without a seam. His
+## penis there is drawn by a third painter (_lower_top), above what flows down the pipe (the stomach part's _flow).
 
 const STEP := 3.0          # spacing of the samples along the centre line (local units)
 const DEPTH := 0.32        # where her throat runs, from the front of her neck (0) to its back (1)
@@ -23,6 +30,10 @@ const CLOSED := 2.5        # half width of her throat where he is not
 const ROOM := 3.0          # her throat around him
 const EDGE := 3.0          # penis-local margin around his outline in the strip taken from his render
 const PAST_TIP := 12.0     # penis-local length taken past his tip point (the rounded end of the art)
+const CLOSE_LEN := 15.0    # past his tip her throat closes over this length
+const HAND_FADE := 6       # samples over which the stomach's pipe takes over, past that (its PIPE_TOP)
+const SPLIT_AT := 0.7      # the lower painter takes over this far down her neck (0 jaw .. 1 chest): above her
+                           # shoulder, below her earrings
 const FOLD := 0.85         # inside a bend, nothing reaches further than this times the bend's radius
 const FADE := 0.25         # per tick, in and out
 ## The fade behind the start edge, per pixel (set per vertex, it would follow the strips' rows: a wide strip's
@@ -53,6 +64,7 @@ var opacity := 0.6
 var start_len := 0.0       # the cutaway begins this far behind her lips, along her face (the plugin's Start)
 var fade_len := 8.0        # and fades in over this length from there (the plugin's Fade setting)
 var shown := 0.0
+var stomach_shown := 0.0             # the stomach part's fade, last tick (update_stomach)
 var _with_penis := false   # off while fading out: his render no longer matches the last shape
 var _painter := Node2D.new()
 var _path := PackedVector2Array()    # centre line samples, STEP apart, from her lips
@@ -71,6 +83,12 @@ var _wid_scale := 1.0
 var _side := 1.0                     # which side of the line his penis-local +y goes
 var _penis_xf := Transform2D()       # penis-local -> his local space (UVs into his render)
 var _bounds := Rect2()
+var _curve_n := 0                    # samples of the centre line's curve (past it, it goes straight on)
+var _hand := 0.0                     # the sample where the stomach's pipe has taken over
+var _w := PackedFloat32Array()       # how much of this part shows at each sample (1, but where the pipe takes over)
+var _lower := Node2D.new()           # draws the part past _split, in the stomach's layer (attach_lower)
+var _lower_top := Node2D.new()       # and his penis there, over what flows down the pipe
+var _split := -1                     # the sample low on her neck where the lower painter takes over (-1: none)
 var _half_px := 0.5                  # half a screen pixel in local units (_paint)
 var _edge_at := Vector2.ZERO         # the cutaway's start edge at Start 0: through here, along her lips,
 var _edge_in := Vector2.RIGHT        # and its unit normal into her
@@ -89,6 +107,10 @@ func _init() -> void:
 	_painter.material = _fade_mat
 	_painter.draw.connect(_paint)
 	add_child(_painter)
+	_lower.material = _fade_mat
+	_lower.draw.connect(_paint_lower)
+	_lower_top.material = _fade_mat
+	_lower_top.draw.connect(_paint_lower_top)
 
 
 func _ready() -> void:
@@ -100,15 +122,80 @@ func _local_bounds() -> Rect2:
 	return _bounds
 
 
+## The lower painters go into the stomach part, on top of its own drawing, what flows down its pipe between them.
+## Their local space is this one's: both are her space (the plugin keeps the stomach part there).
+func attach_lower(stomach: FlashDisplayObject) -> void:
+	stomach.add_child(_lower)
+	stomach.move_child(stomach._flow, -1)
+	stomach.add_child(_lower_top)
+
+
+## The lower painter takes the part low on her neck and on while it can show (the stomach part shows).
+func _splitting() -> bool:
+	return _split > 0 and _lower.is_inside_tree() and _lower.is_visible_in_tree()
+
+
+## Called every tick (after update_shape): updates the stomach part (stomach_part.gd), with her throat's line in its
+## local space. `want`: the stomach should show.
+func update_stomach(stomach: FlashDisplayObject, want: bool) -> void:
+	var her: Her = g.her
+	var inv := stomach.flash_global_transform().affine_inverse()
+	var throat := _throat(her, inv)
+	if throat.size() < 3:
+		return
+	_colours()
+	stomach.wall_col = _wall_col
+	stomach.lumen_col = _lumen_col
+	stomach.glow_col = _glow_col
+	var line: PackedVector2Array   # what the pipe follows before it bends down into the stomach
+	var bend: Vector2              # and the way it goes on from there
+	if shown > 0.0 and _path.size() >= 2:   # this part's centre line, as far as its curve or the hand-over
+		var last := clampi(maxi(_curve_n, int(ceil(_hand)) + 1), 2, _path.size())
+		line = (inv * flash_global_transform()) * _path.slice(0, last)
+		bend = (line[-1] - line[-2]).normalized()
+	else:   # her throat, and on along its tail
+		var axis := _neck_axis(her, inv)
+		var join := int(JOIN * (throat.size() - 1))
+		line = throat.slice(0, join + 1)
+		line.append(_tail(throat, join, axis))
+		bend = axis
+	# what flows down shows past his tip, but not over what of him the upper painter draws (under that layer)
+	var flow_from := 0.0
+	if shown > 0.0:
+		flow_from = maxf(_inside, minf(_split * STEP, _drawn)) if _splitting() else maxf(_inside, _drawn)
+	stomach.update(want, her, line, bend, _hand, shown, flow_from)
+	stomach_shown = stomach.shown
+
+
+## Where the centre line's curve ends: past the base of her throat, on along her neck from its point `join`.
+func _tail(throat: PackedVector2Array, join: int, axis: Vector2) -> Vector2:
+	return throat[join] + axis * (throat[join].distance_to(throat[-1]) + TAIL)
+
+
+## Down her neck, from where it joins her head towards her torso (local).
+func _neck_axis(her: Her, inv: Transform2D) -> Vector2:
+	var neck_at: Vector2 = inv * her.head.localToGlobal(Vector2(her.head.neck.x, her.head.neck.y))
+	return (inv * her.torso.localToGlobal(Vector2.ZERO) - neck_at).normalized()
+
+
 ## Called every tick; `want`: he is in her mouth and the x-ray is on.
 func update_shape(want: bool) -> void:
+	var was := shown
 	shown = clampf(shown + (FADE if want else -FADE), 0.0, 1.0)
 	visible = shown > 0.0
-	alpha = opacity * shown
+	# its opacity (and fade) on the whole cutaway, not on each layer in it (with `alpha`, modulate, which every
+	# child takes, each layer would show the ones under it through it): the plugin's group shader
+	alpha = 1.0
+	if material is ShaderMaterial:
+		material.set_shader_parameter(&"opacity", opacity * shown)
+	for lp in [_lower, _lower_top]:   # in the stomach part's group (its opacity): only this part's fade
+		lp.self_modulate = Color(1, 1, 1, shown)
 	if not want:   # fading out: keeps the last shape, without him
-		if _with_penis:
-			_with_penis = false
+		_with_penis = false
+		if was > 0.0:
 			_painter.queue_redraw()
+			_lower.queue_redraw()
+			_lower_top.queue_redraw()
 		return
 	_with_penis = true
 	var her: Her = g.her
@@ -136,15 +223,14 @@ func update_shape(want: bool) -> void:
 	_x_lips = x_at_lips + START_OUT / _len_scale   # the centre line begins START_OUT outside that point
 	_inside = maxf(0.0, (_x_lips - _tip_x) * _len_scale)
 	_drawn = _inside + PAST_TIP * _len_scale if _inside > 0.0 else 0.0
+	_hand = (_inside + CLOSE_LEN) / STEP + HAND_FADE
 	var throat := _throat(her, inv)
 	if throat.size() < 3:
 		return
 	# one bend: from her lips along him, down into her chest along her neck (from her neck towards her torso) through
 	# the base of her throat; past its end it goes straight on
-	var neck_at: Vector2 = inv * her.head.localToGlobal(Vector2(her.head.neck.x, her.head.neck.y))
-	var axis: Vector2 = (inv * her.torso.localToGlobal(Vector2.ZERO) - neck_at).normalized()
-	var q: Vector2 = throat[int(JOIN * (throat.size() - 1))]
-	var e: Vector2 = q + axis * (q.distance_to(throat[-1]) + TAIL)
+	var axis := _neck_axis(her, inv)
+	var e := _tail(throat, int(JOIN * (throat.size() - 1)), axis)
 	var d := start.distance_to(e)
 	var raw := PackedVector2Array([start - dir * START_OUT])   # straight on into the curve (its tangent there)
 	for k in 33:
@@ -152,12 +238,23 @@ func update_shape(want: bool) -> void:
 	_resample(raw)
 	_side = 1.0 if _norm[0].dot(pv.y) >= 0.0 else -1.0
 	_outline(him)
+	_w.resize(_path.size())
+	for i in _path.size():
+		_w[i] = 1.0 - stomach_shown * smoothstep(_hand - HAND_FADE, _hand, i)
+	_split = -1
+	var base: Vector2 = throat[int(SPLIT_AT * (throat.size() - 1))]
+	for i in _path.size():
+		if (_path[i] - base).dot(axis) >= 0.0:
+			_split = i
+			break
 	_colours()
 	_bounds = Rect2(_path[0], Vector2.ZERO)
 	for i in _path.size():
 		_bounds = _bounds.expand(_at(i, _e0[i] - WALL - GLOW)).expand(_at(i, _e1[i] + WALL + GLOW))
 	_bounds = _bounds.grow(4.0)
 	_painter.queue_redraw()
+	_lower.queue_redraw()
+	_lower_top.queue_redraw()
 
 
 ## Her throat, from her jaw down to her chest: a part of the way (DEPTH) from the front of her neck to its back.
@@ -188,7 +285,7 @@ static func _cubic(a: Vector2, b: Vector2, c: Vector2, d: Vector2, t: float) -> 
 
 
 ## The centre line: the polyline sampled every STEP and smoothed, and past its end straight on as far as he
-## reaches.
+## reaches (or the stomach's pipe takes over, while it shows).
 func _resample(raw: PackedVector2Array) -> void:
 	var p := _even(raw)
 	var q := p.duplicate()
@@ -197,8 +294,10 @@ func _resample(raw: PackedVector2Array) -> void:
 			q[i] = (p[i - 1] + p[i] * 2.0 + p[i + 1]) * 0.25
 		p = q.duplicate()
 	_path = _even(p)
+	_curve_n = _path.size()
 	var end_dir := (_path[-1] - _path[-2]).normalized() if _path.size() > 1 else Vector2.DOWN
-	while (_path.size() - 1) * STEP < _drawn + STEP:
+	var reach := _drawn if stomach_shown <= 0.0 else maxf(_drawn, _hand * STEP)
+	while (_path.size() - 1) * STEP < reach + STEP:
 		_path.append(_path[-1] + end_dir * STEP)
 	var n := _path.size()
 	_norm.resize(n)
@@ -256,7 +355,7 @@ func _outline(him: Him) -> void:
 		if s <= _inside:
 			tip_e = e
 		else:   # closing past his tip
-			e = tip_e.lerp(Vector2(-CLOSED, CLOSED), clampf((s - _inside) / 15.0, 0.0, 1.0))
+			e = tip_e.lerp(Vector2(-CLOSED, CLOSED), clampf((s - _inside) / CLOSE_LEN, 0.0, 1.0))
 		_e0[i] = e.x
 		_e1[i] = e.y
 
@@ -280,12 +379,29 @@ func _paint() -> void:
 	_fade_mat.set_shader_parameter(&"edge_in", _edge_in)
 	_fade_mat.set_shader_parameter(&"start_len", start_len)
 	_fade_mat.set_shader_parameter(&"fade_len", maxf(fade_len, 2.0 * _half_px))
-	var ci := _painter.get_canvas_item()
-	_glow(ci, _e0, -WALL, -WALL - GLOW)
-	_glow(ci, _e1, WALL, WALL + GLOW)
-	_band(ci, -WALL, WALL, _wall_col)
-	_band(ci, 0.0, 0.0, _lumen_col)
-	_penis(ci)
+	var last := _split if _splitting() else _path.size() - 1
+	_paint_range(_painter.get_canvas_item(), 0, last)
+	_penis(_painter.get_canvas_item(), 0, last)
+
+
+func _paint_lower() -> void:
+	if shown <= 0.0 or not _splitting() or _split >= _path.size():
+		return
+	_paint_range(_lower.get_canvas_item(), _split, _path.size() - 1)
+
+
+func _paint_lower_top() -> void:
+	if shown <= 0.0 or not _splitting() or _split >= _path.size():
+		return
+	_penis(_lower_top.get_canvas_item(), _split, _path.size() - 1)
+
+
+## Her throat at the samples i0 to i1 (both drawn: the painters share the row where they meet).
+func _paint_range(ci: RID, i0: int, i1: int) -> void:
+	_glow(ci, _e0, -WALL, -WALL - GLOW, i0, i1)
+	_glow(ci, _e1, WALL, WALL + GLOW, i0, i1)
+	_band(ci, -WALL, WALL, _wall_col, i0, i1)
+	_band(ci, 0.0, 0.0, _lumen_col, i0, i1)
 
 
 ## A premultiplied colour (the fade behind the start edge is FADE_SHADER's).
@@ -295,21 +411,22 @@ static func _pm(col: Color) -> Color:
 
 ## A strip along the centre line from his outline's e0 + lo to e1 + hi, in one colour (premultiplied), its edges
 ## fading out across one screen pixel centred on them.
-func _band(ci: RID, lo: float, hi: float, col: Color) -> void:
+func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
 	var h := _half_px
-	var c := _pm(col)
-	for i in _path.size():
+	var c0 := _pm(col)
+	for i in range(i0, i1 + 1):
+		var c := c0 * _w[i]
 		var d0 := _e0[i] + lo
 		var d1 := _e1[i] + hi
 		var m0 := minf(d0 + h, (d0 + d1) * 0.5)   # a strip thinner than a pixel: no solid middle
 		var m1 := maxf(d1 - h, (d0 + d1) * 0.5)
 		pts.append_array([_at(i, d0 - h), _at(i, m0), _at(i, m1), _at(i, d1 + h)])
 		cols.append_array([Color(0, 0, 0, 0), c, c, Color(0, 0, 0, 0)])
-		if i > 0:
-			var b := (i - 1) * 4
+		if i > i0:
+			var b := (i - i0 - 1) * 4
 			for k in 3:   # the fade in, the solid middle, the fade out
 				idx.append_array([b + k, b + k + 1, b + k + 4, b + k + 1, b + k + 5, b + k + 4])
 	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
@@ -317,26 +434,26 @@ func _band(ci: RID, lo: float, hi: float, col: Color) -> void:
 
 ## A strip from edge + inner (glow colour) to edge + outer (transparent). It starts half a pixel under the wall,
 ## so the wall's faded edge has the glow under it (no light seam between the two).
-func _glow(ci: RID, edge: PackedFloat32Array, inner: float, outer: float) -> void:
+func _glow(ci: RID, edge: PackedFloat32Array, inner: float, outer: float, i0: int, i1: int) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
-	var gc := _glow_col
+	var gc := _pm(_glow_col)
 	var under := -signf(outer - inner) * _half_px
-	for i in _path.size():
+	for i in range(i0, i1 + 1):
 		pts.append(_at(i, edge[i] + inner + under))
 		pts.append(_at(i, edge[i] + outer))
-		cols.append(_pm(gc))
+		cols.append(gc * _w[i])
 		cols.append(Color(0, 0, 0, 0))
-		if i > 0:
-			var b := (i - 1) * 2
+		if i > i0:
+			var b := (i - i0 - 1) * 2
 			idx.append_array([b, b + 1, b + 2, b + 1, b + 3, b + 2])
 	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
 
 
 ## His penis from his render, bent along the centre line: each sample takes the penis-local cross-section at the
 ## same distance from her lips.
-func _penis(ci: RID) -> void:
+func _penis(ci: RID, i0: int, i1: int) -> void:
 	var grp := FlashGroupProxy.of(g.him)
 	if grp == null or _drawn <= 0.0 or not _with_penis:
 		return
@@ -344,21 +461,26 @@ func _penis(ci: RID) -> void:
 	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return
 	var pts := PackedVector2Array()
+	# he shows at the cutaway's opacity over her throat's inside, a little of it through him (as when the opacity was
+	# on each of the cutaway's layers); premultiplied
+	var pen_col := Color(opacity, opacity, opacity, opacity)
 	var cols := PackedColorArray()
 	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
-	var last := mini(int(ceil(_drawn / STEP)), _path.size() - 1)
+	var last := mini(mini(int(ceil(_drawn / STEP)), _path.size() - 1), i1)
+	if last <= i0:
+		return
 	var h := _half_px / _wid_scale   # half a screen pixel, penis-local
-	for i in last + 1:
+	for i in range(i0, last + 1):
 		var x := _x_lips - minf(i * STEP, _drawn) / _len_scale
 		# the strip's sides fade out across a pixel, like the bands
 		var ys := [_y0[i] - h, _y0[i] + h, _y1[i] - h, _y1[i] + h]
 		for j in 4:
 			pts.append(_at(i, _side * ys[j] * _wid_scale))
 			uvs.append((_penis_xf * Vector2(x, ys[j]) - rect.position) / rect.size)
-			cols.append(Color.WHITE if j == 1 or j == 2 else Color(0, 0, 0, 0))
-		if i > 0:
-			var b := (i - 1) * 4
+			cols.append(pen_col if j == 1 or j == 2 else Color(0, 0, 0, 0))
+		if i > i0:
+			var b := (i - i0 - 1) * 4
 			for k in 3:
 				idx.append_array([b + k, b + k + 1, b + k + 4, b + k + 1, b + k + 5, b + k + 4])
 	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols, uvs, PackedInt32Array(), PackedFloat32Array(),
