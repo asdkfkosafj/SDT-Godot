@@ -205,8 +205,17 @@ if [ -n "$mods" ]; then
 	# Godot needs native paths (Git Bash on Windows passes /c/... style ones).
 	command -v cygpath > /dev/null && mods=$(cygpath -m "$mods")
 	find "$mods" -iname '*.swf' > "$WORK/modlist.txt"
-	echo "loading $(wc -l < "$WORK/modlist.txt") mods from $mods..."
-	godot --headless --path game --log-file "$LOGS/godot_mods.log" res://debug/mod_load_test.tscn -- --list="$WORK/modlist.txt" > "$WORK/mods.log" 2>&1
+	# Converted mods go to a test cache that outlives the work folder (REGRESS_MOD_CACHE), never to the player's
+	# user://modcache. The first run converts every mod (about 3 s each), so this step has its own time limit
+	# (REGRESS_MODS_TIMEOUT, default 3600 s); later runs read the cache.
+	cache=${REGRESS_MOD_CACHE:-${TMPDIR:-/tmp}/sdt-regress-modcache}
+	mkdir -p "$cache"
+	command -v cygpath > /dev/null && cache=$(cygpath -m "$cache")
+	echo "loading $(wc -l < "$WORK/modlist.txt") mods from $mods (cache $cache)..."
+	timeout -k 10 "${REGRESS_MODS_TIMEOUT:-3600}" "$GODOT" --headless --path game --log-file "$LOGS/godot_mods.log" \
+		res://debug/mod_load_test.tscn -- --list="$WORK/modlist.txt" --mod-cache="$cache" > "$WORK/mods.log" 2>&1
+	code=$?
+	[ $code = 124 ] && echo "FAIL mod load test timed out after ${REGRESS_MODS_TIMEOUT:-3600} s"
 	grep -E "^FAIL|^done" "$WORK/mods.log"
 	grep -q "^done: .* 0 failed" "$WORK/mods.log" || fail=1
 fi
