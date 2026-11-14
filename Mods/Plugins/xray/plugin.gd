@@ -12,6 +12,10 @@ extends SDTExtension
 ## (stomach_part.gd), drawn over her near arm. What she swallows goes down to it (Her.gulp: what it took from her
 ## mouth), and so does his cum when he comes while she is held deep (Her.fillMouth while held: the game puts none in
 ## her mouth then, it goes down her throat); it fills up to Capacity and empties by Digest.
+##
+## Mouth: cum in her mouth (Her.cumInMouth) shows as a pool with a level that sloshes as her head moves. Her mouth has
+## its shape at rest, closed, and he pushes its walls out only where he touches them. Keep mouth: the cutaway stays
+## after he pulls out while there is cum in her mouth.
 
 const MASK_SHOWS_ALL := {"x": -100.0, "scale": 4.0}   # the mask's rect then covers any penis length
 const FADE_BASE := 8.0       # the length the cutaway fades in over behind her lips at Fade 0
@@ -55,6 +59,8 @@ func _setup() -> void:
 		+ "cutaway shows over her."})
 	setting("start", 0, {"label": "Start", "min": 0, "max": 100, "desc": "How far behind her lips the cutaway "
 		+ "begins: nothing of it shows before that point."})
+	setting("mouth_keep", false, {"label": "Keep mouth", "desc": "While cum is in her mouth, the cutaway stays after "
+		+ "he pulls out, until she swallows it or it drools out."})
 	setting("fade", 0, {"label": "Fade", "min": 0, "max": 100, "desc": "How far behind her lips the cutaway fades in: "
 		+ "more brings it in more gradually from where it begins (Start)."})
 	setting("stomach", false, {"label": "Stomach", "desc": "A cutaway of her stomach and of the pipe down to it from "
@@ -79,6 +85,7 @@ func _enable() -> void:
 	menu_control("effects", "X-ray", MenuSchema.setting_control(self, "opacity", {"wide": true}))
 	menu_control("effects", "X-ray", MenuSchema.setting_control(self, "start", {"wide": true}))
 	menu_control("effects", "X-ray", MenuSchema.setting_control(self, "fade", {"wide": true}))
+	menu_control("effects", "X-ray", MenuSchema.setting_control(self, "mouth_keep"))
 	for k in ["stomach", "stomach_show"]:
 		menu_control("effects", "X-ray", MenuSchema.setting_control(self, k))
 	for k in ["stomach_size", "stomach_capacity", "stomach_digest"]:
@@ -127,8 +134,9 @@ func _cum_in_throat() -> void:
 		_stomach.add_stream(_view._inside if _view.shown > 0.0 else -1.0, 1.0)
 
 
+## The cutaway shows with him in it (not her mouth alone, after he pulled out).
 func _showing() -> bool:
-	return _view != null and _view.shown > 0.0
+	return _view != null and _view.shown > 0.0 and not _view.mouth_only
 
 
 func _tick() -> void:
@@ -154,7 +162,7 @@ func _tick() -> void:
 	_view.opacity = get_setting("opacity")
 	_view.start_len = float(get_setting("start"))
 	_view.fade_len = FADE_BASE + FADE_PER_STEP * float(get_setting("fade"))
-	_view.update_shape(on and in_mouth)
+	_view.update_shape(on and in_mouth, on and get_setting("mouth_keep") and her.cumInMouth > 0)
 	_stomach.opacity = get_setting("opacity")
 	_stomach.size = get_setting("stomach_size") / 100.0
 	_stomach.fill_col = Color.hex((g.cumRGB << 8) | 0xFF)

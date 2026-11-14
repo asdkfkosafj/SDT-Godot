@@ -73,9 +73,12 @@ const DRAG := 0.02         # and lost to the air in it, share per tick
 const WALL_SLIDE := 0.9    # speed kept per tick while it runs down the wall
 const RIPPLE_N := 40       # the surface's ripples: points along it
 const RIPPLE_C := 0.3      # how fast they spread
-const RIPPLE_DAMP := 0.92  # and die down (kept per tick)
+const RIPPLE_K := 0.04     # how hard each point springs back to the level (bobbing: about 30 ticks up and down)
+const RIPPLE_DAMP := 0.92  # and how fast they die down (speed kept per tick)
 const RIPPLE_MAX := 4.0    # the highest (local units)
 const RIPPLE_HIT := 0.1    # how deep something landing pushes it, per unit landing at one unit per tick
+const RIPPLE_PUSH := 1.5   # the most one landing pushes (speed, local units per tick)
+const RIPPLE_W := 1.0      # how wide a landing pushes (points along the surface)
 const DROP_R := 1.2        # a droplet splashed up: its radius
 const SINK := 1.5          # a landing stream goes on this far into the contents (local units: no gap at the surface)
 const RUN_GAP := 3         # ticks without anything coming out that still keep a run going (his spurts come apart)
@@ -323,7 +326,8 @@ func _splash(p: Vector2, gd: Vector2) -> void:
 	_run += 1   # the stream goes on in a run of its own
 
 
-## The ripples along the surface: a damped wave, its ends where the surface meets the wall.
+## The ripples along the surface: a damped wave, its ends where the surface meets the wall, each point springing back
+## to the level (else the surface sags where things land and stays so).
 func _ripple_step() -> void:
 	if _ripple_h.size() != RIPPLE_N:
 		_ripple_h.resize(RIPPLE_N)
@@ -334,28 +338,39 @@ func _ripple_step() -> void:
 	for k in RIPPLE_N:
 		var l := h[maxi(k - 1, 0)]
 		var r := h[mini(k + 1, RIPPLE_N - 1)]
-		_ripple_v[k] = (_ripple_v[k] + RIPPLE_C * (l + r - 2.0 * h[k])) * RIPPLE_DAMP
-		_ripple_h[k] = clampf(h[k] + _ripple_v[k], -RIPPLE_MAX, RIPPLE_MAX)
+		_ripple_v[k] = (_ripple_v[k] + RIPPLE_C * (l + r - 2.0 * h[k]) - RIPPLE_K * h[k]) * RIPPLE_DAMP
+		_ripple_h[k] = h[k] + _ripple_v[k]
+		if absf(_ripple_h[k]) > RIPPLE_MAX:   # held there: it does not push on past it
+			_ripple_h[k] = signf(_ripple_h[k]) * RIPPLE_MAX
+			_ripple_v[k] = 0.0
 
 
-## Something lands on the surface at p (own space), with `hit` (what it carries times its speed): pushes it down there.
+## Something lands on the surface at p (own space), with `hit` (what it carries times its speed): pushes it down there
+## and, as much, up round it (what it pushes aside).
 func _ripple_at(p: Vector2, hit: float) -> void:
 	if _surf.size() != 2 or _ripple_h.size() != RIPPLE_N:
 		return
 	var s := _surf[1] - _surf[0]
 	var u := clampf((p - _surf[0]).dot(s) / maxf(s.length_squared(), 1e-6), 0.0, 1.0)
 	var at := u * (RIPPLE_N - 1)
+	var push := PackedFloat32Array()
+	push.resize(RIPPLE_N)
+	var mean := 0.0
 	for k in RIPPLE_N:
-		var d := k - at
-		_ripple_v[k] -= minf(hit * RIPPLE_HIT, 1.5) * exp(-d * d * 0.5)
+		var d := (k - at) / RIPPLE_W
+		push[k] = minf(hit * RIPPLE_HIT, RIPPLE_PUSH) * exp(-d * d * 0.5)
+		mean += push[k] / RIPPLE_N
+	for k in RIPPLE_N:
+		_ripple_v[k] -= push[k] - mean
 
 
 ## Called every tick by the throat part; `want`: the stomach should show. line: what the pipe follows before it bends
 ## down into the stomach (local), going on along `bend` from its end; hand: the sample where the pipe has taken over
 ## from the throat part (its fade: throat_shown); flow_from: what flows shows from here along the line (his tip, or
-## past the end of his penis where the throat part's upper painter draws it).
+## past the end of his penis where the throat part's upper painter draws it); pipe_from: the pipe shows only from this
+## sample on (past her mouth, where the line starts at her lips), fading in over PIPE_TOP samples.
 func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, bend: Vector2, hand: float,
-		throat_shown: float, flow_from: float) -> void:
+		throat_shown: float, flow_from: float, pipe_from := 0.0) -> void:
 	_advance()
 	var was := shown
 	shown = clampf(shown + (FADE if want else -FADE), 0.0, 1.0)
@@ -425,7 +440,8 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 	for i in _pipe.size():
 		var t := (_pipe[mini(i + 1, _pipe.size() - 1)] - _pipe[maxi(i - 1, 0)]).normalized()
 		_pipe_n[i] = Vector2(-t.y, t.x)
-		_pipe_w[i] = smoothstep(0.0, PIPE_TOP, i) * lerpf(1.0 - throat_shown, 1.0, smoothstep(hand - PIPE_TOP, hand, i))
+		_pipe_w[i] = smoothstep(pipe_from, pipe_from + PIPE_TOP, i) \
+			* lerpf(1.0 - throat_shown, 1.0, smoothstep(hand - PIPE_TOP, hand, i))
 		_pipe_b[i] = smoothstep(n_line - 1, _i_hand, i)   # her space along her throat, her torso from the straight
 	_pipe_len = (_pipe.size() - 1) * STEP
 	_in_pipe()
@@ -874,7 +890,35 @@ func _ripple_height(p: Vector2) -> float:
 	var u := clampf((p - _surf[0]).dot(s) / maxf(s.length_squared(), 1e-6), 0.0, 1.0)
 	var at := u * (RIPPLE_N - 1)
 	var k0 := mini(int(at), RIPPLE_N - 2)
-	return lerpf(_ripple_h[k0], _ripple_h[k0 + 1], at - k0) * sin(PI * u)
+	return _dip_cap(_surf[0] + s * u, lerpf(_ripple_h[k0], _ripple_h[k0 + 1], at - k0) * sin(PI * u))
+
+
+## A ripple's height `rh` (local) at q on the flat surface (own space), going at most most of the way down to the
+## contents' bottom there, or up to the inside's top (low or high contents: the surface stays inside them).
+func _dip_cap(q: Vector2, rh: float) -> float:
+	var room := _to_inside_edge(q, _level_dir if rh < 0.0 else -_level_dir, WALL * 0.5) * _k
+	return clampf(rh, -0.7 * room, 0.7 * room)
+
+
+## How far along `dir` (own space) from q to the oval shrunk by `inset` (local units), in own units: 0 past it.
+func _to_inside_edge(q: Vector2, dir: Vector2, inset: float) -> float:
+	var e := RADII - Vector2.ONE * (inset / _k)
+	var qe := q / e
+	var ge := dir / e
+	var a := ge.dot(ge)
+	var b := 2.0 * qe.dot(ge)
+	var c := qe.dot(qe) - 1.0
+	var disc := b * b - 4.0 * a * c
+	if c >= 0.0 or disc < 0.0:
+		return 0.0
+	return (-b + sqrt(disc)) / (2.0 * a)
+
+
+## p (own space), moved in onto the oval shrunk by `inset` (local units) if it is past it.
+func _in_oval(p: Vector2, inset: float) -> Vector2:
+	var e := RADII - Vector2.ONE * (inset / _k)
+	var f := (p.x / e.x) * (p.x / e.x) + (p.y / e.y) * (p.y / e.y)
+	return p / sqrt(f) if f > 1.0 else p
 
 
 ## A bit's half width (own space).
@@ -955,8 +999,9 @@ func _contents(ci: RID) -> void:
 		_surf = surf.duplicate()
 		for k in RIPPLE_N:
 			var u := k / float(RIPPLE_N - 1)
-			var rh := _ripple_h[k] * sin(PI * u) if rippled else 0.0   # held at the wall
-			wave.append(surf[0].lerp(surf[1], u) + up * (rh / _k))
+			var q := surf[0].lerp(surf[1], u)
+			var rh := _dip_cap(q, _ripple_h[k] * sin(PI * u)) if rippled else 0.0   # held at the wall
+			wave.append(q + up * (rh / _k))
 		# in place of the straight edge between the two crossings
 		var i0 := poly.find(surf[0])
 		var i1 := poly.find(surf[1])
@@ -987,9 +1032,9 @@ func _contents(ci: RID) -> void:
 	var pts := PackedVector2Array()
 	var rows := [[-SURFACE * 2.0 / _k, c0], [-SURFACE / _k, sc], [-h, sc], [h, Color(0, 0, 0, 0)]]
 	var scols := PackedColorArray()
-	for r in rows:
+	for r in rows:   # kept inside the outline (under the wall): low contents are thinner than the line goes down
 		for p in wave:
-			pts.append(p + up * float(r[0]))
+			pts.append(_in_oval(p + up * float(r[0]), WALL * 0.25))
 			scols.append(r[1])
 	var n := wave.size()
 	var idx := PackedInt32Array()
