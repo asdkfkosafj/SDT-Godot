@@ -774,9 +774,11 @@ func _aimpenis_checks() -> void:
 	var up := [Hooks.value(&"Him.penisTiltTarget", him, 10.0), Hooks.value(&"Him.penisAngle", him, 25.0)]
 	him.inMouth = true
 	var mouth := [Hooks.value(&"Him.penisTiltTarget", him, 10.0), Hooks.value(&"Him.penisAngle", him, 25.0)]
-	Extensions.key_pressed(77)
+	Extensions.key_pressed(77)   # M alone: the game's Mute, not aimpenis
+	var m_alone: bool = ap.get_setting("on")
+	Extensions.key_pressed(77 | Hotkeys.SHIFT)
 	var key_off: bool = not ap.get_setting("on")
-	Extensions.key_pressed(77)
+	Extensions.key_pressed(77 | Hotkeys.SHIFT)
 	var key_on: bool = ap.get_setting("on")
 	ap.set_setting("on", false)
 	him.inMouth = was[0]
@@ -786,7 +788,7 @@ func _aimpenis_checks() -> void:
 	_check("aimpenis off: the game's tilt", off == [10.0, 25.0], str(off))
 	_check("aimpenis on, mouse up: aims up, up to 35", up[0] > 40.0 and up[1] == 35.0, str(up))
 	_check("aimpenis in her mouth: the game's tilt", mouth == [10.0, 25.0], str(mouth))
-	_check("aimpenis: M switches it off and on", key_off and key_on)
+	_check("aimpenis: Shift+M switches it off and on, M alone does not", m_alone and key_off and key_on)
 
 
 # ---------------------------------------------------------------- throat rings
