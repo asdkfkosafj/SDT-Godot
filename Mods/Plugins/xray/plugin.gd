@@ -8,14 +8,17 @@ extends SDTExtension
 ## he is deep (so it never pokes out behind her head), becomes a cut where his render is drawn on screen
 ## (FlashGroupProxy.set_cut), so the scene looks the same.
 ##
-## Stomach (its own switch): a cutaway of her stomach, in her torso, and of the food pipe down to it from her throat
-## (stomach_part.gd), drawn over her near arm. What she swallows goes down to it (Her.gulp: what it took from her
-## mouth), and so does his cum when he comes while she is held deep (Her.fillMouth while held: the game puts none in
-## her mouth then, it goes down her throat); it fills up to Capacity and empties by Digest.
+## Stomach (its own switch): a cutaway of her stomach, in her torso (stomach_part.gd), drawn over her near arm, and
+## while the mouth cutaway shows too, of the food pipe down to it from where her throat is closed below her mouth. What
+## she swallows goes down to it (Her.gulp: what it took from her mouth), and so does his cum when he comes while she is
+## held deep (Her.fillMouth while held: the game puts none in her mouth then, it goes down her throat); it fills up to
+## Capacity and empties by Digest.
 ##
-## Mouth: cum in her mouth (Her.cumInMouth) shows as a pool with a level that sloshes as her head moves. Her mouth has
-## its shape at rest, closed, and he pushes its walls out only where he touches them. Keep mouth: the cutaway stays
-## after he pulls out while there is cum in her mouth.
+## Mouth: her mouth has its shape at rest, closed, and he pushes its walls out only where he touches them; below it
+## her throat is closed by a ring, which opens round him and as she swallows. Cum in her mouth (Her.cumInMouth) lies in
+## it as a pool down to that ring, its level sloshing as her head moves; when he comes in her mouth (Her.fillMouth), it
+## comes out of his tip and falls into the pool; what she swallows goes down through the ring. Keep mouth: the cutaway
+## stays after he pulls out while there is cum in her mouth.
 
 const MASK_SHOWS_ALL := {"x": -100.0, "scale": 4.0}   # the mask's rect then covers any penis length
 const FADE_BASE := 8.0       # the length the cutaway fades in over behind her lips at Fade 0
@@ -95,7 +98,7 @@ func _enable() -> void:
 	modify(&"Him.penisMask", {"phase": Hooks.FINAL, "op": "fn", "fn": _mask})
 	hook_before(&"Her.gulp", func(_c): _in_mouth_before = g.her.cumInMouth)
 	hook_after(&"Her.gulp", func(_c): _swallowed(_in_mouth_before - g.her.cumInMouth))
-	hook_after(&"Her.fillMouth", func(_c): _cum_in_throat())
+	hook_after(&"Her.fillMouth", func(c): _cum_in(c.args[0] if not c.args.is_empty() else false))
 	on_late_tick(_tick)
 
 
@@ -125,13 +128,18 @@ func _mask(m: Dictionary, _him) -> Dictionary:
 ## A swallow of `units` goes down to her stomach.
 func _swallowed(units: int) -> void:
 	if units > 0 and stomach_on and _stomach != null:
-		_stomach.add_lump(float(units))
+		# from the back of the pool in her mouth, while the cutaway shows it
+		_stomach.add_lump(float(units), _view.swallow_from() if _view != null and _view.shown > 0.0 else -1.0)
 
 
-## He comes while she is held deep: it goes down her throat from his tip (not into her mouth).
-func _cum_in_throat() -> void:
-	if g.her.held and stomach_on and _stomach != null:
-		_stomach.add_stream(_view._inside if _view.shown > 0.0 else -1.0, 1.0)
+## He comes while she is held deep: it goes down her throat from his tip (not into her mouth). Else (a spurt tick into
+## her mouth, not cum landing on it: `force`) it comes out of his tip into her mouth, while the cutaway shows him.
+func _cum_in(force: bool) -> void:
+	if g.her.held:
+		if stomach_on and _stomach != null:
+			_stomach.add_stream(_view._inside if _view.shown > 0.0 else -1.0, 1.0)
+	elif not force and g.her.mouthFull and _showing():
+		_view.add_shot()
 
 
 ## The cutaway shows with him in it (not her mouth alone, after he pulled out).
@@ -162,15 +170,17 @@ func _tick() -> void:
 	_view.opacity = get_setting("opacity")
 	_view.start_len = float(get_setting("start"))
 	_view.fade_len = FADE_BASE + FADE_PER_STEP * float(get_setting("fade"))
-	_view.update_shape(on and in_mouth, on and get_setting("mouth_keep") and her.cumInMouth > 0)
+	var mouth_alone: bool = on and get_setting("mouth_keep") and her.cumInMouth > 0
+	_view.update_shape(on and in_mouth, mouth_alone)
 	_stomach.opacity = get_setting("opacity")
 	_stomach.size = get_setting("stomach_size") / 100.0
 	_stomach.fill_col = Color.hex((g.cumRGB << 8) | 0xFF)
 	_stomach.capacity = PER_FINISH * float(get_setting("stomach_capacity"))
 	_stomach.digest = _stomach.capacity * float(get_setting("stomach_digest")) / 100.0 / (60.0 * 30.0)
 	var show: String = get_setting("stomach_show")
+	# the food pipe, from the stomach up to where her throat closes below her mouth, shows while both do
 	_view.update_stomach(_stomach, stomach_on and (show == "Always" or in_mouth
-		or (show == "When in use" and _stomach.in_use())), in_mouth)
+		or (show == "When in use" and _stomach.in_use())), on and (in_mouth or mouth_alone))
 	if _showing() or _lifted:
 		_set_cut()
 	else:

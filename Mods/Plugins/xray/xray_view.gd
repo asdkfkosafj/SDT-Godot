@@ -10,9 +10,14 @@ extends FlashDisplayObject
 ## Drawn in the main pass as a canvas group (its opacity applies to the whole cutaway at once), not in a render
 ## target of its own: that one could be drawn before his render in a frame and show his previous frame.
 ##
+## Her mouth: its shape at rest (closed), pushed out only where he touches it; her throat closed below it (a ring:
+## GATE_LEN), opening round him and as she swallows. Cum in her mouth lies in it as a pool down to that ring (_pool);
+## his spurts come out of his tip into it (_move_shots); what she swallows goes down through the ring (the stomach
+## part's lumps, her throat bulging round them: _bulge).
+##
 ## The stomach (stomach_part.gd) is a display object of its own, above her near arm; this one gives it her throat's
-## line every tick (update_stomach). While both show, its pipe takes over from this one a little past his tip, along
-## this one's centre line (this one fades out there as the pipe fades in), so the pipe goes on over her arm. Its part
+## line every tick (update_stomach). This one ends (fades out) a little past the ring, or past his tip; while the
+## stomach shows, its pipe takes over there, along this one's centre line, so the pipe goes on over her arm. Its part
 ## low on her neck is then drawn by a second painter (_lower) in the stomach's layer, over her arm too (her
 ## shoulder would cut him off); both draw the same row of the centre line there, so they meet without a seam. His
 ## penis there is drawn by a third painter (_lower_top), above what flows down the pipe (the stomach part's _flow).
@@ -71,7 +76,7 @@ const MOUTH_ROOF_TURN := 1.05   # her mouth closed: the roof meets her throat wh
 const MOUTH_ROUND := 0.8  # her mouth closed: the roof goes straight back from her upper lip and turns down into her
                            # throat in a rounded corner, the more square the nearer this is to 1
 const MOUTH_TURN := 0.6    # her mouth ends where the centre line has turned this far (radians) down into her throat
-const MOUTH_BACK := 6      # samples before her throat over which the pool closes (to the pocket's floor)
+const MOUTH_BACK := 6      # samples before her throat over which her mouth's walls hand over to her throat's round him
 const REJOIN := 10        # past what is drawn of him, the centre line goes over to her throat at rest over at least
                           # this many samples (along him only where he is: her throat stays in its place past his tip)
 const REJOIN_BEND := 50.0 # and over as many more as it takes for the bend that adds to be no tighter than this radius
@@ -85,13 +90,33 @@ const SLOSH_SMOOTH := 0.2  # how much of each tick's speeding up counts at once
 const SLOSH_K := 0.06      # how hard it springs back level, per tick
 const SLOSH_DAMP := 0.45   # and how fast its swing dies down
 const SLOSH_MAX := 0.45    # the most it tilts
-const SPLASH := 0.03       # what comes into her mouth sets it swinging (tilt speed)
+const SPLASH := 0.03       # what lands in it sets it swinging (tilt speed)
+const SHOT_SPEED := 9.0    # his cum leaves his tip this fast (local units per tick), along him
+const SHOT_SPREAD := 0.08  # give or take this much (radians, at random)
+const SHOT_G := 0.8        # it falls (down for the pool): speed gained per tick
+const SHOT_DRAG := 0.03    # and loses this share of its speed per tick
+const SHOT_SLIDE := 0.85   # speed kept per tick while it runs along her mouth's wall
+const SHOT_W := 2.6        # half the width of the stream
+const SHOT_HOLD := 3       # a spurt tick keeps it coming out this many ticks (the game's come a few ticks apart: one
+                           # stream while he spurts)
+const SHOT_FROM := 3.0     # it comes out this far past his tip point (from under the end of his render)
+const SHOT_LIFE := 45      # ticks: past that, it is in the pool wherever it is
+const SHOT_RUN := 6        # it runs along her mouth's wall at most this many ticks (then it is in the pool: the pool is
+const SHOT_REST := 0.6     # one level, it does not keep what lies in a hollow apart), less where it comes to rest (this
+                           # slow: local units per tick)
+const GATE_LEN := 5        # where her mouth meets her throat, her throat is closed (what is in her mouth stays there)
+                           # over this many samples each way from its middle (where her mouth at rest ends: in her,
+                           # not on the centre line, which follows him)
+const GATE_MIN := 0.5      # to this half width (a seam)
+const GATE_RING := 5.0     # and its wall is this much thicker there, out from it (a ring of muscle)
+const GATE_PRE := 0.5      # as she gets ready to swallow it opens this much (of the way to her throat's own width);
+                           # what she swallows opens it the rest of the way (the lump, LUMP_ROOM)
+const LUMP_ROOM := 1.0     # her throat bulges round a swallowed lump this far out from it
 
 var opacity := 0.6
 var start_len := 0.0       # the cutaway begins this far behind her lips, along her face (the plugin's Start)
 var fade_len := 8.0        # and fades in over this length from there (the plugin's Fade setting)
 var shown := 0.0
-var stomach_shown := 0.0             # the stomach part's pipe's fade, last tick (update_stomach)
 var _with_penis := false   # off while fading out: his render no longer matches the last shape
 var _painter := Node2D.new()
 var _path := PackedVector2Array()    # centre line samples, STEP apart, from her lips
@@ -111,7 +136,8 @@ var _side := 1.0                     # which side of the line his penis-local +y
 var _penis_xf := Transform2D()       # penis-local -> his local space (UVs into his render)
 var _bounds := Rect2()
 var _curve_n := 0                    # samples of the centre line's curve (past it, it goes straight on)
-var _hand := 0.0                     # the sample where the stomach's pipe has taken over
+var _hand := 0.0                     # the sample where this part has faded out: past her throat's closed stretch
+                                     # (GATE_LEN) or his tip; the stomach's pipe (its food pipe) takes over there
 var _mouth_end := 0                  # the sample where her mouth's roof and floor have come into her throat
 var _w := PackedFloat32Array()       # how much of this part shows at each sample (1, but where the pipe takes over)
 var _lower := Node2D.new()           # draws the part past _split, in the stomach's layer (attach_lower)
@@ -133,7 +159,7 @@ var _to_jaw := true                  # her jaw (the pocket's floor) is on the e1
 var _mouth_amt := 0.0                # what is in her mouth, as it shows (eased)
 var _pool_parts: Array = []          # the pool's bands: [polygons, from, to (depth along _pool_gd), colour, colour]
 var _pool_gd := Vector2.DOWN         # down for the pool (local): square to its surface
-var _back_dir := Vector2.LEFT        # back into her mouth at its end (local), and how far its end is along that
+var _back_dir := Vector2.LEFT        # down her throat at the pool's end (local), and how far its end is along that
 var _back_at := 0.0
 var _tilt := 0.0                     # the surface's tilt from level (radians) and how fast it changes
 var _tilt_v := 0.0
@@ -141,7 +167,20 @@ var _last_pos := Vector2.ZERO        # where her mouth was last tick (in the sce
 var _last_vel := Vector2.ZERO
 var _acc := Vector2.ZERO             # how fast it speeds up, smoothed
 var _moving := false                 # _last_pos / _last_vel hold something
-var _last_cim := 0                   # cumInMouth last tick
+var _shots: Array[Dictionary] = []   # his cum on its way into the pool, oldest first: p, v (local), q (cumInMouth
+                                     # units it carries), run, age
+var _shot_queue := 0                 # spurt ticks since last tick (add_shot)
+var _shot_left := 0                  # ticks it keeps coming out (SHOT_HOLD)
+var _shot_run := 0                   # the run of ticks it comes out in (one stream), and ticks since it last did
+var _shot_quiet := 99
+var _in_flight := 0                  # cumInMouth not in the pool yet (on its way)
+var _lumen := PackedVector2Array()   # her mouth and throat down to where it is closed: their inside edges
+var _level := INF                    # the pool's surface (depth along _pool_gd; with no pool, the bottom)
+var _gate := 0                       # the sample in the middle of the closed stretch (GATE_LEN), and exactly
+var _gate_f := 0.0                   # (between samples)
+var _thick := PackedFloat32Array()   # how much thicker the wall is at each sample (GATE_RING)
+var _b0 := PackedFloat32Array()      # _e0 / _e1 without the bulge round what she swallows (_bulge)
+var _b1 := PackedFloat32Array()
 
 
 func _init() -> void:
@@ -210,9 +249,85 @@ func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) ->
 	if shown > 0.0:
 		flow_from = maxf(_inside, minf(_split * STEP, _drawn)) if _splitting() else maxf(_inside, _drawn)
 	# (while this part fades, the pipe shows under it as much as it does not: not through her mouth)
-	stomach.update(want, want_pipe, her, line, bend, _hand, shown, flow_from,
-		float(_mouth_end) if shown > 0.0 else 0.0)
-	stomach_shown = stomach.shown * stomach.pipe_shown   # (its pipe takes over from this part only while it shows)
+	stomach.update(want, want_pipe, her, line, bend, _hand, shown, flow_from, _gate_f if shown > 0.0 else 0.0)
+	_bulge(stomach)
+
+
+## Where what she swallows starts down (along the centre line): the back of the pool in her mouth, above where her
+## throat is closed (it goes on down through there).
+func swallow_from() -> float:
+	return maxf(float(_m0), _gate_f - 2.0 * GATE_LEN) * STEP
+
+
+## Her throat closed where her mouth meets it (GATE_LEN), but round him, and opening a little as she gets ready to
+## swallow (the game's swallow: from its build-up to the moment she swallows, closing again as she relaxes).
+func _close_gate(her: Her) -> void:
+	var open := 0.0
+	if her.swallowing:
+		var t := float(her.swallowTimer)
+		var seq: Dictionary = her.swallowSequence
+		open = GATE_PRE * smoothstep(float(seq["build"]), float(seq["swallow"]), t) \
+			* (1.0 - smoothstep(float(seq["relax"]), float(seq["end"]), t))
+	_thick.resize(_path.size())
+	_thick.fill(0.0)
+	for i in range(maxi(1, ceili(_gate_f - GATE_LEN)), mini(_path.size(), floori(_gate_f + GATE_LEN) + 1)):
+		var ring := 0.5 + 0.5 * cos(PI * (i - _gate_f) / GATE_LEN)
+		var k := ring * (1.0 - open)
+		if _with_penis:   # held open where he is, and ahead of his tip as her throat closes past it (CLOSE_LEN)
+			k *= smoothstep(_inside, _inside + CLOSE_LEN, i * STEP)
+		var c := (_e0[i] + _e1[i]) * 0.5
+		var a := lerpf(_e0[i], c - GATE_MIN, k)
+		var b := lerpf(_e1[i], c + GATE_MIN, k)
+		_e0[i] = a
+		_e1[i] = b
+		_thick[i] = GATE_RING * ring * lerpf(1.0, 0.5, clampf(((b - a) * 0.5 - GATE_MIN) / CLOSED, 0.0, 1.0))
+
+
+## Where the centre line has turned MOUTH_ROOF_TURN from its way in at her lips (between samples, so it moves
+## smoothly as she does).
+func _turn_point() -> Vector2:
+	var n := mini(_path.size(), _curve_n)
+	var dir := (_path[_m0 + 1] - _path[_m0]).normalized()
+	var c := cos(MOUTH_ROOF_TURN)
+	var prev := 1.0
+	for i in range(_m0, n - 1):
+		var d := (_path[i + 1] - _path[i]).normalized().dot(dir)
+		if d <= c:   # (each segment's way at its middle: the turn crosses c between i - 0.5 and i + 0.5)
+			var t := clampf(i - 0.5 + (prev - c) / maxf(prev - d, 1e-6), 0.0, n - 1.001)
+			return _path[int(t)].lerp(_path[int(t) + 1], t - int(t))
+		prev = d
+	return _path[n - 1]
+
+
+## The centre line's sample nearest `p` (between samples).
+func _index_near(p: Vector2) -> float:
+	var best := INF
+	var at := 0.0
+	for i in _path.size() - 1:
+		var a := _path[i]
+		var ab := _path[i + 1] - a
+		var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 1e-6), 0.0, 1.0)
+		var d := (a + ab * t).distance_squared_to(p)
+		if d < best:
+			best = d
+			at = i + t
+	return at
+
+
+## Her throat bulges round what she swallows on its way down (the stomach part's lumps, along the same line).
+func _bulge(stomach: FlashDisplayObject) -> void:
+	if shown <= 0.0 or _b0.size() != _path.size():
+		return
+	var lw: PackedFloat32Array = stomach.lump_w()
+	_e0 = _b0.duplicate()
+	_e1 = _b1.duplicate()
+	for i in mini(lw.size(), _path.size()):
+		if lw[i] <= 0.01:
+			continue
+		var hw := lw[i] + LUMP_ROOM
+		_e0[i] = minf(_e0[i], -hw)
+		_e1[i] = maxf(_e1[i], hw)
+		_bounds = _bounds.expand(_at(i, -hw - WALL - GLOW)).expand(_at(i, hw + WALL + GLOW))
 
 
 ## Where the centre line's curve ends: past the base of her throat, on along her neck from its point `join`.
@@ -249,6 +364,10 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 		if was > 0.0:
 			_slosh(her, false)
 			_pool()
+			_move_shots()
+			if shown <= 0.0:   # (gone: what was on its way is in the pool)
+				_shots.clear()
+				_in_flight = 0
 			_painter.queue_redraw()
 			_lower.queue_redraw()
 			_lower_top.queue_redraw()
@@ -279,6 +398,7 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_line(lips_mid, _edge_in, tail, axis)
 	_outline(him)
 	_pocket(top_lip, bottom_lip, jaw_at)
+	var gate_at := _turn_point()
 	_rest_mouth(top_lip, lips_meet)
 	var start := lips_mid
 	var pv := Transform2D()
@@ -307,13 +427,19 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 		_pocket(top_lip, bottom_lip, jaw_at)
 		_fit_mouth(rest)
 	_edge_at = start
-	# the stomach's pipe (a closed tube) takes over only past her mouth: not through it, his tip near her lips
-	_hand = maxf(_hand, _mouth_end + HAND_FADE)
+	# this part ends past her throat's closed stretch (where the stomach's pipe takes over), or past his tip
+	_gate_f = minf(_index_near(gate_at), float(_path.size() - 1 - GATE_LEN))
+	_gate = int(round(_gate_f))
+	_hand = maxf(_hand, _gate_f + HAND_FADE + 1.0)
+	_close_gate(her)
+	_b0 = _e0.duplicate()
+	_b1 = _e1.duplicate()
 	_slosh(her, true)
 	_pool()
+	_move_shots()
 	_w.resize(_path.size())
 	for i in _path.size():
-		_w[i] = 1.0 - stomach_shown * smoothstep(_hand - HAND_FADE, _hand, i)
+		_w[i] = 1.0 - smoothstep(_hand - HAND_FADE, _hand, i)
 	_split = -1
 	var base: Vector2 = throat[int(SPLIT_AT * (throat.size() - 1))]
 	for i in _path.size():
@@ -323,7 +449,8 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_colours()
 	_bounds = Rect2(_path[0], Vector2.ZERO)
 	for i in _path.size():
-		_bounds = _bounds.expand(_at(i, _e0[i] - WALL - GLOW)).expand(_at(i, _e1[i] + WALL + GLOW))
+		var out := WALL + GLOW + _thick[i]
+		_bounds = _bounds.expand(_at(i, _e0[i] - out)).expand(_at(i, _e1[i] + out))
 	_bounds = _bounds.grow(4.0)
 	_painter.queue_redraw()
 	_lower.queue_redraw()
@@ -390,7 +517,7 @@ func _resample(raw: PackedVector2Array, rest := PackedVector2Array(), from := IN
 	_path = _even(p)
 	_curve_n = _path.size()
 	var end_dir := (_path[-1] - _path[-2]).normalized() if _path.size() > 1 else Vector2.DOWN
-	var reach := _drawn if stomach_shown <= 0.0 else maxf(_drawn, _hand * STEP)
+	var reach := maxf(_drawn, _hand * STEP)
 	while (_path.size() - 1) * STEP < reach + STEP:
 		_path.append(_path[-1] + end_dir * STEP)
 	var n := _path.size()
@@ -640,9 +767,6 @@ func _slosh(her: Her, live: bool) -> void:
 		_last_pos = pos
 		_last_vel = vel
 	_moving = live
-	if her.cumInMouth > _last_cim:
-		_tilt_v += SPLASH * (1.0 if randf() < 0.5 else -1.0)
-	_last_cim = her.cumInMouth
 	var target := clampf(_acc.x * SLOSH_PUSH, -SLOSH_MAX, SLOSH_MAX) if live else 0.0
 	_tilt_v += (target - _tilt) * SLOSH_K - _tilt_v * SLOSH_DAMP
 	_tilt = clampf(_tilt + _tilt_v, -SLOSH_MAX, SLOSH_MAX)
@@ -654,22 +778,35 @@ func _slosh(her: Her, live: bool) -> void:
 func _pool() -> void:
 	_pool_parts.clear()
 	var her: Her = g.her
-	_mouth_amt += (float(her.cumInMouth) - _mouth_amt) * MOUTH_EASE
-	if _mouth_amt < 0.2 or _m1 <= _m0 or _m1 >= _path.size():
+	_mouth_amt += (float(maxi(0, her.cumInMouth - _in_flight)) - _mouth_amt) * MOUTH_EASE
+	var end := mini(_gate, _path.size() - 1)
+	_lumen.clear()
+	_level = INF
+	if end <= _m0 + 1:
 		return
-	# the pocket, half a wall into its wall (the wall is drawn over its edge); towards her throat its roof comes down
-	# to its floor (her tongue holds it back), so the pool ends there in a point, not straight across her throat
-	var cav := PackedVector2Array()
 	var floor_e := _e1 if _to_jaw else _e0
 	var roof_e := _e0 if _to_jaw else _e1
+	for i in range(_m0, end + 1):
+		_lumen.append(_at(i, floor_e[i]))
+	for i in range(end, _m0 - 1, -1):
+		_lumen.append(_at(i, roof_e[i]))
+	var lowest := -INF
+	for p in _lumen:
+		lowest = maxf(lowest, p.dot(_pool_gd))
+	_level = lowest - 1.0   # (with no pool: what comes in lands at the bottom)
+	if _mouth_amt < 0.2:
+		return
+	# her mouth and on down her throat to where it is closed (GATE_LEN: what is in her mouth lies on that), half a wall
+	# into its walls (the wall is drawn over its edge)
+	var cav := PackedVector2Array()
 	var out := WALL * 0.5 * (1.0 if _to_jaw else -1.0)   # out of the floor's side
-	for i in range(_m0, _m1 + 1):
+	for i in range(_m0, end + 1):
 		cav.append(_at(i, floor_e[i] + out))
-	for i in range(_m1, _m0 - 1, -1):
-		cav.append(_at(i, lerpf(roof_e[i] - out, floor_e[i] + out, smoothstep(_m1 - MOUTH_BACK, _m1, i))))
+	for i in range(end, _m0 - 1, -1):
+		cav.append(_at(i, roof_e[i] - out))
 	var pen := PackedVector2Array()
 	if _with_penis:
-		var last := mini(_m1, int(_inside / STEP))
+		var last := mini(end, int(_inside / STEP))
 		for i in range(_m0, last + 1):
 			pen.append(_at(i, _p0[i]))
 		for i in range(last, _m0 - 1, -1):
@@ -693,16 +830,17 @@ func _pool() -> void:
 		else:
 			b = m
 	var level := (a + b) * 0.5
+	_level = level
 	var fill := Color.hex((g.cumRGB << 8) | 0xFF)
 	var c0 := _pm(fill)
 	var c1 := _pm(Color(fill.r * FILL_DARK, fill.g * FILL_DARK, fill.b * FILL_DARK, fill.a))
 	var sc := _pm(fill.darkened(0.15))
 	var h := _half_px
-	# it fades out over the pocket's last MOUTH_BACK samples: each band in two, before that and over it (so its
-	# colour changes evenly inside each piece, as the triangles draw it)
-	_back_dir = (_path[_m1] - _path[_m1 - 1]).normalized()
-	_back_at = _path[_m1].dot(_back_dir)
-	var fade_from := _back_at - MOUTH_BACK * STEP
+	# it fades out over the last GATE_LEN / 2 samples (where he holds her throat open, it does not end straight across
+	# him): each band in two, before that and over it (so its colour changes evenly inside each piece, as drawn)
+	_back_dir = (_path[end] - _path[end - 1]).normalized()
+	_back_at = _path[end].dot(_back_dir)
+	var fade_from := _back_at - GATE_LEN * 0.5 * STEP
 	var zones := [_slab(_back_dir, fade_from - 1000.0, fade_from, cav[0]),
 		_slab(_back_dir, fade_from, _back_at + 1.0, cav[0])]
 	for band in [[level - h, level + h, Color(0, 0, 0, 0), sc], [level + h, level + SURFACE, sc, sc],
@@ -759,7 +897,7 @@ func _paint_pool_bands(ci: RID, over: bool) -> void:
 			var cols := PackedColorArray()
 			for p in poly:
 				var c := (part[3] as Color).lerp(part[4], clampf((p.dot(_pool_gd) - d0) / (d1 - d0), 0.0, 1.0))
-				c *= clampf((_back_at - p.dot(_back_dir)) / (MOUTH_BACK * STEP), 0.0, 1.0)   # fading out at the back
+				c *= clampf((_back_at - p.dot(_back_dir)) / (GATE_LEN * 0.5 * STEP), 0.0, 1.0)   # fading out at its end
 				cols.append(c * MOUTH_OVER if over else c)
 			RenderingServer.canvas_item_add_triangle_array(ci, tri, poly, cols)
 
@@ -774,7 +912,7 @@ func _paint_pool(ci: RID) -> void:
 		var pts := PackedVector2Array()
 		var cols := PackedColorArray()
 		var idx := PackedInt32Array()
-		for i in range(_m0, _m1 + 1):
+		for i in range(_m0, mini(_gate, _path.size() - 1) + 1):
 			var e: float = _e0[i] if side < 0.0 else _e1[i]
 			var c := _pm(_wall_col) * _w[i]
 			pts.append_array([_at(i, e + side * WALL * 0.75), _at(i, e + side * h), _at(i, e - side * h)])
@@ -808,9 +946,135 @@ func _paint() -> void:
 	var last := _split if _splitting() else _path.size() - 1
 	_paint_range(_painter.get_canvas_item(), 0, last)
 	_paint_pool(_painter.get_canvas_item())
+	_paint_shots(_painter.get_canvas_item())   # (under him: out from under his tip)
 	_penis(_painter.get_canvas_item(), 0, last)
 	if _with_penis:
 		_paint_pool_bands(_painter.get_canvas_item(), true)
+
+
+## He comes in her mouth (a spurt tick: one unit of cumInMouth): it comes out of his tip (and goes on coming out
+## for SHOT_HOLD ticks).
+func add_shot() -> void:
+	_shot_queue += 1
+
+
+## His cum on its way: out of his tip along him, falling, running along her mouth's walls where it meets them, into
+## the pool where it reaches its surface (only then does the pool take it: _in_flight).
+func _move_shots() -> void:
+	if _shot_queue > 0:
+		_shot_left = SHOT_HOLD
+	if _shot_left > 0 and _with_penis and _inside > 0.0 and _path.size() >= 2:
+		var t := minf((_inside + SHOT_FROM) / STEP, _path.size() - 1.001)
+		var i := int(t)
+		var tip := _path[i].lerp(_path[i + 1], t - i)
+		var dir := (_path[i + 1] - _path[i]).normalized()
+		if _shot_quiet > 0:
+			_shot_run += 1
+		_shots.append({"p": tip, "v": dir.rotated(randf_range(-SHOT_SPREAD, SHOT_SPREAD)) * SHOT_SPEED,
+			"q": _shot_queue, "run": _shot_run, "age": 0, "wall": 0})
+		_in_flight += _shot_queue
+		_shot_left -= 1
+		_shot_quiet = 0
+	else:
+		_shot_left = 0
+		_shot_quiet += 1
+	_shot_queue = 0
+	var keep: Array[Dictionary] = []
+	var grav := _pool_gd * SHOT_G
+	for d in _shots:
+		if d["age"] == 0:   # (new: at his tip this tick)
+			d["age"] = 1
+			keep.append(d)
+			continue
+		var v: Vector2 = (d["v"] + grav) * (1.0 - SHOT_DRAG)
+		var p: Vector2 = d["p"] + v
+		if _lumen.size() >= 3 and not Geometry2D.is_point_in_polygon(p, _lumen):   # the wall: onto it, along it
+			var q := _nearest_on(_lumen, p)
+			var nrm := (p - q).normalized()
+			p = q
+			var vn := v.dot(nrm)
+			if vn > 0.0:
+				v = (v - nrm * vn) * SHOT_SLIDE
+			d["wall"] += 1
+		d["p"] = p
+		d["v"] = v
+		d["age"] += 1
+		var on_wall: int = d["wall"]
+		if p.dot(_pool_gd) >= _level or d["age"] > SHOT_LIFE or _lumen.size() < 3 or on_wall >= SHOT_RUN \
+				or (on_wall > 0 and v.length() < SHOT_REST):   # in the pool
+			_in_flight = maxi(0, _in_flight - int(d["q"]))
+			if d["q"] > 0:
+				_tilt_v += SPLASH * (1.0 if randf() < 0.5 else -1.0)
+			continue
+		keep.append(d)
+	_shots = keep
+
+
+## The point of the closed outline `poly` nearest `p`.
+static func _nearest_on(poly: PackedVector2Array, p: Vector2) -> Vector2:
+	var best := poly[0]
+	for i in poly.size():
+		var q := Geometry2D.get_closest_point_to_segment(p, poly[i], poly[(i + 1) % poly.size()])
+		if q.distance_squared_to(p) < best.distance_squared_to(p):
+			best = q
+	return best
+
+
+## His cum on its way: each run one stream through its bits, newest (at his tip) to oldest, its edge a little darker.
+func _paint_shots(ci: RID) -> void:
+	if _shots.is_empty():
+		return
+	var fill := Color.hex((g.cumRGB << 8) | 0xFF)
+	var runs := {}
+	for d in _shots:
+		if not runs.has(d["run"]):
+			runs[d["run"]] = PackedVector2Array()
+		runs[d["run"]].append(d["p"])
+	for pts: PackedVector2Array in runs.values():
+		pts.reverse()
+		for pass_ in [[SHOT_W, fill.darkened(0.15)], [SHOT_W - 0.6, fill]]:
+			_stream(ci, pts, pass_[0], _pm(pass_[1]))
+
+
+## A line through `pts`, `w` each side, round at both ends, in one colour (premultiplied), its edges fading out across
+## one screen pixel.
+func _stream(ci: RID, pts: PackedVector2Array, w: float, c: Color) -> void:
+	var h := _half_px
+	var n := pts.size()
+	if n >= 2:
+		var vs := PackedVector2Array()
+		var cols := PackedColorArray()
+		var idx := PackedInt32Array()
+		for j in n:
+			var t := (pts[mini(j + 1, n - 1)] - pts[maxi(j - 1, 0)])
+			var nrm := Vector2(-t.y, t.x).normalized() if t.length() > 0.001 else Vector2.UP
+			for o in [-w - h, -w + h, w - h, w + h]:
+				vs.append(pts[j] + nrm * o)
+			cols.append_array([Color(0, 0, 0, 0), c, c, Color(0, 0, 0, 0)])
+			if j > 0:
+				var b := (j - 1) * 4
+				for k in 3:
+					idx.append_array([b + k, b + k + 1, b + k + 4, b + k + 1, b + k + 5, b + k + 4])
+		RenderingServer.canvas_item_add_triangle_array(ci, idx, vs, cols)
+	for e in ([pts[0], pts[n - 1]] if n >= 2 else [pts[0]]):
+		_round(ci, e, w, c)
+
+
+## A round dot (its edge fading out across one screen pixel).
+func _round(ci: RID, at: Vector2, r: float, c: Color) -> void:
+	var h := _half_px
+	var vs := PackedVector2Array([at])
+	var cols := PackedColorArray([c])
+	var idx := PackedInt32Array()
+	var seg := 12
+	for k in seg:
+		var u := Vector2.RIGHT.rotated(TAU * k / seg)
+		vs.append_array([at + u * (r - h), at + u * (r + h)])
+		cols.append_array([c, Color(0, 0, 0, 0)])
+		var a := 1 + 2 * k
+		var b := 1 + 2 * ((k + 1) % seg)
+		idx.append_array([0, a, b, a, a + 1, b, a + 1, b + 1, b])
+	RenderingServer.canvas_item_add_triangle_array(ci, idx, vs, cols)
 
 
 func _paint_lower() -> void:
@@ -829,7 +1093,7 @@ func _paint_lower_top() -> void:
 func _paint_range(ci: RID, i0: int, i1: int) -> void:
 	_glow(ci, _e0, -WALL, -WALL - GLOW, i0, i1)
 	_glow(ci, _e1, WALL, WALL + GLOW, i0, i1)
-	_band(ci, -WALL, WALL, _wall_col, i0, i1)
+	_band(ci, -WALL, WALL, _wall_col, i0, i1, true)
 	_band(ci, 0.0, 0.0, _lumen_col, i0, i1)
 
 
@@ -838,9 +1102,9 @@ static func _pm(col: Color) -> Color:
 	return Color(col.r * col.a, col.g * col.a, col.b * col.a, col.a)
 
 
-## A strip along the centre line from his outline's e0 + lo to e1 + hi, in one colour (premultiplied), its edges
-## fading out across one screen pixel centred on them.
-func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int) -> void:
+## A strip along the centre line from his outline's e0 + lo to e1 + hi (`ring`: and out by _thick), in one colour
+## (premultiplied), its edges fading out across one screen pixel centred on them.
+func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int, ring := false) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
@@ -848,8 +1112,9 @@ func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int) -> void:
 	var c0 := _pm(col)
 	for i in range(i0, i1 + 1):
 		var c := c0 * _w[i]
-		var d0 := _e0[i] + lo
-		var d1 := _e1[i] + hi
+		var t := _thick[i] if ring else 0.0
+		var d0 := _e0[i] + lo - t
+		var d1 := _e1[i] + hi + t
 		var m0 := minf(d0 + h, (d0 + d1) * 0.5)   # a strip thinner than a pixel: no solid middle
 		var m1 := maxf(d1 - h, (d0 + d1) * 0.5)
 		pts.append_array([_at(i, d0 - h), _at(i, m0), _at(i, m1), _at(i, d1 + h)])
@@ -861,8 +1126,8 @@ func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int) -> void:
 	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
 
 
-## A strip from edge + inner (glow colour) to edge + outer (transparent). It starts half a pixel under the wall,
-## so the wall's faded edge has the glow under it (no light seam between the two).
+## A strip from edge + inner (glow colour) to edge + outer (transparent), out by _thick (round the thicker wall). It
+## starts half a pixel under the wall, so the wall's faded edge has the glow under it (no light seam between the two).
 func _glow(ci: RID, edge: PackedFloat32Array, inner: float, outer: float, i0: int, i1: int) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
@@ -870,8 +1135,9 @@ func _glow(ci: RID, edge: PackedFloat32Array, inner: float, outer: float, i0: in
 	var gc := _pm(_glow_col)
 	var under := -signf(outer - inner) * _half_px
 	for i in range(i0, i1 + 1):
-		pts.append(_at(i, edge[i] + inner + under))
-		pts.append(_at(i, edge[i] + outer))
+		var t := signf(outer - inner) * _thick[i]
+		pts.append(_at(i, edge[i] + inner + under + t))
+		pts.append(_at(i, edge[i] + outer + t))
 		cols.append(gc * _w[i])
 		cols.append(Color(0, 0, 0, 0))
 		if i > i0:

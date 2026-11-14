@@ -22,7 +22,8 @@ extends FlashDisplayObject
 ## Pipe and stomach are one shape: one outline down one side of the pipe, out along a flare into the oval, round it
 ## and back up the other side, with one wall and one glow along it, and one inside. The pipe comes into the stomach
 ## straight down (STRAIGHT, the same in the stomach's own space every tick), and widens into it along the flare.
-## The pipe shows only while he is in her mouth (pipe_shown, fading as the rest): without it, the oval alone, closed.
+## The pipe shows only while the throat part does (pipe_shown, fading as the rest): without it, the oval alone, closed.
+## It runs up to where the throat part ends (below where her throat is closed, or past his tip) and takes over there.
 ##
 ## The game glides her body parts between ticks (physics interpolation): her head with her (her space), her torso
 ## swaying against her (up to some 20 px a tick at her belly while he thrusts). Drawn where her torso is at the tick,
@@ -62,6 +63,8 @@ const LUMP_START := 0.2    # a swallowed lump starts this share of the way down 
 const LUMP_SPEED := 0.025  # and goes down this share of it per tick (half the game's swallow wave)
 const LUMP_LEN := 22.0     # its half length
 const LUMP_WIDE := 0.8     # its half width: PIPE + this times how much she swallowed
+const LUMP_GROW := 6.0     # a lump from her mouth (add_lump's `at`) grows to that over this many ticks (out of the
+                           # pool there)
 const STREAM_SPEED := 9.0  # his cum down the pipe, per tick
 const STREAM_W := 3.5      # its half width (the pipe bulges a little around it, as around a lump)
 const SPLASH := 0.004      # what lands in it sets the surface swinging: tilt speed per unit
@@ -82,10 +85,12 @@ const RIPPLE_W := 1.0      # how wide a landing pushes (points along the surface
 const DROP_R := 1.2        # a droplet splashed up: its radius
 const SINK := 1.5          # a landing stream goes on this far into the contents (local units: no gap at the surface)
 const RUN_GAP := 3         # ticks without anything coming out that still keep a run going (his spurts come apart)
+const LUMP_OVER := 0.35    # a lump going down beside him (above his tip, where the throat part draws him) shows this
+                           # much
 
 var opacity := 0.6
 var shown := 0.0
-var pipe_shown := 0.0      # the pipe (only while he is in her mouth): 0 the oval alone, closed; fades as `shown`
+var pipe_shown := 0.0      # the pipe (only with the throat part): 0 the oval alone, closed; fades as `shown`
 var size := 1.0            # the plugin's Stomach size
 var fill := 0.0            # how full it is (0 to 1 of its inside's area): amount / capacity
 var amount := 0.0          # what is in it (the game's units of cum in her mouth)
@@ -155,6 +160,10 @@ var _cum_w := PackedFloat32Array()     # the half width of what is in the pipe a
 var _level := 0.0                      # the contents' surface (along _level_dir, own space; past the bottom when empty)
 var _flow := Node2D.new()
 var _half_px := 0.5
+var _lump_w := PackedFloat32Array()    # the half width of the lumps alone at each sample (the throat part bulges
+                                       # round them)
+var _throat_shown := 0.0               # the throat part's fade, and where it has faded out along the pipe (its hand)
+var _hand := 0.0
 
 
 func _init() -> void:
@@ -202,10 +211,11 @@ func _local_bounds() -> Rect2:
 	return bounds
 
 
-## A swallow of `units` starts down her throat.
-func add_lump(units: float) -> void:
-	_flows.append({"s": LUMP_START * _line_len, "len": LUMP_LEN, "amount": units, "lump": true,
-		"speed": LUMP_SPEED * _line_len, "from": 0.0, "out": 0.0})
+## A swallow of `units` starts down her throat: from `at` along the pipe (its middle; < 0: a share LUMP_START of the
+## way down her throat).
+func add_lump(units: float, at := -1.0) -> void:
+	_flows.append({"s": at if at >= 0.0 else LUMP_START * _line_len, "len": LUMP_LEN, "amount": units, "lump": true,
+		"speed": LUMP_SPEED * _line_len, "from": 0.0, "out": 0.0, "age": 0.0 if at >= 0.0 else LUMP_GROW})
 
 
 ## A spurt tick's `units` start down from his tip (`from`, along the pipe; < 0: from the end of her throat).
@@ -214,6 +224,11 @@ func add_stream(from: float, units: float) -> void:
 		from = _line_len
 	_flows.append({"s": from, "len": 0.0, "amount": units, "lump": false, "speed": STREAM_SPEED, "from": from,
 		"out": 0.0})
+
+
+## The half width of the lumps at each sample along the line (none while it does not show).
+func lump_w() -> PackedFloat32Array:
+	return _lump_w if shown > 0.0 else PackedFloat32Array()
 
 
 ## Something is in it or on its way.
@@ -230,7 +245,9 @@ func _advance() -> void:
 	var keep: Array[Dictionary] = []
 	for f in _flows:
 		f["s"] += f["speed"]
-		if not f["lump"]:
+		if f["lump"]:
+			f["age"] += 1.0
+		else:
 			f["len"] = minf(f["s"] - f["from"], 2.0 * STREAM_SPEED + 6.0)   # a little over the next piece: one line
 		# how much of it is out at the bottom: over its length (a stream piece's reaches the next one: it comes out
 		# as one stream, not a bit every spurt tick)
@@ -368,7 +385,7 @@ func _ripple_at(p: Vector2, hit: float) -> void:
 ## down into the stomach (local), going on along `bend` from its end; hand: the sample where the pipe has taken over
 ## from the throat part (its fade: throat_shown); flow_from: what flows shows from here along the line (his tip, or
 ## past the end of his penis where the throat part's upper painter draws it); pipe_from: the pipe shows only from this
-## sample on (past her mouth, where the line starts at her lips), fading in over PIPE_TOP samples.
+## sample on (where her throat is closed below her mouth; the line starts at her lips), fading in over PIPE_TOP samples.
 func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, bend: Vector2, hand: float,
 		throat_shown: float, flow_from: float, pipe_from := 0.0) -> void:
 	_advance()
@@ -390,6 +407,8 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 			_redraw()
 		return
 	_flow_from = flow_from
+	_throat_shown = throat_shown
+	_hand = hand
 	var tor: FlashDisplayObject = her.torso
 	var cc: FlashDisplayObject = tor.chestCostume
 	var bp: FlashDisplayObject = cc.bellyPiercing
@@ -464,6 +483,8 @@ func _redraw() -> void:
 func _in_pipe() -> void:
 	var n := _pipe.size()
 	_cum_w.resize(n)
+	_lump_w.resize(n)
+	_lump_w.fill(0.0)
 	_pipe_g.resize(n)
 	_cum_w.fill(0.0)
 	_pipe_g.fill(0.0)
@@ -477,7 +498,9 @@ func _in_pipe() -> void:
 		var i1 := mini(n - 1, int(ceil((head + LUMP_LEN) / STEP)))
 		for i in range(i0, i1 + 1):
 			var d: float = (i * STEP - head) / f["len"]
-			_widen(i, (PIPE + LUMP_WIDE * f["amount"]) * exp(-d * d * 2.0))
+			var w: float = (PIPE + LUMP_WIDE * f["amount"]) * exp(-d * d * 2.0) * smoothstep(0.0, LUMP_GROW, f["age"])
+			_widen(i, w)
+			_lump_w[i] = maxf(_lump_w[i], w)
 	runs.sort_custom(func(a, b): return a[0] < b[0])
 	var joined := []
 	for r in runs:
@@ -949,16 +972,21 @@ func _dot(ci: RID, p: Vector2, r: float) -> void:
 
 
 ## What is in the pipe: on top of everything (her throat closes past his tip: it shows there too), where the pipe
-## shows or past his tip; on the pipe's bones.
+## shows or past his tip (a lump beside him: LUMP_OVER), and where the throat part draws her throat while the pipe
+## does not show (her mouth alone); on the pipe's bones.
 func _paint_flow() -> void:
-	if shown <= 0.0 or pipe_shown <= 0.0 or _cum_w.size() != _pipe.size() or _flows.is_empty():
+	if shown <= 0.0 or (pipe_shown <= 0.0 and _throat_shown <= 0.0) or _cum_w.size() != _pipe.size() \
+			or _flows.is_empty():
 		return
 	_half_px = _half_px_of(_flow)
 	_space = Transform2D.IDENTITY
 	var w := PackedFloat32Array()
 	w.resize(_pipe.size())
 	for i in _pipe.size():
-		w[i] = clampf(_cum_w[i] * 2.0, 0.0, 1.0) * (1.0 if i * STEP >= _flow_from else _pipe_w[i]) * pipe_shown
+		var by_him := maxf(_pipe_w[i], LUMP_OVER * clampf(_lump_w[i] * 2.0, 0.0, 1.0))
+		var throat := _throat_shown * (1.0 - smoothstep(_hand - PIPE_TOP, _hand, i))
+		w[i] = clampf(_cum_w[i] * 2.0, 0.0, 1.0) * (1.0 if i * STEP >= _flow_from else by_him) \
+			* maxf(pipe_shown, throat)
 	var ci := _flow.get_canvas_item()
 	_band(ci, _pipe, _pipe_n, false, 0.0, 0.0, fill_col, w, _cum_w, _pipe_b)
 	_flush(ci, _flow_mesh)
