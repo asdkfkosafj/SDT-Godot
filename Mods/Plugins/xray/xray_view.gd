@@ -137,7 +137,7 @@ func _splitting() -> bool:
 
 ## Called every tick (after update_shape): updates the stomach part (stomach_part.gd), with her throat's line in its
 ## local space. `want`: the stomach should show.
-func update_stomach(stomach: FlashDisplayObject, want: bool) -> void:
+func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) -> void:
 	var her: Her = g.her
 	var inv := stomach.flash_global_transform().affine_inverse()
 	var throat := _throat(her, inv)
@@ -163,7 +163,7 @@ func update_stomach(stomach: FlashDisplayObject, want: bool) -> void:
 	var flow_from := 0.0
 	if shown > 0.0:
 		flow_from = maxf(_inside, minf(_split * STEP, _drawn)) if _splitting() else maxf(_inside, _drawn)
-	stomach.update(want, her, line, bend, _hand, shown, flow_from)
+	stomach.update(want, want_pipe, her, line, bend, _hand, shown, flow_from)
 	stomach_shown = stomach.shown
 
 

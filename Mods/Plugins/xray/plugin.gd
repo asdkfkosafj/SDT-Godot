@@ -162,7 +162,7 @@ func _tick() -> void:
 	_stomach.digest = _stomach.capacity * float(get_setting("stomach_digest")) / 100.0 / (60.0 * 30.0)
 	var show: String = get_setting("stomach_show")
 	_view.update_stomach(_stomach, stomach_on and (show == "Always" or in_mouth
-		or (show == "When in use" and _stomach.in_use())))
+		or (show == "When in use" and _stomach.in_use())), in_mouth)
 	if _showing() or _lifted:
 		_set_cut()
 	else:

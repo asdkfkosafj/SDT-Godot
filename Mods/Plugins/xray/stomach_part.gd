@@ -22,6 +22,7 @@ extends FlashDisplayObject
 ## Pipe and stomach are one shape: one outline down one side of the pipe, out along a flare into the oval, round it
 ## and back up the other side, with one wall and one glow along it, and one inside. The pipe comes into the stomach
 ## straight down (STRAIGHT, the same in the stomach's own space every tick), and widens into it along the flare.
+## The pipe shows only while he is in her mouth (pipe_shown, fading as the rest): without it, the oval alone, closed.
 ##
 ## The game glides her body parts between ticks (physics interpolation): her head with her (her space), her torso
 ## swaying against her (up to some 20 px a tick at her belly while he thrusts). Drawn where her torso is at the tick,
@@ -49,7 +50,7 @@ const PIPE_TOP := 6        # samples over which the pipe fades in at its top, an
 const FADE := 0.25         # per tick, in and out
 ## The oval, in torso units at Size 100: its half width (across her body) and half height (along her spine).
 const RADII := Vector2(44, 68)
-const AT_NAVEL := Vector2(-10, -137)   # its middle from her navel, in her torso's space
+const AT_NAVEL := Vector2(5, -137)     # its middle from her navel, in her torso's space
 const FILL_DARK := 0.82    # the bottom of the contents, times their colour (shading, darker with depth)
 const SURFACE := 2.0       # the darker line along their surface, its width
 const SLOSH_PUSH := 0.12   # the surface's tilt (radians) for each scene unit per tick per tick she speeds up sideways
@@ -76,10 +77,12 @@ const RIPPLE_DAMP := 0.92  # and die down (kept per tick)
 const RIPPLE_MAX := 4.0    # the highest (local units)
 const RIPPLE_HIT := 0.1    # how deep something landing pushes it, per unit landing at one unit per tick
 const DROP_R := 1.2        # a droplet splashed up: its radius
+const SINK := 1.5          # a landing stream goes on this far into the contents (local units: no gap at the surface)
 const RUN_GAP := 3         # ticks without anything coming out that still keep a run going (his spurts come apart)
 
 var opacity := 0.6
 var shown := 0.0
+var pipe_shown := 0.0      # the pipe (only while he is in her mouth): 0 the oval alone, closed; fades as `shown`
 var size := 1.0            # the plugin's Stomach size
 var fill := 0.0            # how full it is (0 to 1 of its inside's area): amount / capacity
 var amount := 0.0          # what is in it (the game's units of cum in her mouth)
@@ -114,6 +117,8 @@ var _mouth_in := PackedVector2Array()  # the inside, from where the hand-over en
 var _mouth_tri := PackedInt32Array()
 var _mouth_src := PackedInt32Array()   # the _mouth sample each point of the inside comes from (-1: its two top ones)
 var _mouth_y := Vector2.ZERO           # where the flare starts and where it meets the oval (own y)
+var _cap := PackedVector2Array()       # the oval's top between those meeting points (own space; shows as the pipe
+var _cap_n := PackedVector2Array()     # fades out), and its outward normals
 var _mouth_k := -1.0                   # _k they were built for
 var _mouth_top := 0.0                  # where the hand-over starts (own y)
 var _i_hand := 0                       # the pipe's sample there
@@ -349,11 +354,15 @@ func _ripple_at(p: Vector2, hit: float) -> void:
 ## down into the stomach (local), going on along `bend` from its end; hand: the sample where the pipe has taken over
 ## from the throat part (its fade: throat_shown); flow_from: what flows shows from here along the line (his tip, or
 ## past the end of his penis where the throat part's upper painter draws it).
-func update(want: bool, her: Her, line: PackedVector2Array, bend: Vector2, hand: float,
+func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, bend: Vector2, hand: float,
 		throat_shown: float, flow_from: float) -> void:
 	_advance()
 	var was := shown
 	shown = clampf(shown + (FADE if want else -FADE), 0.0, 1.0)
+	if was <= 0.0:   # it shows again: the pipe as it should be, fading in with the rest
+		pipe_shown = 1.0 if want_pipe else 0.0
+	else:
+		pipe_shown = clampf(pipe_shown + (FADE if want_pipe else -FADE), 0.0, 1.0)
 	visible = shown > 0.0
 	# its opacity (and fade) on the whole cutaway, not on each layer in it (with `alpha`, modulate, which every
 	# child takes, each layer would show the ones under it through it): the plugin's group shader
@@ -548,6 +557,20 @@ func _build_mouth() -> void:
 		var t := (_mouth[mini(i + 1, n - 1)] - _mouth[maxi(i - 1, 0)]).normalized()
 		_mouth_n[i] = Vector2(-t.y, t.x)
 	_mouth_y = Vector2(y1, ya)
+	# the oval's top between where the flare meets it, left to right (_shape goes from its right down round the
+	# bottom, then up its left side and over the top)
+	_cap = PackedVector2Array([Vector2(-xa, ya)])
+	for i in _shape.size():
+		if _shape[i].y < ya - 1e-4 and _shape[i].x < 0.0:
+			_cap.append(_shape[i])
+	for i in _shape.size():
+		if _shape[i].y < ya - 1e-4 and _shape[i].x >= 0.0:
+			_cap.append(_shape[i])
+	_cap.append(Vector2(xa, ya))
+	_cap_n.resize(_cap.size())
+	for i in _cap.size():
+		var c := _cap[i]
+		_cap_n[i] = Vector2(c.x / (RADII.x * RADII.x), c.y / (RADII.y * RADII.y)).normalized()
 	_mouth_in.clear()
 	_mouth_src.clear()
 	var ri := r - WALL * 0.5 / _k
@@ -629,6 +652,7 @@ func _paint() -> void:
 		i0 += 1
 	i0 = maxi(0, i0 - 1)
 	var mouth := _mouth_parts(half_local)
+	var pipe := pipe_shown > 0.0
 	# the insides: the stomach's, the pipe's down into it
 	_add_own(mouth[0])
 	_half_px = half_local
@@ -637,8 +661,9 @@ func _paint() -> void:
 	var line := _pipe.slice(i0, m)
 	if line.size() >= 2:
 		line[-1] += (line[-1] - line[-2]).normalized() * 1.5
-	_band(ci, line, _pipe_n.slice(i0, m), false, -PIPE, PIPE, lumen_col, _pipe_w.slice(i0, m), _pipe_g.slice(i0, m),
-		_pipe_b.slice(i0, m))
+	if pipe:
+		_band(ci, line, _pipe_n.slice(i0, m), false, -PIPE, PIPE, lumen_col, _faded(_pipe_w.slice(i0, m)),
+			_pipe_g.slice(i0, m), _pipe_b.slice(i0, m))
 	# what is in the stomach (own space)
 	_half_px = half_local / _k
 	_space = _xf
@@ -666,69 +691,109 @@ func _paint() -> void:
 			glow.append(_pipe[i] + n * (PIPE + WALL + g * (1.0 - smoothstep(_i_hand, j, i))))
 			nrm.append(n)
 		sides.append([out, glow, nrm])
-	var w := _pipe_w.slice(i0, j + 1)
+	var w := _faded(_pipe_w.slice(i0, j + 1))
 	var bw := _pipe_b.slice(i0, j + 1)
-	for sd in sides:
-		_glow(ci, sd[1], sd[2], false, 0.0, 0.0, GLOW, w, PackedFloat32Array(), bw)
+	if pipe:
+		for sd in sides:
+			_glow(ci, sd[1], sd[2], false, 0.0, 0.0, GLOW, w, PackedFloat32Array(), bw)
 	_add_own(mouth[1])
-	for sd in sides:
-		_band(ci, sd[0], sd[2], false, -WALL, 0.0, wall_col, w, PackedFloat32Array(), bw)
+	if pipe:
+		for sd in sides:
+			_band(ci, sd[0], sd[2], false, -WALL, 0.0, wall_col, w, PackedFloat32Array(), bw)
 	_add_own(mouth[2])
 	_flush(ci, _mesh)
 
 
+## A pipe sample's weights times pipe_shown.
+func _faded(w: PackedFloat32Array) -> PackedFloat32Array:
+	if pipe_shown >= 1.0:
+		return w
+	for i in w.size():
+		w[i] *= pipe_shown
+	return w
+
+
 ## The stomach's part of the mesh, in its own space: [inside, glow, wall] (lists of surfaces), from where the flare
 ## starts round to where it starts on the other side. The same every tick (kept) unless something passing down the
-## pipe bulges the flare.
+## pipe bulges the flare, or the pipe fades. Without the pipe (pipe_shown 0) the oval alone, closed; while the pipe
+## fades, the flare fades with it and the oval's top between where the flare meets it (_cap) the other way.
 func _mouth_parts(half_local: float) -> Array:
-	var bulge := _mouth_bulge()
-	var key := [_k, wall_col, glow_col, lumen_col, snappedf(half_local, 0.001)]
+	var p := pipe_shown
+	var bulge := _mouth_bulge() if p > 0.0 else PackedFloat32Array()
+	var key := [_k, wall_col, glow_col, lumen_col, snappedf(half_local, 0.001), p]
 	if bulge.is_empty() and key == _mouth_key:
 		return _mouth_cache
 	_half_px = half_local / _k
 	_space = Transform2D.IDENTITY
 	_bw = 1.0
+	var start := _surfs.size()
 	var parts := []
-	# the inside
-	var inside := _mouth_in
-	if not bulge.is_empty():
-		inside = _mouth_in.duplicate()
-		for k in inside.size():
-			var src := _mouth_src[k]
-			if src >= 0:
-				inside[k] += _mouth_n[src] * bulge[src]
-			else:   # its top corners: as the points next to them
-				inside[k].x += signf(inside[k].x) * bulge[_mouth_src[1 if k == 0 else inside.size() - 2]]
-	var cols := PackedColorArray()
-	cols.resize(inside.size())
-	cols.fill(_pm(lumen_col))
+	# the inside: the oval's (under the flare's while the pipe fades in), the flare's
 	var at := _surfs.size()
-	_tri(_mouth_tri if not _mouth_tri.is_empty() else _fan(inside.size()), inside, cols)
+	if p < 1.0:
+		var oc := PackedColorArray()
+		oc.resize(_inner.size())
+		oc.fill(_pm(lumen_col))
+		_tri(_fan(_inner.size()), _inner, oc)
+	if p > 0.0:
+		var inside := _mouth_in
+		if not bulge.is_empty():
+			inside = _mouth_in.duplicate()
+			for k in inside.size():
+				var src := _mouth_src[k]
+				if src >= 0:
+					inside[k] += _mouth_n[src] * bulge[src]
+				else:   # its top corners: as the points next to them
+					inside[k].x += signf(inside[k].x) * bulge[_mouth_src[1 if k == 0 else inside.size() - 2]]
+		var cols := PackedColorArray()
+		cols.resize(inside.size())
+		cols.fill(_pm(lumen_col) * p)
+		_tri(_mouth_tri if not _mouth_tri.is_empty() else _fan(inside.size()), inside, cols)
 	parts.append(_surfs.slice(at))
-	# the outline, its ends exactly where the pipe's sides end (the flare's start, as the bulge there)
-	var r := (PIPE + WALL) / _k
-	var j := mini(_i_hand + int(round(STRAIGHT / STEP)), _pipe_g.size() - 1)
-	var b0 := (_pipe_g[j] / _k) if not bulge.is_empty() and j >= 0 else 0.0
-	var line := PackedVector2Array([Vector2(-r - b0, _mouth_y.x)])
-	var glow := PackedVector2Array([Vector2(-r, _mouth_y.x)])
-	var nrm := PackedVector2Array([Vector2.LEFT])
-	for i in _mouth.size():
-		var p := _mouth[i]
-		if p.y <= _mouth_y.x + 1e-4:
-			continue
-		glow.append(p)
-		line.append(p + _mouth_n[i] * (bulge[i] if not bulge.is_empty() else 0.0))
-		nrm.append(_mouth_n[i])
-	line.append(Vector2(r + b0, _mouth_y.x))
-	glow.append(Vector2(r, _mouth_y.x))
-	nrm.append(Vector2.RIGHT)
-	at = _surfs.size()
-	_glow(RID(), glow, nrm, false, 0.0, 0.0, GLOW / _k)
-	parts.append(_surfs.slice(at))
-	at = _surfs.size()
-	_band(RID(), line, nrm, false, -WALL / _k, 0.0, wall_col)
-	parts.append(_surfs.slice(at))
-	_surfs.resize(at - parts[0].size() - parts[1].size())   # kept apart: _add_own puts them in where they go
+	if p <= 0.0:   # the oval's outline, closed
+		at = _surfs.size()
+		_glow(RID(), _shape, _shape_n, true, 0.0, 0.0, GLOW / _k)
+		parts.append(_surfs.slice(at))
+		at = _surfs.size()
+		_band(RID(), _shape, _shape_n, true, -WALL / _k, 0.0, wall_col)
+		parts.append(_surfs.slice(at))
+	else:
+		# the outline, its ends exactly where the pipe's sides end (the flare's start, as the bulge there); the flare
+		# (above where it meets the oval) at p
+		var r := (PIPE + WALL) / _k
+		var j := mini(_i_hand + int(round(STRAIGHT / STEP)), _pipe_g.size() - 1)
+		var b0 := (_pipe_g[j] / _k) if not bulge.is_empty() and j >= 0 else 0.0
+		var line := PackedVector2Array([Vector2(-r - b0, _mouth_y.x)])
+		var glow := PackedVector2Array([Vector2(-r, _mouth_y.x)])
+		var nrm := PackedVector2Array([Vector2.LEFT])
+		var w := PackedFloat32Array([p])
+		for i in _mouth.size():
+			var q := _mouth[i]
+			if q.y <= _mouth_y.x + 1e-4:
+				continue
+			glow.append(q)
+			line.append(q + _mouth_n[i] * (bulge[i] if not bulge.is_empty() else 0.0))
+			nrm.append(_mouth_n[i])
+			w.append(p if q.y < _mouth_y.y - 1e-4 else 1.0)
+		line.append(Vector2(r + b0, _mouth_y.x))
+		glow.append(Vector2(r, _mouth_y.x))
+		nrm.append(Vector2.RIGHT)
+		w.append(p)
+		var cap_w := PackedFloat32Array()
+		if p < 1.0:
+			cap_w.resize(_cap.size())
+			cap_w.fill(1.0 - p)
+		at = _surfs.size()
+		_glow(RID(), glow, nrm, false, 0.0, 0.0, GLOW / _k, w)
+		if p < 1.0:
+			_glow(RID(), _cap, _cap_n, false, 0.0, 0.0, GLOW / _k, cap_w)
+		parts.append(_surfs.slice(at))
+		at = _surfs.size()
+		_band(RID(), line, nrm, false, -WALL / _k, 0.0, wall_col, w)
+		if p < 1.0:
+			_band(RID(), _cap, _cap_n, false, -WALL / _k, 0.0, wall_col, cap_w)
+		parts.append(_surfs.slice(at))
+	_surfs.resize(start)   # kept apart: _add_own puts them in where they go
 	_mouth_key = key if bulge.is_empty() else []
 	_mouth_cache = parts
 	return parts
@@ -759,9 +824,14 @@ func _paint_drops(ci: RID) -> void:
 		var front: Dictionary = ds[0]
 		var fv: Vector2 = front["v"]
 		var down_to := _landed.has(r) and fv.dot(gd) > 1e-4
-		if down_to:
-			var t := clampf((_level - (front["p"] as Vector2).dot(gd)) / fv.dot(gd), 0.0, 1.5)
-			pts.append(front["p"] + fv * t)
+		if down_to:   # on down into the surface where it lands (its ripples dip there), a little past it
+			var fp: Vector2 = front["p"]
+			var t := 0.0
+			for _pass in 2:
+				var at := fp + fv * t
+				var surface := _level - _ripple_height(at) / _k + SINK / _k
+				t = clampf((surface - fp.dot(gd)) / fv.dot(gd), 0.0, 2.5)
+			pts.append(fp + fv * t)
 			hw.append(_drop_w(front))
 		for d in ds:
 			pts.append(d["p"])
@@ -796,6 +866,17 @@ func _paint_drops(ci: RID) -> void:
 			_dot(ci, line[-1], lw[-1])
 
 
+## How high the rippled surface is above its level at p (local units; own space p): as _contents draws it.
+func _ripple_height(p: Vector2) -> float:
+	if _surf.size() != 2 or _ripple_h.size() != RIPPLE_N:
+		return 0.0
+	var s := _surf[1] - _surf[0]
+	var u := clampf((p - _surf[0]).dot(s) / maxf(s.length_squared(), 1e-6), 0.0, 1.0)
+	var at := u * (RIPPLE_N - 1)
+	var k0 := mini(int(at), RIPPLE_N - 2)
+	return lerpf(_ripple_h[k0], _ripple_h[k0 + 1], at - k0) * sin(PI * u)
+
+
 ## A bit's half width (own space).
 func _drop_w(d: Dictionary) -> float:
 	if d["drop"]:
@@ -826,14 +907,14 @@ func _dot(ci: RID, p: Vector2, r: float) -> void:
 ## What is in the pipe: on top of everything (her throat closes past his tip: it shows there too), where the pipe
 ## shows or past his tip; on the pipe's bones.
 func _paint_flow() -> void:
-	if shown <= 0.0 or _cum_w.size() != _pipe.size() or _flows.is_empty():
+	if shown <= 0.0 or pipe_shown <= 0.0 or _cum_w.size() != _pipe.size() or _flows.is_empty():
 		return
 	_half_px = _half_px_of(_flow)
 	_space = Transform2D.IDENTITY
 	var w := PackedFloat32Array()
 	w.resize(_pipe.size())
 	for i in _pipe.size():
-		w[i] = clampf(_cum_w[i] * 2.0, 0.0, 1.0) * (1.0 if i * STEP >= _flow_from else _pipe_w[i])
+		w[i] = clampf(_cum_w[i] * 2.0, 0.0, 1.0) * (1.0 if i * STEP >= _flow_from else _pipe_w[i]) * pipe_shown
 	var ci := _flow.get_canvas_item()
 	_band(ci, _pipe, _pipe_n, false, 0.0, 0.0, fill_col, w, _cum_w, _pipe_b)
 	_flush(ci, _flow_mesh)
