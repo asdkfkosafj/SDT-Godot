@@ -804,7 +804,10 @@ func _pool() -> void:
 		cav.append(_at(i, floor_e[i] + out))
 	for i in range(end, _m0 - 1, -1):
 		cav.append(_at(i, roof_e[i] - out))
+	# him: his outline (the room he takes), and the whole strip taken from his render (_penis: what the pool shows
+	# over), past his tip point too (his art's rounded end; where he is not, it is the pool's own colour over the pool)
 	var pen := PackedVector2Array()
+	var strip := PackedVector2Array()
 	if _with_penis:
 		var last := mini(end, int(_inside / STEP))
 		for i in range(_m0, last + 1):
@@ -813,6 +816,13 @@ func _pool() -> void:
 			pen.append(_at(i, _p1[i]))
 		if pen.size() < 4:
 			pen.clear()
+		var drawn := mini(int(ceil(_drawn / STEP)), _path.size() - 1)
+		for i in range(_m0, drawn + 1):
+			strip.append(_at(i, _side * _y0[i] * _wid_scale))
+		for i in range(drawn, _m0 - 1, -1):
+			strip.append(_at(i, _side * _y1[i] * _wid_scale))
+		if strip.size() < 4:
+			strip.clear()
 	var gd := _pool_gd
 	var top := INF
 	var bottom := -INF
@@ -854,9 +864,9 @@ func _pool() -> void:
 		if polys.is_empty():
 			continue
 		var over := []   # its part over him
-		if not pen.is_empty():
+		if not strip.is_empty():
 			for poly in polys:
-				over.append_array(Geometry2D.intersect_polygons(poly, pen))
+				over.append_array(Geometry2D.intersect_polygons(poly, strip))
 		_pool_parts.append([polys, band[0], band[1], band[2], band[3], over])
 
 
