@@ -231,11 +231,6 @@ func lump_w() -> PackedFloat32Array:
 	return _lump_w if shown > 0.0 else PackedFloat32Array()
 
 
-## Something is in it or on its way.
-func in_use() -> bool:
-	return amount > 0.01 or not _flows.is_empty() or not _drops.is_empty()
-
-
 ## Moves what is in the pipe on (shown or not), pours what comes out at its bottom in (straight into the contents
 ## while the stomach does not show), and empties it by `digest`.
 func _advance() -> void:

@@ -13,7 +13,8 @@ extends FlashDisplayObject
 ## Her mouth: its shape at rest (closed), pushed out only where he touches it; her throat closed below it (a ring:
 ## GATE_LEN), opening round him and as she swallows. Cum in her mouth lies in it as a pool down to that ring (_pool);
 ## his spurts come out of his tip into it (_move_shots); what she swallows goes down through the ring (the stomach
-## part's lumps, her throat bulging round them: _bulge).
+## part's lumps, her throat bulging round them: _bulge). While his tip is past the ring's middle, her throat is open
+## round him down to it: the pool goes on down there, and runs on down (drain: the plugin takes it out of her mouth).
 ##
 ## The stomach (stomach_part.gd) is a display object of its own, above her near arm; this one gives it her throat's
 ## line every tick (update_stomach). This one ends (fades out) a little past the ring, or past his tip; while the
@@ -104,14 +105,22 @@ const SHOT_LIFE := 45      # ticks: past that, it is in the pool wherever it is
 const SHOT_RUN := 6        # it runs along her mouth's wall at most this many ticks (then it is in the pool: the pool is
 const SHOT_REST := 0.6     # one level, it does not keep what lies in a hollow apart), less where it comes to rest (this
                            # slow: local units per tick)
-const GATE_LEN := 5        # where her mouth meets her throat, her throat is closed (what is in her mouth stays there)
-                           # over this many samples each way from its middle (where her mouth at rest ends: in her,
-                           # not on the centre line, which follows him)
+## The ring (where her mouth meets her throat): everything there follows its middle (_gate_f): where the pool ends,
+## where her walls close round it, where swallows start down, where the food pipe takes over, from where what is in
+## her mouth runs down while he holds it open. To move it all up or down her throat, change GATE_SHIFT.
+const GATE_SHIFT := 0.0    # the ring's middle this far (local units) on down her throat (> 0) or up towards her lips
+                           # (< 0) from where her mouth at rest ends (MOUTH_ROOF_TURN); STEP units per sample
+const GATE_LEN := 5        # her throat is closed there (what is in her mouth stays there) over this many samples each
+                           # way from its middle (in her, not on the centre line, which follows him)
 const GATE_MIN := 0.5      # to this half width (a seam)
 const GATE_RING := 5.0     # and its wall is this much thicker there, out from it (a ring of muscle)
 const GATE_PRE := 0.5      # as she gets ready to swallow it opens this much (of the way to her throat's own width);
                            # what she swallows opens it the rest of the way (the lump, LUMP_ROOM)
 const LUMP_ROOM := 1.0     # her throat bulges round a swallowed lump this far out from it
+const DRAIN := 0.25        # while he holds the ring open, what is in her mouth runs down her throat round him this
+                           # fast (the game's units per tick: a full mouth in some 5 s), while it reaches down there
+                           # (her throat goes down from her mouth); from his tip at the ring's middle, faster as he
+                           # goes on through it, full speed past it
 
 var opacity := 0.6
 var start_len := 0.0       # the cutaway begins this far behind her lips, along her face (the plugin's Start)
@@ -176,6 +185,8 @@ var _shot_quiet := 99
 var _in_flight := 0                  # cumInMouth not in the pool yet (on its way)
 var _lumen := PackedVector2Array()   # her mouth and throat down to where it is closed: their inside edges
 var _level := INF                    # the pool's surface (depth along _pool_gd; with no pool, the bottom)
+var _pool_end := 0                   # the sample the pool reaches down to: the ring, or past it his tip while he holds
+                                     # it open (then what is in her mouth runs down round him: drain)
 var _gate := 0                       # the sample in the middle of the closed stretch (GATE_LEN), and exactly
 var _gate_f := 0.0                   # (between samples)
 var _thick := PackedFloat32Array()   # how much thicker the wall is at each sample (GATE_RING)
@@ -259,6 +270,19 @@ func swallow_from() -> float:
 	return maxf(float(_m0), _gate_f - 2.0 * GATE_LEN) * STEP
 
 
+## How much of what is in her mouth runs down her throat this tick (the game's units; 0 while none does): he holds
+## the ring open (his tip past its middle: the more, the further on through it), and the pool reaches down to its
+## end (her throat goes down from her mouth).
+func drain() -> float:
+	var through := clampf(_inside / STEP - _gate_f, 0.0, GATE_LEN) / GATE_LEN
+	if shown <= 0.0 or not _with_penis or mouth_only or _mouth_amt < 0.2 or _pool_end <= _gate or through <= 0.0:
+		return 0.0
+	var e := _pool_end
+	if maxf(_at(e, _e0[e]).dot(_pool_gd), _at(e, _e1[e]).dot(_pool_gd)) <= _level:
+		return 0.0
+	return DRAIN * through
+
+
 ## Her throat closed where her mouth meets it (GATE_LEN), but round him, and opening a little as she gets ready to
 ## swallow (the game's swallow: from its build-up to the moment she swallows, closing again as she relaxes).
 func _close_gate(her: Her) -> void:
@@ -283,20 +307,23 @@ func _close_gate(her: Her) -> void:
 		_thick[i] = GATE_RING * ring * lerpf(1.0, 0.5, clampf(((b - a) * 0.5 - GATE_MIN) / CLOSED, 0.0, 1.0))
 
 
-## Where the centre line has turned MOUTH_ROOF_TURN from its way in at her lips (between samples, so it moves
-## smoothly as she does).
-func _turn_point() -> Vector2:
+## The ring's middle (called on her throat at rest, without him, so it stays in her): where the centre line has turned
+## MOUTH_ROOF_TURN from its way in at her lips (between samples, so it moves smoothly as she does), then GATE_SHIFT on
+## along it.
+func _gate_point() -> Vector2:
 	var n := mini(_path.size(), _curve_n)
 	var dir := (_path[_m0 + 1] - _path[_m0]).normalized()
 	var c := cos(MOUTH_ROOF_TURN)
 	var prev := 1.0
+	var t := float(n - 1)
 	for i in range(_m0, n - 1):
 		var d := (_path[i + 1] - _path[i]).normalized().dot(dir)
 		if d <= c:   # (each segment's way at its middle: the turn crosses c between i - 0.5 and i + 0.5)
-			var t := clampf(i - 0.5 + (prev - c) / maxf(prev - d, 1e-6), 0.0, n - 1.001)
-			return _path[int(t)].lerp(_path[int(t) + 1], t - int(t))
+			t = i - 0.5 + (prev - c) / maxf(prev - d, 1e-6)
+			break
 		prev = d
-	return _path[n - 1]
+	t = clampf(t + GATE_SHIFT / STEP, _m0 + 1.0, _path.size() - 1.001)
+	return _path[int(t)].lerp(_path[int(t) + 1], t - int(t))
 
 
 ## The centre line's sample nearest `p` (between samples).
@@ -398,7 +425,7 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_line(lips_mid, _edge_in, tail, axis)
 	_outline(him)
 	_pocket(top_lip, bottom_lip, jaw_at)
-	var gate_at := _turn_point()
+	var gate_at := _gate_point()
 	_rest_mouth(top_lip, lips_meet)
 	var start := lips_mid
 	var pv := Transform2D()
@@ -434,18 +461,18 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_close_gate(her)
 	_b0 = _e0.duplicate()
 	_b1 = _e1.duplicate()
+	_split = -1   # (before the pool: its part past here is drawn by the lower painter too)
+	var base: Vector2 = throat[int(SPLIT_AT * (throat.size() - 1))]
+	for i in _path.size():
+		if (_path[i] - base).dot(axis) >= 0.0:
+			_split = i
+			break
 	_slosh(her, true)
 	_pool()
 	_move_shots()
 	_w.resize(_path.size())
 	for i in _path.size():
 		_w[i] = 1.0 - smoothstep(_hand - HAND_FADE, _hand, i)
-	_split = -1
-	var base: Vector2 = throat[int(SPLIT_AT * (throat.size() - 1))]
-	for i in _path.size():
-		if (_path[i] - base).dot(axis) >= 0.0:
-			_split = i
-			break
 	_colours()
 	_bounds = Rect2(_path[0], Vector2.ZERO)
 	for i in _path.size():
@@ -780,6 +807,14 @@ func _pool() -> void:
 	var her: Her = g.her
 	_mouth_amt += (float(maxi(0, her.cumInMouth - _in_flight)) - _mouth_amt) * MOUTH_EASE
 	var end := mini(_gate, _path.size() - 1)
+	if _with_penis:   # with his tip past the ring, her throat is open round him down to it: the pool goes on down there,
+		# and as he holds the ring open, on past his tip through where her throat closes (its end fades out past that,
+		# where her throat is as narrow as what runs on down the pipe: not round his glans, not in the funnel below it)
+		# (all of it once his tip is a quarter of the way on through: the drain has started at its middle)
+		var past := (CLOSE_LEN + GATE_LEN * 0.5 * STEP) \
+			* clampf(4.0 * (_inside / STEP - _gate_f) / GATE_LEN, 0.0, 1.0)
+		end = clampi(int((_inside + past) / STEP), end, _path.size() - 1)
+	_pool_end = end
 	_lumen.clear()
 	_level = INF
 	if end <= _m0 + 1:
@@ -853,6 +888,14 @@ func _pool() -> void:
 	var fade_from := _back_at - GATE_LEN * 0.5 * STEP
 	var zones := [_slab(_back_dir, fade_from - 1000.0, fade_from, cav[0]),
 		_slab(_back_dir, fade_from, _back_at + 1.0, cav[0])]
+	# its part low on her neck, past _split, is drawn again by the lower painter (that one draws her throat there over
+	# this painter's drawing)
+	var low := PackedVector2Array()
+	if _splitting() and end > _split + 1:
+		for i in range(_split, end + 1):
+			low.append(_at(i, floor_e[i] + out))
+		for i in range(end, _split - 1, -1):
+			low.append(_at(i, roof_e[i] - out))
 	for band in [[level - h, level + h, Color(0, 0, 0, 0), sc], [level + h, level + SURFACE, sc, sc],
 			[level + SURFACE, level + 2.0 * SURFACE, sc, c0], [level + 2.0 * SURFACE, bottom + 1.0, c0, c1]]:
 		if band[1] <= band[0]:
@@ -867,7 +910,14 @@ func _pool() -> void:
 		if not strip.is_empty():
 			for poly in polys:
 				over.append_array(Geometry2D.intersect_polygons(poly, strip))
-		_pool_parts.append([polys, band[0], band[1], band[2], band[3], over])
+		var lower := []   # and both past _split
+		var lower_over := []
+		if not low.is_empty():
+			for poly in polys:
+				lower.append_array(Geometry2D.intersect_polygons(poly, low))
+			for poly in over:
+				lower_over.append_array(Geometry2D.intersect_polygons(poly, low))
+		_pool_parts.append([polys, band[0], band[1], band[2], band[3], over, lower, lower_over])
 
 
 ## The room in the pocket `cav` between depths d0 and d1 along gd, not taken by him (`pen`).
@@ -895,12 +945,14 @@ static func _area(p: PackedVector2Array) -> float:
 	return a * 0.5
 
 
-## The pool's bands (`over`: their parts over him, at MOUTH_OVER), each colour changing evenly with depth.
-func _paint_pool_bands(ci: RID, over: bool) -> void:
+## The pool's bands (`over`: their parts over him, at MOUTH_OVER; `lower`: only their parts past _split), each colour
+## changing evenly with depth.
+func _paint_pool_bands(ci: RID, over: bool, lower := false) -> void:
 	for part in _pool_parts:
 		var d0: float = part[1]
 		var d1: float = part[2]
-		for poly: PackedVector2Array in (part[5] if over else part[0]):   # (no holes: a band across a pocket has none)
+		# (no holes: a band across a pocket has none)
+		for poly: PackedVector2Array in part[(7 if over else 6) if lower else (5 if over else 0)]:
 			var tri := Geometry2D.triangulate_polygon(poly)
 			if tri.is_empty():
 				continue
@@ -912,23 +964,24 @@ func _paint_pool_bands(ci: RID, over: bool) -> void:
 			RenderingServer.canvas_item_add_triangle_array(ci, tri, poly, cols)
 
 
-## The pool, and her mouth's wall drawn again over its edge.
-func _paint_pool(ci: RID) -> void:
+## The pool, and her mouth's wall drawn again over its edge (`lower`: their parts past _split).
+func _paint_pool(ci: RID, lower := false) -> void:
 	if _pool_parts.is_empty():
 		return
-	_paint_pool_bands(ci, false)
+	_paint_pool_bands(ci, false, lower)
 	var h := _half_px
+	var i0 := _split if lower else _m0
 	for side in [-1.0, 1.0]:
 		var pts := PackedVector2Array()
 		var cols := PackedColorArray()
 		var idx := PackedInt32Array()
-		for i in range(_m0, mini(_gate, _path.size() - 1) + 1):
+		for i in range(i0, mini(_pool_end, _path.size() - 1) + 1):
 			var e: float = _e0[i] if side < 0.0 else _e1[i]
 			var c := _pm(_wall_col) * _w[i]
 			pts.append_array([_at(i, e + side * WALL * 0.75), _at(i, e + side * h), _at(i, e - side * h)])
 			cols.append_array([c, c, Color(0, 0, 0, 0)])
-			if i > _m0:
-				var b := (i - _m0 - 1) * 3
+			if i > i0:
+				var b := (i - i0 - 1) * 3
 				for k in 2:
 					idx.append_array([b + k, b + k + 1, b + k + 3, b + k + 1, b + k + 4, b + k + 3])
 		RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
@@ -1091,12 +1144,16 @@ func _paint_lower() -> void:
 	if shown <= 0.0 or not _splitting() or _split >= _path.size():
 		return
 	_paint_range(_lower.get_canvas_item(), _split, _path.size() - 1)
+	if _pool_end > _split + 1:   # the pool run down there
+		_paint_pool(_lower.get_canvas_item(), true)
 
 
 func _paint_lower_top() -> void:
 	if shown <= 0.0 or not _splitting() or _split >= _path.size():
 		return
 	_penis(_lower_top.get_canvas_item(), _split, _path.size() - 1)
+	if _with_penis and _pool_end > _split + 1:
+		_paint_pool_bands(_lower_top.get_canvas_item(), true, true)
 
 
 ## Her throat at the samples i0 to i1 (both drawn: the painters share the row where they meet).

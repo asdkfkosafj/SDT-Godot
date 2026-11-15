@@ -2541,6 +2541,14 @@ func swallowFromMouth() -> void:
 	cumInMouth -= amount
 
 
+## Port addition (for plugins): cum leaves her mouth other than by a swallow or her nose (the x-ray plugin: down her
+## throat round him while he holds it open). Takes at most what there is; returns what it took.
+func takeFromMouth(amount: int) -> int:
+	amount = mini(cumInMouth, maxi(0, amount))
+	cumInMouth -= amount
+	return amount
+
+
 func lastSpurt() -> void:
 	if Hooks.has(&"Her.lastSpurt"):   # HOOK
 		var h := Hooks.before(&"Her.lastSpurt", self, [])
