@@ -1,18 +1,26 @@
 #!/usr/bin/env bash
-# Builds a Windows release: release/SDT-Godot-<date>-<commit>-windows/ and the .zip of it.
-#   GODOT=<Godot 4.7.2 editor binary> bash tools/make_release.sh
-# Needs the 4.7.2.stable export templates (Editor > Manage Export Templates) and the export preset in
-# game/export_presets.cfg. Builds from the working tree: commit first, so the name's commit matches the contents.
+# Builds a release: release/SDT-Godot-<date>-<commit>-<platform>/ and the .zip of it.
+#   GODOT=<Godot 4.7.2 editor binary> bash tools/make_release.sh [windows|linux]   (default windows)
+# Needs the 4.7.2.stable export templates (Editor > Manage Export Templates) and the export presets in
+# game/export_presets.cfg ("Windows Desktop", "Linux"). The Linux build uses the Linux native libraries in game/bin
+# (built by the GitHub workflow when native/ changes: pull first). Builds from the working tree: commit first, so the
+# name's commit matches the contents.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 GODOT=${GODOT:-godot}
 PY=tools/.venv/Scripts/python.exe
 [ -x "$PY" ] || PY=python3
+PLATFORM=${1:-windows}
+case $PLATFORM in
+	windows) PRESET="Windows Desktop"; BIN=SDT.exe ;;
+	linux) PRESET="Linux"; BIN=SDT.x86_64 ;;
+	*) echo "unknown platform $PLATFORM (windows or linux)" >&2; exit 2 ;;
+esac
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 	echo "warning: uncommitted changes are in this build" >&2
 fi
-NAME="SDT-Godot-$(date -u +%Y-%m-%d)-$(git rev-parse --short HEAD)-windows"
+NAME="SDT-Godot-$(date -u +%Y-%m-%d)-$(git rev-parse --short HEAD)-$PLATFORM"
 OUT="release/$NAME"
 if [ -e "$OUT" ] || [ -e "$OUT.zip" ]; then
 	echo "$OUT already exists" >&2
@@ -20,7 +28,7 @@ if [ -e "$OUT" ] || [ -e "$OUT.zip" ]; then
 fi
 mkdir -p "$OUT"
 
-"$GODOT" --headless --path game --export-release "Windows Desktop" "$PWD/$OUT/SDT.exe"
+"$GODOT" --headless --path game --export-release "$PRESET" "$PWD/$OUT/$BIN"
 [ -f "$OUT/SDT.pck" ] || { echo "export failed" >&2; exit 1; }
 
 # the Mods folder: the game's folders, with the plugins the repository ships (tracked files only)
@@ -33,9 +41,10 @@ git ls-files -z Mods/Plugins | while IFS= read -r -d '' f; do
 done
 cp tools/release_readme.txt "$OUT/README.txt"
 
+# (the program file marked executable in the zip, for Linux: zip entries made on Windows carry no Unix mode)
 "$PY" -I -c '
 import os, sys, zipfile
-out = sys.argv[1]
+out, binary = sys.argv[1], sys.argv[2]
 base = os.path.dirname(out)
 with zipfile.ZipFile(out + ".zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
 	for root, dirs, files in os.walk(out):
@@ -44,6 +53,11 @@ with zipfile.ZipFile(out + ".zip", "w", zipfile.ZIP_DEFLATED, compresslevel=9) a
 			z.writestr(rel.replace(os.sep, "/") + "/", "")   # keep the empty mod folders
 		for f in files:
 			p = os.path.join(root, f)
-			z.write(p, os.path.relpath(p, base))
-' "$OUT"
+			zi = zipfile.ZipInfo.from_file(p, os.path.relpath(p, base))
+			zi.compress_type = zipfile.ZIP_DEFLATED
+			zi.create_system = 3   # Unix: the modes below apply
+			zi.external_attr = (0o100755 if root == out and f == binary else 0o100644) << 16
+			with open(p, "rb") as fh:
+				z.writestr(zi, fh.read(), compresslevel=9)
+' "$OUT" "$BIN"
 ls -la "$OUT" "$OUT.zip"
