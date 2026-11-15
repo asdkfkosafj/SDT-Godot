@@ -6,9 +6,15 @@
 #   tools/regress.sh                 run all scenarios, report differences
 #   tools/regress.sh grab cum        run only these scenarios
 #   tools/regress.sh --update        accept the current output as the new reference (after checking the diff!)
-#   tools/regress.sh --stress        also run the costume stress test and report memory per round
+#   tools/regress.sh --stress        also run the costume stress test (memory per round) and the strand stress
+#                                    test (freed strands, orphan nodes that keep growing)
 #   tools/regress.sh --mods=<dir>    also load every .swf mod in <dir> (and subfolders) and report failures
 #   tools/regress.sh --no-images     skip the image goldens
+#
+# Alongside the scenarios (all in parallel): the extension, DialogueActions and menu checks, the defaults checks (the
+# game as players get it: extensions at their defaults and the shipped plugins, game/debug/defaults_checks.gd), the
+# rule checks (tools/rules_checks.sh), FlashBitmapData's fast paths (game/debug/bitmap_test.gd) and the fix checks
+# (game/debug/fix_checks.gd). --stress adds the costume and strand stress tests (minutes).
 #
 # Image goldens (tests/golden/images/): the same scenarios also run in a window, 1280 x 720, and pictures of the
 # window at the dumps listed in game/debug/regress.gd IMAGES are compared with the references pixel by pixel
@@ -99,9 +105,30 @@ da_pid=$!
 mkdir -p "$WORK/mods_menu"
 godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_menu.log" -- --save-dir="$WORK/save_menu" --mods-dir="$WORK/mods_menu" 	--driver=res://debug/menu_checks.gd > "$WORK/menu_checks.log" 2>&1 &
 menu_pid=$!
+# The game as players get it (game/debug/defaults_checks.gd): not in Vanilla mode, extensions at their defaults, the
+# shipped plugins (Mods/Plugins), the x-ray on; a short scene, then every extension off and on again.
+mkdir -p "$WORK/mods_def/Plugins" "$WORK/save_def"
+cp -r Mods/Plugins/*/ "$WORK/mods_def/Plugins/"
+godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_def.log" -- --deterministic --seed=1 --save-dir="$WORK/save_def" \
+	--mods-dir="$WORK/mods_def" --driver=res://debug/defaults_checks.gd > "$WORK/defaults_checks.log" 2>&1 &
+def_pid=$!
+# Rule checks (tools/rules_checks.sh: ported rules pinned to the ActionScript) and FlashBitmapData's fast paths
+TMPDIR=$WORK bash tools/rules_checks.sh > "$WORK/rules_checks.log" 2>&1 &
+rules_pid=$!
+godot --headless --path game --log-file "$LOGS/godot_bitmap.log" res://debug/bitmap_test.tscn > "$WORK/bitmap_test.log" 2>&1 &
+bitmap_pid=$!
+# Fixed bugs that must stay fixed: text decoding, rope elements after a hair mod clears their layer, pickers
+# (game/debug/fix_checks.gd)
+mkdir -p "$WORK/save_fix" "$WORK/mods_fix"
+godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_fix.log" -- --deterministic --seed=1 --vanilla 	--save-dir="$WORK/save_fix" --mods-dir="$WORK/mods_fix" --driver=res://debug/fix_checks.gd > "$WORK/fix_checks.log" 2>&1 &
+fix_pid=$!
 wait "$ext_pid"; ext_status=$?
 wait "$da_pid"; da_status=$?
 wait "$menu_pid"; menu_status=$?
+wait "$def_pid"; def_status=$?
+wait "$rules_pid"; rules_status=$?
+wait "$bitmap_pid"
+wait "$fix_pid"; fix_status=$?
 wait   # the scenarios
 
 fail=0
@@ -140,11 +167,40 @@ script_errors() {   # each error line with the "at:" line after it
 	awk '/SCRIPT ERROR|^ERROR/ { e = $0; getline n; print e " | " n }' "$1" \
 		| grep -v -E "at exit|gdscript://|mods_ext/Plugins|missing or duplicate id|a problem it reports itself|already used|contains ';'|has errors|uses class_name" | head -5
 }
-if [ -n "$(script_errors "$WORK/ext_checks.log")" ] || [ -n "$(script_errors "$WORK/da_checks.log")" ] 		|| [ -n "$(script_errors "$WORK/menu_checks.log")" ]; then
+if [ -n "$(script_errors "$WORK/ext_checks.log")" ] || [ -n "$(script_errors "$WORK/da_checks.log")" ] 		|| [ -n "$(script_errors "$WORK/menu_checks.log")" ] || [ -n "$(script_errors "$WORK/defaults_checks.log")" ]; then
 	echo "FAIL script errors in the checks:"
 	script_errors "$WORK/ext_checks.log"
 	script_errors "$WORK/da_checks.log"
 	script_errors "$WORK/menu_checks.log"
+	script_errors "$WORK/defaults_checks.log"
+	fail=1
+fi
+if [ "$def_status" = 0 ] && grep -q "^DEFAULTS CHECKS: .* 0 failed" "$WORK/defaults_checks.log"; then
+	echo "ok   defaults checks ($(grep -c '^CHECK ok' "$WORK/defaults_checks.log") passed)"
+else
+	echo "FAIL defaults checks, exit code $def_status$(timed_out $def_status) (see $WORK/defaults_checks.log):"
+	grep -E "^CHECK FAIL|SCRIPT ERROR" -A1 "$WORK/defaults_checks.log" | head -16
+	fail=1
+fi
+if [ "$rules_status" = 0 ]; then
+	echo "ok   rule checks ($(grep '^RULES CHECKS:' "$WORK/rules_checks.log" | sed 's/^RULES CHECKS: //'))"
+else
+	echo "FAIL rule checks (see $WORK/rules_checks.log):"
+	grep -E "^RULE FAIL|^FAIL|timed out|no summary" -A1 "$WORK/rules_checks.log" | head -16
+	fail=1
+fi
+if [ "$fix_status" = 0 ] && grep -q "^FIX CHECKS: .* 0 failed" "$WORK/fix_checks.log" 		&& [ -z "$(script_errors "$WORK/fix_checks.log")" ]; then
+	echo "ok   fix checks ($(grep -c '^CHECK ok' "$WORK/fix_checks.log") passed)"
+else
+	echo "FAIL fix checks, exit code $fix_status$(timed_out $fix_status) (see $WORK/fix_checks.log):"
+	grep -E "^CHECK FAIL|SCRIPT ERROR|^ERROR" -A1 "$WORK/fix_checks.log" | grep -v "at exit" | head -16
+	fail=1
+fi
+if grep -q "^bitmap_test: OK" "$WORK/bitmap_test.log"; then
+	echo "ok   bitmap fast paths"
+else
+	echo "FAIL bitmap fast paths (see $WORK/bitmap_test.log):"
+	grep -E "bitmap_test|ERROR" "$WORK/bitmap_test.log" | head -8
 	fail=1
 fi
 if [ "$ext_status" = 0 ] && grep -q "^EXT CHECKS: .* 0 failed" "$WORK/ext_checks.log"; then
@@ -199,6 +255,11 @@ if [ $stress = 1 ]; then
 	echo "stress test (4 rounds of every picker and character)..."
 	run_game stress --driver=res://debug/stress_costumes.gd
 	grep "^STRESS" "$WORK/stress.log"
+	echo "strand stress test (9000 ticks of auto mode and random actions, about a minute)..."
+	run_game strands --driver=res://debug/stress_strands.gd
+	st=$?
+	grep -E "^STRAND (done|FAIL|FREED)" "$WORK/strands.log"
+	[ "$st" = 0 ] || { echo "FAIL strand stress test, exit code $st$(timed_out $st) (see $WORK/strands.log)"; fail=1; }
 fi
 
 if [ -n "$mods" ]; then
