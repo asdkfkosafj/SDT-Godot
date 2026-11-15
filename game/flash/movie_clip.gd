@@ -420,7 +420,7 @@ func _remove_timeline_child(d: int) -> void:
 		_detach(child)
 		child._on_removed()
 		# Flash garbage-collects it; Godot nodes must be freed explicitly (unless a script re-adds it this tick).
-		Flash.release_if_orphaned(child)
+		Flash.release_timeline_child(child)
 
 
 # A script that removes a timeline child takes it out of timeline control (Flash behaviour).

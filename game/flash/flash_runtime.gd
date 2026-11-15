@@ -754,6 +754,7 @@ func _print_profile() -> void:
 
 
 var _release_candidates: Array = []
+var _timeline_released: Array = []   # release_timeline_child
 
 ## Port extension (not in Flash): callables run every tick before the timelines advance (tick_before) and after
 ## the ENTER_FRAME listeners (tick_after). The port's extension system (src/ext/extensions.gd) uses them so
@@ -814,6 +815,15 @@ func release_if_orphaned(o: FlashDisplayObject) -> void:
 	_release_candidates.append(o)
 
 
+## A child its timeline removed (a frame without it). As release_if_orphaned, but its instance names do not keep it:
+## the timeline has just unbound it from its parent, and the game reaches such parts only through their parents
+## (e.g. lips.lipFill, a costume's rgbFill), so nothing names it any more. Freed after DISPOSE_DELAY (dispose_later)
+## if still off the display list then. Those were never freed before: every mood change, costume step or shuffle
+## left named parts behind (some 100 per shuffle).
+func release_timeline_child(o: FlashDisplayObject) -> void:
+	_timeline_released.append(o)
+
+
 ## Port of Flash's garbage collection for objects the game is done with (e.g. a killed costume element): freed
 ## DISPOSE_DELAY ticks later if still off the display list then, along with its whole subtree (and its filter /
 ## mask proxy), unless its class says it is still referenced (a _can_dispose() method returning false: it is
@@ -852,6 +862,15 @@ func _free_disposals() -> void:
 func _free_orphans() -> void:
 	if not _disposals.is_empty():
 		_free_disposals()
+	if not _timeline_released.is_empty():
+		var removed := _timeline_released
+		_timeline_released = []
+		for o in removed:
+			if is_instance_valid(o) and o._flash_parent == null and not o.is_inside_tree():
+				if _freeable(o):
+					o.queue_free()
+				elif _freeable(o, false):
+					dispose_later(o)
 	if _release_candidates.is_empty():
 		return
 	var list := _release_candidates
@@ -869,14 +888,15 @@ const _PLAIN_SCRIPTS := [&"FlashShape", &"FlashMovieClip", &"FlashSprite", &"Fla
 ## True if nothing in o's subtree can still be referenced by game code: only plain runtime objects (no game
 ## class), no instance names, no listeners, and every Godot descendant belongs to o. Anything else is left for
 ## the game to keep or reuse (Flash's garbage collector would only free it once unreferenced).
-func _freeable(o: FlashDisplayObject) -> bool:
+## `names_keep` false: instance names do not count (release_timeline_child).
+func _freeable(o: FlashDisplayObject, names_keep := true) -> bool:
 	if not _PLAIN_SCRIPTS.has(o.get_script().get_global_name()):
 		return false
-	if o.flash_name != "" or not o._listeners.is_empty() or has_enter_frame(o):
+	if (names_keep and o.flash_name != "") or not o._listeners.is_empty() or has_enter_frame(o):
 		return false
 	if o is FlashSprite:
 		for c in o._children:
-			if not _freeable(c):
+			if not _freeable(c, names_keep):
 				return false
 	return _owns_godot_subtree(o, o)
 

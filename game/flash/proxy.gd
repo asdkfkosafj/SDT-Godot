@@ -276,6 +276,10 @@ static func update_backdrops() -> void:
 		var obj = _backdrops[bbc]
 		if not is_instance_valid(bbc) or not is_instance_valid(obj):
 			_backdrops.erase(bbc)
+			if is_instance_valid(bbc):   # its object was freed: the copy (a sibling, not a child) goes with it
+				if bbc.get_parent() != null:
+					bbc.get_parent().remove_child(bbc)
+				bbc.queue_free()
 			continue
 		var outer: Node = obj._tree_node()
 		var on: bool = bbc.get_parent() != null and outer.get_parent() == bbc.get_parent() and FlashProxy.shown(outer)
