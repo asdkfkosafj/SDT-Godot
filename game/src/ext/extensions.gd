@@ -82,6 +82,7 @@ static var _installed := false
 static var _events: Dictionary = {}   # event name -> [[extension, Callable]]
 static var _widgets: Array = []      # [extension, FlashDisplayObject]
 static var _da_addons: Array = []    # [extension, Callable(da)]: additions to DialogueActions (on_dialogueactions)
+static var _compiled: Dictionary = {}   # plugin script path -> GDScript (compile_script)
 
 ## Plugins found in Mods/Plugins: id -> {"folder", "name", "author", "version", "error"} ("" = loaded).
 static var plugins: Dictionary = {}
@@ -339,6 +340,10 @@ static func _load_plugin(pid: String, folder: String, cfg: ConfigFile, marker: S
 ## Compiles a GDScript file from anywhere on disk (plugins live outside the project). Plugin scripts may not use
 ## class_name, so they cannot take over the name of a game class.
 static func compile_script(path: String) -> GDScript:
+	# compiled once per start: a second script with the same resource_path (a plugin switched off and on again,
+	# loading its scripts in _enable) is refused by Godot ("Another resource is loaded from path")
+	if _compiled.has(path):
+		return _compiled[path]
 	if not FileAccess.file_exists(path):
 		push_warning("extensions: %s not found" % path)
 		return null
@@ -353,6 +358,7 @@ static func compile_script(path: String) -> GDScript:
 	if scr.reload() != OK:
 		push_warning("extensions: %s has errors" % path)
 		return null
+	_compiled[path] = scr
 	return scr
 
 
