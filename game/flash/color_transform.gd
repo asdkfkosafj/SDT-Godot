@@ -33,6 +33,13 @@ func clone() -> FlashColorTransform:
 		redOffset, greenOffset, blueOffset, alphaOffset)
 
 
+## Same values (a mod setting the same transform every frame changes nothing).
+func equals(o: FlashColorTransform) -> bool:
+	return o != null and redMultiplier == o.redMultiplier and greenMultiplier == o.greenMultiplier \
+		and blueMultiplier == o.blueMultiplier and alphaMultiplier == o.alphaMultiplier and redOffset == o.redOffset \
+		and greenOffset == o.greenOffset and blueOffset == o.blueOffset and alphaOffset == o.alphaOffset
+
+
 ## Flash 'color' setter: sets offsets to the RGB value and multipliers to 0.
 var color: int:
 	get:

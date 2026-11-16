@@ -13,7 +13,7 @@ func _init() -> void:
 
 
 func _setup() -> void:
-	setting("dialogspeed", GAME_SPEED, {"label": "Text speed", "min": 10, "max": 100,
+	setting("dialogspeed", GAME_SPEED, {"label": "Text speed", "min": 20, "max": 100,
 		"desc": "Time per letter; lower is faster. The game's own speed is 55. Lines with a voice clip keep its pace."})
 
 
@@ -23,7 +23,7 @@ func _enable() -> void:
 	# right is faster
 	menu_control("dialogue", "Dialogue", {"type": "slider", "label": "Text speed",
 		"tip": "Letters per second. The game's own speed is 18. Lines with a voice clip keep its pace.",
-		"min": 10.0, "max": 100.0, "step": 1.0,
+		"min": 10.0, "max": 50.0, "step": 1.0,
 		"get": func(): return roundf(1000.0 / float(get_setting("dialogspeed"))),
 		"set": func(v: float): set_setting("dialogspeed", int(roundf(1000.0 / maxf(v, 1.0)))),
 		"reset": func(): set_setting("dialogspeed", GAME_SPEED),

@@ -13,6 +13,8 @@ var doubles: Array = [NAN]
 var namespaces: Array = [[0, ""]]      # [kind, name]
 var ns_sets: Array = [[]]
 var multinames: Array = [{}]           # {kind, name, ns}
+var _mn_names: Array = []              # multiname index -> its name, or null for a run-time name (on the stack)
+var _found_methods: Dictionary = {}    # "class|name" -> find_method's answer (mod code asks each frame)
 var methods: Array = []                # {params, name}
 var bodies: Dictionary = {}            # method index -> {code: PackedByteArray, locals: int}
 var instances: Array = []              # {name, super, traits, iinit}
@@ -30,6 +32,9 @@ static func parse(bytes: PackedByteArray) -> FlashAbc:
 	if not a._parse():
 		return null
 	a._d = PackedByteArray()
+	for mn in a.multinames:
+		var late: bool = mn.get("kind") in ["multinamel", "rtqnamel"]
+		a._mn_names.append(null if late else String(mn.get("name", "")))
 	return a
 
 
@@ -282,15 +287,22 @@ func find_class(n: String) -> String:
 
 ## Instance method / getter trait of cls or its superclasses: [kind, method index] or [].
 func find_method(cls: String, n: String) -> Array:
+	var ck := cls + "|" + n
+	var found = _found_methods.get(ck)
+	if found != null:
+		return found
+	found = []
 	var c := cls
 	var seen := {}
-	while class_by_name.has(c) and not seen.has(c):
+	while class_by_name.has(c) and not seen.has(c) and found.is_empty():
 		seen[c] = true
 		for t in instances[class_by_name[c]]["traits"]:
 			if t["name"] == n and (t["kind"] == 1 or t["kind"] == 2):
-				return [t["kind"], t["method"]]
+				found = [t["kind"], t["method"]]
+				break
 		c = instances[class_by_name[c]]["super"]
-	return []
+	_found_methods[ck] = found
+	return found
 
 
 ## True if cls is (or extends) base within this ABC.
@@ -332,6 +344,71 @@ var host: Object = null   # resolves globals / classes: host.abc_global(name) ->
 
 
 ## Runs method 'mi' with 'this' and returns its result. Unsupported instructions abort the method with a warning.
+## run(): opcode -> its case in the instruction match (255: unsupported). A GDScript match tests its patterns one
+## after the other (about 20 ns each), so the cases are numbered with the most used first.
+static var _OP_GROUP: PackedByteArray = _op_groups()
+
+static func _op_groups() -> PackedByteArray:
+	var t := PackedByteArray()
+	t.resize(256)
+	t.fill(255)
+	for k in _GROUP_OPS.size():
+		for o in _GROUP_OPS[k]:
+			t[o] = k
+	return t
+
+const _GROUP_OPS := [
+	[0xD0, 0xD1, 0xD2, 0xD3],
+	[0x66, 0x61, 0x68, 0x6A],
+	[0x24],
+	[0xD4, 0xD5, 0xD6, 0xD7],
+	[0x02, 0x09, 0x82, 0x08, 0xF0, 0xF1],
+	[0x46, 0x4F, 0x4C, 0x4A],
+	[0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x0C, 0x0D, 0x0E, 0x0F],
+	[0x30, 0x1C],
+	[0x2A],
+	[0x29],
+	[0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xC5, 0xC6, 0xC7, 0xA8, 0xA9, 0xAA, 0xA5, 0xA6, 0xA7],
+	[0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0],
+	[0x5D, 0x5E, 0x5F, 0x60],
+	[0x80, 0x86],
+	[0x47],
+	[0x2C, 0x2D, 0x2E, 0x2F],
+	[0x20, 0x21],
+	[0x26],
+	[0x27],
+	[0x48],
+	[0x75, 0x84],
+	[0x73, 0x83, 0x74, 0x88],
+	[0x70, 0x85],
+	[0x62, 0x63],
+	[0x92, 0x94, 0xC2, 0xC3],
+	[0x96],
+	[0x6C, 0x6D],
+	[0x41],
+	[0x42],
+	[0x55],
+	[0x56],
+	[0x2B],
+	[0x1D],
+	[0x5A],
+	[0x64, 0x65],
+	[0x87],
+	[0x90, 0xC4],
+	[0x91, 0xC0],
+	[0x93, 0xC1],
+	[0xEF],
+	[0x57],
+	[0x40],
+	[0x25],
+	[0x28],
+	[0x49],
+	[0x76, 0x81],
+	[0x77, 0x89],
+	[0x95],
+]
+
+
 func run(mi: int, this_obj, args: Array = []):
 	if _freed(this_obj):
 		return null
@@ -357,241 +434,252 @@ func run(mi: int, this_obj, args: Array = []):
 		var at := pc
 		var op := code[pc]
 		pc += 1
-		match op:
-			0x5A:  # newcatch (its scope object)
-				pc = _skip_u30(code, pc)
-				stack.append({})
-			0x1D:  # popscope
-				scopes.pop_back()
-			0x02, 0x09, 0x82, 0x08, 0xF0, 0xF1:  # nop, label, coerce_a, kill(u30), debugline, debugfile
-				if op == 0x08 or op == 0xF0 or op == 0xF1:
-					pc = _skip_u30(code, pc)
-			0xEF:  # debug
-				pc += 1
-				pc = _skip_u30(code, pc)
-				pc += 1
-				pc = _skip_u30(code, pc)
-			0x30, 0x1C:  # pushscope, pushwith
-				scopes.append(stack.pop_back())
-			0x57:  # newactivation (slots kept by index)
-				stack.append({})
-			0x6C, 0x6D:  # getslot, setslot
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				if op == 0x6D:
-					var v = stack.pop_back()
-					var o = stack.pop_back()
-					if o is Dictionary:
-						o[r[0]] = v
-				else:
-					var o = stack.pop_back()
-					stack.append(o.get(r[0]) if o is Dictionary else null)
-			0x40:  # newfunction (no captured outer scope)
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				var fm: int = r[0]
-				stack.append(func(e = null): return run(fm, this_obj, [] if e == null else [e]))
-			0x42:  # construct
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				var call_args := stack.slice(stack.size() - r[0]) if r[0] > 0 else []
-				stack.resize(stack.size() - r[0])
-				var cls_obj = stack.pop_back()
-				if host != null and cls_obj is Dictionary and cls_obj.has("__class__"):
-					stack.append(host.abc_construct(String(cls_obj["__class__"]), call_args))
-				else:
-					stack.append(null)
-			0x20, 0x21:
-				stack.append(null)
-			0x24:
-				var b := code[pc]
-				pc += 1
-				stack.append(b - 256 if b > 127 else b)
-			0x25:
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				stack.append(r[0] - 0x10000 if r[0] & 0x8000 else r[0])
-			0x26:
-				stack.append(true)
-			0x27:
-				stack.append(false)
-			0x28:
-				stack.append(NAN)
-			0x29:
-				stack.pop_back()
-			0x2A:
-				stack.append(stack.back())
-			0x2B:
-				var a = stack.pop_back()
-				var b = stack.pop_back()
-				stack.append(a)
-				stack.append(b)
-			0x2C, 0x2D, 0x2E, 0x2F:
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				match op:
-					0x2C: stack.append(strings[r[0]])
-					0x2D: stack.append(ints[r[0]])
-					0x2E: stack.append(uints[r[0]])
-					0x2F: stack.append(doubles[r[0]])
-			0xD0, 0xD1, 0xD2, 0xD3:
-				stack.append(locals[op - 0xD0])
-			0xD4, 0xD5, 0xD6, 0xD7:
-				locals[op - 0xD4] = stack.pop_back()
-			0x62, 0x63:
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				if r[0] >= locals.size():
-					locals.resize(r[0] + 1)
-				if op == 0x62:
-					stack.append(locals[r[0]])
-				else:
-					locals[r[0]] = stack.pop_back()
-			0x92, 0x94, 0xC2, 0xC3:  # inclocal, declocal (+ _i)
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				locals[r[0]] = _num(locals[r[0]]) + (1 if op == 0x92 or op == 0xC2 else -1)
-			0x64, 0x65:  # getglobalscope, getscopeobject
-				var idx := 0
-				if op == 0x65:
-					idx = code[pc]
+		var grp := _OP_GROUP[op]
+		if grp < 12:
+			match grp:
+				0:  # 0xD0, 0xD1, 0xD2, 0xD3
+					stack.append(locals[op - 0xD0])
+				1:  # 0x66, 0x61, 0x68, 0x6A getproperty, setproperty, initproperty, deleteproperty
+					var ni := code[pc]
+					if ni < 0x80:
+						pc += 1
+					else:
+						var r := _read_u30(code, pc)
+						ni = r[0]
+						pc = r[1]
+					var value = null
+					if op == 0x61 or op == 0x68:
+						value = stack.pop_back()
+					var key = _mn_names[ni]
+					if key == null:
+						key = stack.pop_back()
+					var obj = stack.pop_back()
+					if op == 0x66:
+						stack.append(_prop_get(obj, key))
+					elif op == 0x6A:
+						stack.append(true)
+					else:
+						_prop_set(obj, key, value)
+				2:  # 0x24
+					var b := code[pc]
 					pc += 1
-				stack.append(scopes[idx] if op == 0x65 and idx < scopes.size() else this_obj)
-			0x5D, 0x5E, 0x5F, 0x60:  # findpropstrict, findproperty, finddef, getlex
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				var mn: Dictionary = multinames[r[0]]
-				var owner = _find(this_obj, String(mn.get("name", "")))
-				if op == 0x60:
-					stack.append(_prop_get(owner, String(mn.get("name", ""))))
-				else:
-					stack.append(owner)
-			0x66, 0x61, 0x68, 0x6A:  # getproperty, setproperty, initproperty, deleteproperty
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				var mn: Dictionary = multinames[r[0]]
-				var value = null
-				if op == 0x61 or op == 0x68:
-					value = stack.pop_back()
-				var key = _name_of(mn, stack)
-				var obj = stack.pop_back()
-				if op == 0x66:
-					stack.append(_prop_get(obj, key))
-				elif op == 0x6A:
+					stack.append(b - 256 if b > 127 else b)
+				3:  # 0xD4, 0xD5, 0xD6, 0xD7
+					locals[op - 0xD4] = stack.pop_back()
+				4:  # 0x02, 0x09, 0x82, 0x08, 0xF0, 0xF1 nop, label, coerce_a, kill(u30), debugline, debugfile
+					if op == 0x08 or op == 0xF0 or op == 0xF1:
+						pc = _skip_u30(code, pc)
+				5:  # 0x46, 0x4F, 0x4C, 0x4A callproperty, callpropvoid, callproplex, constructprop
+					var r := _read_u30(code, pc)
+					var r2 := _read_u30(code, r[1])
+					pc = r2[1]
+					var argc: int = r2[0]
+					var call_args := stack.slice(stack.size() - argc) if argc > 0 else []
+					stack.resize(stack.size() - argc)
+					var key = _mn_names[r[0]]
+					if key == null:
+						key = stack.pop_back()
+					var obj = stack.pop_back()
+					var res = _construct(obj, String(key), call_args) if op == 0x4A else _call(obj, String(key), call_args)
+					if op != 0x4F:
+						stack.append(res)
+				6:  # 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x0C, 0x0D, 0x0E, 0x0F
+					var off := _s24(code, pc)
+					pc += 3
+					var jump := false
+					match op:
+						0x10:
+							jump = true
+						0x11:
+							jump = _truthy(stack.pop_back())
+						0x12:
+							jump = not _truthy(stack.pop_back())
+						_:
+							var b = stack.pop_back()
+							var a = stack.pop_back()
+							match op:
+								0x13: jump = _compare(0xAB, a, b)
+								0x14: jump = not _compare(0xAB, a, b)
+								0x15: jump = _compare(0xAD, a, b)
+								0x16: jump = _compare(0xAE, a, b)
+								0x17: jump = _compare(0xAF, a, b)
+								0x18: jump = _compare(0xB0, a, b)
+								0x19: jump = _compare(0xAC, a, b)
+								0x1A: jump = not _compare(0xAC, a, b)
+								0x0C: jump = not _compare(0xAD, a, b)
+								0x0D: jump = not _compare(0xAE, a, b)
+								0x0E: jump = not _compare(0xAF, a, b)
+								0x0F: jump = not _compare(0xB0, a, b)
+					if jump:
+						pc += off
+				7:  # 0x30, 0x1C pushscope, pushwith
+					scopes.append(stack.pop_back())
+				8:  # 0x2A
+					stack.append(stack.back())
+				9:  # 0x29
+					stack.pop_back()
+				10:  # 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xC5, 0xC6, 0xC7, 0xA8, 0xA9, 0xAA, 0xA5, 0xA6, 0xA7
+					var b = stack.pop_back()
+					var a = stack.pop_back()
+					stack.append(_arith(op, a, b))
+				11:  # 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0
+					var b = stack.pop_back()
+					var a = stack.pop_back()
+					stack.append(_compare(op, a, b))
+		else:
+			match grp:
+				12:  # 0x5D, 0x5E, 0x5F, 0x60 findpropstrict, findproperty, finddef, getlex
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					var mn: Dictionary = multinames[r[0]]
+					var owner = _find(this_obj, String(mn.get("name", "")))
+					if op == 0x60:
+						stack.append(_prop_get(owner, String(mn.get("name", ""))))
+					else:
+						stack.append(owner)
+				13:  # 0x80, 0x86 coerce, astype
+					pc = _skip_u30(code, pc)
+				14:  # 0x47
+					return null
+				15:  # 0x2C, 0x2D, 0x2E, 0x2F
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					match op:
+						0x2C: stack.append(strings[r[0]])
+						0x2D: stack.append(ints[r[0]])
+						0x2E: stack.append(uints[r[0]])
+						0x2F: stack.append(doubles[r[0]])
+				16:  # 0x20, 0x21
+					stack.append(null)
+				17:  # 0x26
 					stack.append(true)
-				else:
-					_prop_set(obj, key, value)
-			0x46, 0x4F, 0x4C, 0x4A:  # callproperty, callpropvoid, callproplex, constructprop
-				var r := _read_u30(code, pc)
-				var r2 := _read_u30(code, r[1])
-				pc = r2[1]
-				var argc: int = r2[0]
-				var call_args := stack.slice(stack.size() - argc) if argc > 0 else []
-				stack.resize(stack.size() - argc)
-				var mn: Dictionary = multinames[r[0]]
-				var key = _name_of(mn, stack)
-				var obj = stack.pop_back()
-				var res = _construct(obj, String(key), call_args) if op == 0x4A else _call(obj, String(key), call_args)
-				if op != 0x4F:
-					stack.append(res)
-			0x41:  # call
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				var call_args := stack.slice(stack.size() - r[0]) if r[0] > 0 else []
-				stack.resize(stack.size() - r[0])
-				stack.pop_back()  # receiver
-				var fn = stack.pop_back()
-				stack.append(fn.callv(call_args) if fn is Callable and fn.is_valid() else null)
-			0x49:  # constructsuper
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				stack.resize(stack.size() - r[0] - 1)
-			0x55:  # newobject
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				var o := {}
-				for i in r[0]:
+				18:  # 0x27
+					stack.append(false)
+				19:  # 0x48
+					return stack.pop_back()
+				20:  # 0x75, 0x84
+					stack.append(float(_num(stack.pop_back())))
+				21:  # 0x73, 0x83, 0x74, 0x88 convert_i / coerce_i / convert_u / coerce_u
+					stack.append(int(_num(stack.pop_back())))
+				22:  # 0x70, 0x85 convert_s, coerce_s
 					var v = stack.pop_back()
-					var k = stack.pop_back()
-					o[str(k)] = v
-				stack.append(o)
-			0x56:  # newarray
-				var r := _read_u30(code, pc)
-				pc = r[1]
-				var a := stack.slice(stack.size() - r[0]) if r[0] > 0 else []
-				stack.resize(stack.size() - r[0])
-				stack.append(a)
-			0x47:
-				return null
-			0x48:
-				return stack.pop_back()
-			0x70, 0x85:  # convert_s, coerce_s
-				var v = stack.pop_back()
-				stack.append(_str(v) if not (op == 0x85 and v == null) else null)
-			0x73, 0x83, 0x74, 0x88:  # convert_i / coerce_i / convert_u / coerce_u
-				stack.append(int(_num(stack.pop_back())))
-			0x75, 0x84:
-				stack.append(float(_num(stack.pop_back())))
-			0x76, 0x81:
-				stack.append(_truthy(stack.pop_back()))
-			0x77, 0x89:
-				pass
-			0x80, 0x86:  # coerce, astype
-				pc = _skip_u30(code, pc)
-			0x87:  # astypelate
-				stack.pop_back()
-			0x90, 0xC4:
-				stack.append(-_num(stack.pop_back()))
-			0x91, 0xC0:
-				stack.append(_num(stack.pop_back()) + 1)
-			0x93, 0xC1:
-				stack.append(_num(stack.pop_back()) - 1)
-			0x96:
-				stack.append(not _truthy(stack.pop_back()))
-			0x95:
-				var v = stack.pop_back()
-				stack.append("string" if v is String else "number" if (v is int or v is float) else "boolean" if v is bool \
-					else "undefined" if v == null else "object")
-			0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xC5, 0xC6, 0xC7, 0xA8, 0xA9, 0xAA, 0xA5, 0xA6, 0xA7:
-				var b = stack.pop_back()
-				var a = stack.pop_back()
-				stack.append(_arith(op, a, b))
-			0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0:
-				var b = stack.pop_back()
-				var a = stack.pop_back()
-				stack.append(_compare(op, a, b))
-			0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x0C, 0x0D, 0x0E, 0x0F:
-				var off := _s24(code, pc)
-				pc += 3
-				var jump := false
-				match op:
-					0x10:
-						jump = true
-					0x11:
-						jump = _truthy(stack.pop_back())
-					0x12:
-						jump = not _truthy(stack.pop_back())
-					_:
-						var b = stack.pop_back()
-						var a = stack.pop_back()
-						match op:
-							0x13: jump = _compare(0xAB, a, b)
-							0x14: jump = not _compare(0xAB, a, b)
-							0x15: jump = _compare(0xAD, a, b)
-							0x16: jump = _compare(0xAE, a, b)
-							0x17: jump = _compare(0xAF, a, b)
-							0x18: jump = _compare(0xB0, a, b)
-							0x19: jump = _compare(0xAC, a, b)
-							0x1A: jump = not _compare(0xAC, a, b)
-							0x0C: jump = not _compare(0xAD, a, b)
-							0x0D: jump = not _compare(0xAE, a, b)
-							0x0E: jump = not _compare(0xAF, a, b)
-							0x0F: jump = not _compare(0xB0, a, b)
-				if jump:
-					pc += off
-			_:
-				_warn("ABC: unsupported instruction 0x%02x in %s%s; script stopped" % [op, methods[mi]["name"], _in()])
-				return null
+					stack.append(_str(v) if not (op == 0x85 and v == null) else null)
+				23:  # 0x62, 0x63
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					if r[0] >= locals.size():
+						locals.resize(r[0] + 1)
+					if op == 0x62:
+						stack.append(locals[r[0]])
+					else:
+						locals[r[0]] = stack.pop_back()
+				24:  # 0x92, 0x94, 0xC2, 0xC3 inclocal, declocal (+ _i)
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					locals[r[0]] = _num(locals[r[0]]) + (1 if op == 0x92 or op == 0xC2 else -1)
+				25:  # 0x96
+					stack.append(not _truthy(stack.pop_back()))
+				26:  # 0x6C, 0x6D getslot, setslot
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					if op == 0x6D:
+						var v = stack.pop_back()
+						var o = stack.pop_back()
+						if o is Dictionary:
+							o[r[0]] = v
+					else:
+						var o = stack.pop_back()
+						stack.append(o.get(r[0]) if o is Dictionary else null)
+				27:  # 0x41 call
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					var call_args := stack.slice(stack.size() - r[0]) if r[0] > 0 else []
+					stack.resize(stack.size() - r[0])
+					stack.pop_back()  # receiver
+					var fn = stack.pop_back()
+					stack.append(fn.callv(call_args) if fn is Callable and fn.is_valid() else null)
+				28:  # 0x42 construct
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					var call_args := stack.slice(stack.size() - r[0]) if r[0] > 0 else []
+					stack.resize(stack.size() - r[0])
+					var cls_obj = stack.pop_back()
+					if host != null and cls_obj is Dictionary and cls_obj.has("__class__"):
+						stack.append(host.abc_construct(String(cls_obj["__class__"]), call_args))
+					else:
+						stack.append(null)
+				29:  # 0x55 newobject
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					var o := {}
+					for i in r[0]:
+						var v = stack.pop_back()
+						var k = stack.pop_back()
+						o[str(k)] = v
+					stack.append(o)
+				30:  # 0x56 newarray
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					var a := stack.slice(stack.size() - r[0]) if r[0] > 0 else []
+					stack.resize(stack.size() - r[0])
+					stack.append(a)
+				31:  # 0x2B
+					var a = stack.pop_back()
+					var b = stack.pop_back()
+					stack.append(a)
+					stack.append(b)
+				32:  # 0x1D popscope
+					scopes.pop_back()
+				33:  # 0x5A newcatch (its scope object)
+					pc = _skip_u30(code, pc)
+					stack.append({})
+				34:  # 0x64, 0x65 getglobalscope, getscopeobject
+					var idx := 0
+					if op == 0x65:
+						idx = code[pc]
+						pc += 1
+					stack.append(scopes[idx] if op == 0x65 and idx < scopes.size() else this_obj)
+				35:  # 0x87 astypelate
+					stack.pop_back()
+				36:  # 0x90, 0xC4
+					stack.append(-_num(stack.pop_back()))
+				37:  # 0x91, 0xC0
+					stack.append(_num(stack.pop_back()) + 1)
+				38:  # 0x93, 0xC1
+					stack.append(_num(stack.pop_back()) - 1)
+				39:  # 0xEF debug
+					pc += 1
+					pc = _skip_u30(code, pc)
+					pc += 1
+					pc = _skip_u30(code, pc)
+				40:  # 0x57 newactivation (slots kept by index)
+					stack.append({})
+				41:  # 0x40 newfunction (no captured outer scope)
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					var fm: int = r[0]
+					stack.append(func(e = null): return run(fm, this_obj, [] if e == null else [e]))
+				42:  # 0x25
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					stack.append(r[0] - 0x10000 if r[0] & 0x8000 else r[0])
+				43:  # 0x28
+					stack.append(NAN)
+				44:  # 0x49 constructsuper
+					var r := _read_u30(code, pc)
+					pc = r[1]
+					stack.resize(stack.size() - r[0] - 1)
+				45:  # 0x76, 0x81
+					stack.append(_truthy(stack.pop_back()))
+				46:  # 0x77, 0x89
+					pass
+				47:  # 0x95
+					var v = stack.pop_back()
+					stack.append("string" if v is String else "number" if (v is int or v is float) else "boolean" if v is bool \
+						else "undefined" if v == null else "object")
+				_:
+					_warn("ABC: unsupported instruction 0x%02x in %s%s; script stopped" % [op, methods[mi]["name"], _in()])
+					return null
 		if _thrown != "":
 			# inside a try block: on to its catch, as Flash does; elsewhere the script carries on (lenient)
 			var msg := _thrown
@@ -632,13 +720,6 @@ static func _skip_u30(code: PackedByteArray, pc: int) -> int:
 static func _s24(code: PackedByteArray, pc: int) -> int:
 	var v := code[pc] | (code[pc + 1] << 8) | (code[pc + 2] << 16)
 	return v - 0x1000000 if v & 0x800000 else v
-
-
-func _name_of(mn: Dictionary, stack: Array):
-	match mn.get("kind"):
-		"multinamel", "rtqnamel":
-			return stack.pop_back()
-	return String(mn.get("name", ""))
 
 
 static func _truthy(v) -> bool:
@@ -740,14 +821,46 @@ func _abc_method(obj: Object, n: String) -> Array:
 
 
 func _has(obj: Object, n: String) -> bool:
-	if obj.has_method(n) or not _abc_method(obj, n).is_empty():
+	if _kind(obj, n) != NEITHER or not _abc_method(obj, n).is_empty():
 		return true
-	if obj is FlashMovieClip and (obj._named.has(n) or obj._dyn.has(n)):
-		return true
-	for p in obj.get_property_list():
-		if p["name"] == n:
-			return true
-	return false
+	return obj is FlashMovieClip and (obj._named.has(n) or obj._dyn.has(n))
+
+
+## The property names of obj's class (its script, else its engine class). get_property_list builds the whole list
+## (about 130 us on a movie clip) and mod code looks up a global name like ColorTransform each frame: the names are
+## kept per class.
+static var _class_props: Dictionary = {}
+
+static func _prop_names(obj: Object) -> Dictionary:
+	var key = obj.get_script()
+	if key == null:
+		key = obj.get_class()
+	var names: Dictionary = _class_props.get(key, {})
+	if names.is_empty():
+		for p in obj.get_property_list():
+			names[p["name"]] = true
+		_class_props[key] = names
+	return names
+
+
+## What name n is on obj's class: a METHOD (has_method), else a PROPERTY (script or engine), else NEITHER. Kept per
+## class like _prop_names: has_method on each property access was a large part of a mod's per-frame cost.
+enum {METHOD, PROPERTY, NEITHER}
+static var _class_kinds: Dictionary = {}
+
+static func _kind(obj: Object, n: String) -> int:
+	var key = obj.get_script()
+	if key == null:
+		key = obj.get_class()
+	var kinds = _class_kinds.get(key)
+	if kinds == null:
+		kinds = {}
+		_class_kinds[key] = kinds
+	var r = kinds.get(n)
+	if r == null:
+		r = METHOD if obj.has_method(n) else PROPERTY if _prop_names(obj).has(n) else NEITHER
+		kinds[n] = r
+	return r
 
 
 ## True for an object the runtime has freed (Flash.dispose_later): mod code still holding one sees null.
@@ -797,7 +910,14 @@ func _prop_get(obj, key):
 				return {"__host_object__": "transform", "obj": obj}
 			if k == "loaderInfo":
 				return {"__host_object__": "loaderInfo"}
-		if obj.has_method(k) and not (obj is FlashMovieClip and obj._named.has(k)):
+		var kind := _kind(obj, k)
+		# a named child (MainHair, outline, ...) comes before a method of that name; a property comes first (obj.get
+		# finds a child through _get only when the class has no property of that name)
+		if kind != PROPERTY and obj is FlashMovieClip:
+			var c = obj._named.get(k)
+			if c != null:
+				return c
+		if kind == METHOD:
 			return Callable(obj, k)
 		var v = obj.get(k)
 		if v == null:

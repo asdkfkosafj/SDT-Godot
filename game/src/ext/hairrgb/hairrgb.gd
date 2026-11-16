@@ -7,10 +7,31 @@ extends SDTExtension
 ## Port: a colour the player has not set leaves the mod's own colour (the original game showed hair mods that way;
 ## the Loader mod started them all at 255,252,247). Its colours are in the new menu's Her > Hair, each shown when the
 ## hair has that part. Taking the mods off (clearing them) gives the hair its own colours back, as the Loader mod's
-## reset did.
+## reset did. Hair mods' packages see the Loader mod's hairRGB_comm (LoaderComm), as they did with the Loader.
 
 const OUTLINE_MULT := 0.4
 const SLOTS := 4
+
+
+## What hair mods made for hairRGB find on the Loader as hairRGB_comm (the Loader mod's own object): with it they
+## keep all their colour parts (without it some hide rgbFill2 / rgbFill3 and take one colour from another item) and
+## may read hairRGB, the first colour (e.g. for their outlines, every frame). Its other fields are the Loader
+## mod's settings they check.
+class LoaderComm:
+	extends RefCounted
+	var ext
+	var usedefaultonnocharcode := 0
+	var usedefaultonreset := 0
+	var swatch3A := 0.0
+	## The first colour as {r, g, b, a}; one the player has not chosen gives no change (black offsets).
+	var hairRGB: Dictionary:
+		get:
+			return ext._rgb[0] if ext._set[0] else {"r": 0, "g": 0, "b": 0, "a": 1.0}
+
+	func _init(e) -> void:
+		ext = e
+
+var _comm: LoaderComm = null
 
 var _rgb: Array = []          # slot -> {r, g, b, a}
 var _set: Array = []          # slot -> the player (or a code) chose it
@@ -43,6 +64,12 @@ func _enable() -> void:
 
 func _disable() -> void:
 	_reset()
+
+
+func loader_comms() -> Dictionary:
+	if _comm == null:
+		_comm = LoaderComm.new(self)
+	return {"hairRGB_comm": _comm}
 
 
 func _clear_slots() -> void:

@@ -147,6 +147,16 @@ static func get_extension(ext_id: String) -> SDTExtension:
 	return by_id.get(ext_id)
 
 
+## What a mod package's initl(loader) gets as the Loader (FlashSwfMod.run_initl): the objects the extensions that are
+## on offer (SDTExtension.loader_comms), or null when none does (no Loader at all).
+static func loader_stand_in():
+	var out := {}
+	for ext in all:
+		if ext.enabled:
+			out.merge(ext.loader_comms())
+	return out if not out.is_empty() else null
+
+
 ## Whether the extension with this id is (or would be) enabled: the player's choice, else its default.
 static func is_on(ext_id: String) -> bool:
 	if vanilla_mode:

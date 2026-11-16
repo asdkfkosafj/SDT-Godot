@@ -65,6 +65,13 @@ func _setting_changed(_key: String, _value) -> void:
 	pass
 
 
+## Objects a Loader mod finds on the loader its package's initl(loader) gets, by name (e.g. "hairRGB_comm": mods
+## made for the Loader mod hairRGB check for it and behave differently without it). Asked while this extension
+## is on, each time a mod package is put on (Extensions.loader_stand_in).
+func loader_comms() -> Dictionary:
+	return {}
+
+
 # ---------------------------------------------------------------- tick and hooks
 
 ## Runs `fn` every game tick, before the game's own tick (timelines, then the game's ENTER_FRAME logic).

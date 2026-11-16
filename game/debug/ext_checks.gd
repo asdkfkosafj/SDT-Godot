@@ -128,6 +128,7 @@ func step(_frame: int) -> void:
 				_blink_veto_checks()
 				_template_checks()
 				_subtitles_checks()
+				_loader_comm_checks()
 				_extramod_checks()
 				_shock_spray_veto_checks()
 				_extramodhim_checks()
@@ -320,6 +321,23 @@ func _template_checks() -> void:
 		and hl._flash_parent == null and not layers_left)
 	Extensions.set_enabled("templateextension", true)
 	_check("TemplateExtension on again", helpers.has("CostumeArmwear") and te._layers.size() == 8)
+
+
+## What mod packages' initl gets as the Loader: hairRGB's hairRGB_comm (hair mods made for it keep all their colour
+## parts), with its first colour; nothing once hairRGB is off.
+func _loader_comm_checks() -> void:
+	var hr = Extensions.get_extension("hairrgb")
+	var l = Extensions.loader_stand_in()
+	_check("Loader stand-in: hairRGB_comm while hairRGB is on", l is Dictionary and l.has("hairRGB_comm")
+		and l["hairRGB_comm"].hairRGB.has("r"))
+	hr.set_colour(0, {"r": 10, "g": 20, "b": 30, "a": 1.0})
+	_check("hairRGB_comm.hairRGB is the first colour", l["hairRGB_comm"].hairRGB["g"] == 20 if l is Dictionary else false)
+	hr._reset()
+	hr._apply()
+	Extensions.set_enabled("hairrgb", false)
+	var off = Extensions.loader_stand_in()
+	_check("Loader stand-in: no hairRGB_comm with hairRGB off", off == null or not off.has("hairRGB_comm"))
+	Extensions.set_enabled("hairrgb", true)
 
 
 ## Subtitles (the dialogue look): on by default, the game's box hidden behind a shade, the text centred in Inter

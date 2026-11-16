@@ -27,6 +27,8 @@ const KIT_CLASSES := {"SDTMods.ModPackage": "res://src/SDTMods/ModPackage.gd"}
 
 var library: FlashLibrary
 var abc: Array[FlashAbc] = []
+var _short_ids: Dictionary = {}    # short class name -> symbol id (-1: none); mod code looks names up each frame
+var _has_global: Dictionary = {}   # name -> abc_has_global answer (the library and its ABC do not change)
 
 
 static func register() -> void:
@@ -555,17 +557,18 @@ func _instantiate_root() -> FlashDisplayObject:
 	return instantiate(0)
 
 
-## The Loader calls a loaded mod package's initl(loader). Here it runs without a loader (null): the mod's setup of
-## its own display objects works (a mod masking one part's erase shape with another part); Loader API
-## calls (lProxy hooks, addEnterFramePersist, ...) and reads of l.g find nothing.
-func run_initl(root) -> void:
+## The Loader calls a loaded mod package's initl(loader). Here it runs without the Loader: `loader` is null, or a
+## Dictionary of the objects the extensions offer in its place (Extensions.loader_stand_in, e.g. hairRGB_comm). The
+## mod's setup of its own display objects works (a mod masking one part's erase shape with another part); Loader
+## API calls (lProxy hooks, addEnterFramePersist, ...) and reads of l.g find nothing.
+func run_initl(root, loader = null) -> void:
 	if root == null or not root.has_meta(&"abc"):
 		return
 	var a: FlashAbc = root.get_meta(&"abc")
 	var m := a.find_method(str(root.get_meta(&"abc_class", "")), "initl")
 	if not m.is_empty() and m[0] == 1:
 		FlashAbc.quiet = true
-		a.run(m[1], root, [null])
+		a.run(m[1], root, [loader])
 		FlashAbc.quiet = false
 
 
@@ -605,22 +608,29 @@ func instantiate(id: int, parent = null, place: Dictionary = {}, pidx: int = -1,
 func _class_id(n: String) -> int:
 	if library.classes.has(n):
 		return int(library.classes[n])
+	if _short_ids.has(n):
+		return _short_ids[n]
+	var id := -1
 	for cls in library.classes:
 		if String(cls).get_slice(".", String(cls).get_slice_count(".") - 1) == n:
-			return int(library.classes[cls])
-	return -1
+			id = int(library.classes[cls])
+			break
+	_short_ids[n] = id
+	return id
 
 
 func abc_has_global(n: String) -> bool:
-	if n in ["trace", "ModTypes", "ModElements", "Math", "getDefinitionByName", "String", "Number", "int", "uint",
-			"Boolean", "Array", "Object", "isNaN", "Event", "MouseEvent", "Dictionary"]:
-		return true
-	if _class_id(n) >= 0:
-		return true
-	for a in abc:
-		if a.find_class(n) != "":
-			return true
-	return false
+	if _has_global.has(n):
+		return _has_global[n]
+	var found := n in ["trace", "ModTypes", "ModElements", "Math", "getDefinitionByName", "String", "Number", "int",
+		"uint", "Boolean", "Array", "Object", "isNaN", "Event", "MouseEvent", "Dictionary"] or _class_id(n) >= 0
+	if not found:
+		for a in abc:
+			if a.find_class(n) != "":
+				found = true
+				break
+	_has_global[n] = found
+	return found
 
 
 func abc_global(n: String):
@@ -699,6 +709,12 @@ func abc_construct(n: String, args: Array):
 			return args
 		"Object", "Dictionary", "flash.utils.Dictionary":
 			return {}
+		"ColorTransform", "flash.geom.ColorTransform":
+			# hairRGB hair mods build their outline colours from string fields, every frame
+			var v := [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+			for i in mini(args.size(), 8):
+				v[i] = FlashAbc._num(args[i])
+			return FlashColorTransform.from_array(v)
 	var id := _class_id(n)
 	if id < 0:
 		if not FlashAbc.quiet:

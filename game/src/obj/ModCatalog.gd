@@ -625,7 +625,7 @@ func apply(e: Dictionary) -> void:
 	var mods = root.get("mods") if root != null else null
 	if not mods is Array:
 		return
-	mod.run_initl(root)
+	mod.run_initl(root, Extensions.loader_stand_in())
 	var pkg := LoadedModPackage.new("swfMod")
 	var items := _applied_items(e)
 	pkg.setFilePath("%s|%s" % [e["path"], "+".join(PackedStringArray(items.map(func(i): return str(i))))])

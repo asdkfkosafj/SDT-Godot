@@ -131,6 +131,8 @@ var colorTransform: FlashColorTransform:
 	set(value):
 		if value == null:   # Flash throws a TypeError, which the release player ignores (mod frame scripts do this)
 			return
+		if value.equals(_color_transform):   # nothing to redraw (shapes rebuild their material for offsets)
+			return
 		_color_transform = value.clone()
 		_apply_color_transform()
 
