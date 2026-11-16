@@ -1,8 +1,8 @@
 extends RefCounted
 ## Scripted checks (main.gd --driver, use with --save-dir): an overwriting mod clearing the layer with a
 ## character's rope hair, then hair / character changes after the killed elements' disposal delay (used to hit freed
-## objects); text decoding; Flash .sol import guard (SDT_SOL_DIR). Run by tools/regress.sh; prints "CHECK ok / FAIL
-## <name>" and "FIX CHECKS: n passed, m failed".
+## objects); text decoding; characters without a glyph in the dialogue font; Flash .sol import guard (SDT_SOL_DIR).
+## Run by tools/regress.sh; prints "CHECK ok / FAIL <name>" and "FIX CHECKS: n passed, m failed".
 
 var _android := -1
 var _pass := 0
@@ -41,6 +41,7 @@ func step(frame: int) -> void:
 			g.characterControl.setChar(_android, false)
 			_check("Android 18 has her rope elements", g.characterControl.currentElements.size() > 0,
 				g.characterControl.currentElements.size())
+			_missing_glyphs()
 		100:
 			# what an overwriting HAIR_COSTUME / dynamic-hair mod does to the layer holding the character's ropes
 			g.customElementLoader._clearTarget(g.hairOverLayer)
@@ -65,6 +66,18 @@ func step(frame: int) -> void:
 			_info("orphans", Flash.orphan_stats(5))
 			print("FIX CHECKS: %d passed, %d failed" % [_pass, _fail])
 			Flash.get_tree().quit()
+
+
+## Dialogue "delay characters": a character the embedded dialogue font has no glyph for (Б) shows as nothing,
+## as in Flash, but stays in the field's text (one typing step each).
+func _missing_glyphs() -> void:
+	var field: FlashTextField = g.dialogueControl.tfContainer.dialogueField
+	var old := field.text
+	field.text = "Oh ББББ my é"
+	var shown: String = field._control.text
+	_check("dialogue field hides characters its font has no glyph for", shown == "Oh  my é", shown)
+	_check("dialogue field text keeps those characters", field.text == "Oh ББББ my é", field.text)
+	field.text = old
 
 
 func _decoding() -> void:

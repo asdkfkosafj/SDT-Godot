@@ -37,6 +37,31 @@ var backgroundColor: int = 0xFFFFFF
 var embedFonts := true
 var condense_white := false
 
+## Font instance id -> true when that embedded font has glyphs (an empty cmap means the export failed).
+static var _font_has_glyphs := {}
+
+
+## The text as Flash draws it: an embedded (SWF) font shows nothing for a character it has no glyph for, and
+## that character takes no space. Dialogue writers use this: "Б" (not in the dialogue font) is an invisible
+## character that still takes one typing step, a pause. Godot would draw it from a system font (or as a hex
+## box), so such characters are taken out here. Device fonts (SystemFont) and input fields keep all text.
+func _shown(t: String) -> String:
+	if _input or not (_font is FontFile) or t.is_empty():
+		return t
+	var id := _font.get_instance_id()
+	if not _font_has_glyphs.has(id):
+		_font_has_glyphs[id] = not _font.get_supported_chars().is_empty()
+	if not _font_has_glyphs[id]:
+		return t
+	var out := t
+	var removed := 0
+	for i in t.length():
+		var cp := t.unicode_at(i)
+		if cp > 32 and not _font.has_char(cp):
+			out = out.erase(i - removed, 1)
+			removed += 1
+	return out
+
 
 func _init() -> void:
 	_build_control()
@@ -159,7 +184,7 @@ func _apply_format() -> void:
 			_control.alignment = _halign()
 			if maxChars > 0:
 				_control.max_length = maxChars
-	_control.text = _text
+	_control.text = _shown(_text)
 	_layout()
 
 
@@ -209,7 +234,7 @@ var text: String:
 	set(value):
 		_text = value
 		if _control != null:
-			_control.text = value
+			_control.text = _shown(value)
 			_layout()
 
 
@@ -260,7 +285,7 @@ var textWidth: float:
 	get:
 		var f: Font = _font if _font != null else ThemeDB.fallback_font
 		var w := 0.0
-		for line in _text.split("\n"):
+		for line in _shown(_text).split("\n"):
 			w = maxf(w, f.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, int(round(_font_size))).x
 				+ _letter_spacing * line.length())
 		return w
