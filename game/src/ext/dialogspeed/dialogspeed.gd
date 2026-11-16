@@ -19,7 +19,15 @@ func _setup() -> void:
 
 func _enable() -> void:
 	_apply(get_setting("dialogspeed"))
-	menu_control("dialogue", "Dialogue", MenuSchema.setting_control(self, "dialogspeed"))
+	# the setting is the Loader's (ms per letter, lower is faster); the slider shows letters per second, so that
+	# right is faster
+	menu_control("dialogue", "Dialogue", {"type": "slider", "label": "Text speed",
+		"tip": "Letters per second. The game's own speed is 18. Lines with a voice clip keep its pace.",
+		"min": 10.0, "max": 100.0, "step": 1.0,
+		"get": func(): return roundf(1000.0 / float(get_setting("dialogspeed"))),
+		"set": func(v: float): set_setting("dialogspeed", int(roundf(1000.0 / maxf(v, 1.0)))),
+		"reset": func(): set_setting("dialogspeed", GAME_SPEED),
+		"format": func(v): return "%d / s" % int(v)})
 
 
 func _disable() -> void:

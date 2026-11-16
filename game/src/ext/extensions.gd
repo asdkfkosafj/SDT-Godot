@@ -20,6 +20,7 @@ const BUILTIN: Array[String] = [
 	"res://src/ext/dasbyaddons/dasbyaddons.gd",
 	"res://src/ext/dialogpatch/dialogpatch.gd",
 	"res://src/ext/dialogdisplayedit/dialogdisplayedit.gd",
+	"res://src/ext/subtitles/subtitles.gd",
 	"res://src/ext/gaggeddialog/gaggeddialog.gd",
 	"res://src/ext/dialogspeed/dialogspeed.gd",
 	"res://src/ext/monitordialog/monitordialog.gd",

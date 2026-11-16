@@ -39,6 +39,14 @@ var condense_white := false
 
 ## Font instance id -> true when that embedded font has glyphs (an empty cmap means the export failed).
 static var _font_has_glyphs := {}
+## Port extension (not in Flash): the embedded font whose glyphs decide which characters show (see _shown), when
+## the field draws with another font (the Subtitles dialogue look draws Inter, which has "Б"; the game's dialogue
+## font, which decides, has not). null: the field's own font.
+var glyph_font: Font = null:
+	set(value):
+		if value != glyph_font:
+			glyph_font = value
+			_apply_format()
 
 
 ## The text as Flash draws it: an embedded (SWF) font shows nothing for a character it has no glyph for, and
@@ -46,18 +54,19 @@ static var _font_has_glyphs := {}
 ## character that still takes one typing step, a pause. Godot would draw it from a system font (or as a hex
 ## box), so such characters are taken out here. Device fonts (SystemFont) and input fields keep all text.
 func _shown(t: String) -> String:
-	if _input or not (_font is FontFile) or t.is_empty():
+	var gf: Font = glyph_font if glyph_font != null else _font
+	if _input or not (gf is FontFile) or t.is_empty():
 		return t
-	var id := _font.get_instance_id()
+	var id := gf.get_instance_id()
 	if not _font_has_glyphs.has(id):
-		_font_has_glyphs[id] = not _font.get_supported_chars().is_empty()
+		_font_has_glyphs[id] = not gf.get_supported_chars().is_empty()
 	if not _font_has_glyphs[id]:
 		return t
 	var out := t
 	var removed := 0
 	for i in t.length():
 		var cp := t.unicode_at(i)
-		if cp > 32 and not _font.has_char(cp):
+		if cp > 32 and not gf.has_char(cp):
 			out = out.erase(i - removed, 1)
 			removed += 1
 	return out

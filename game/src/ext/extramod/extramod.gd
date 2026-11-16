@@ -93,8 +93,7 @@ var _lip_offset := 0           # her lip / jaw frames: 81 per skin
 ## Every ExtraMod mod placed: {"pkg": its LoadedModPackage, "type", "flags": {flag: value}}, replayed when one of them
 ## is taken off alone (the others keep what they need hidden)
 var _records: Array = []
-var _dia_box = null            # the game's own dialogue box picture
-var _dia_mods := false         # a mod replaces the dialogue box picture
+var _dia_mods := false         # a mod replaces the dialogue box picture (the game's box is hidden)
 var _dia_color = null          # dialogue text colour / size set by a mod or an EM_ word (null: the game's)
 var _dia_size = null
 var _dia_font := false         # a mod or an EM_ word set a font
@@ -138,9 +137,6 @@ func _enable() -> void:
 	_register("BodyEye", EYE_PARTS)
 	for t in OTHER_TYPES:
 		_register(t, OTHER_TYPES[t])
-	var dc = g.dialogueControl
-	if dc != null and dc.numChildren > 0:
-		_dia_box = dc.getChildAt(0)
 	_lip_offset = g.characterControl.currentSkin * 81
 	hook_after(&"CustomElementLoader.addStaticModElement", func(h): _placed(h.args[0]))
 	hook_after(&"CustomElementLoader.clearInstancedMods", func(_h): _reset())
@@ -497,12 +493,34 @@ func _dia_format() -> void:
 func _update_dia() -> void:
 	var dc = g.dialogueControl
 	var mods: Array = _parts("Overlay", "diabox") + _parts("DialogueBox")   # ExtraMod's order
+	var was := _dia_mods
 	_dia_mods = not mods.is_empty()
 	for p in mods:
 		if p._flash_parent == dc:
 			dc.setChildIndex(p, 0)
-	if _dia_box != null and is_instance_valid(_dia_box):
-		_dia_box.visible = not _dia_mods
+	if was and not _dia_mods:
+		_game_box(true)
+	_tell_subtitles()   # the Subtitles look gives way to the box mod (its Classic box), or comes back
+	if _dia_mods:
+		_game_box(false)   # again at each line: every style has its own box picture
+	_dia_format()   # the mods' text colour / size again (a change of look sets the text's own)
+
+
+## Shows or hides the game's own dialogue box pictures (the box of each style).
+func _game_box(on: bool) -> void:
+	var dc = g.dialogueControl
+	if dc == null:
+		return
+	for i in dc.numChildren:
+		var c = dc.getChildAt(i)
+		if c is FlashShape and Dialogue.BOX_FILL_ALPHA.has(c._char_id):
+			c.visible = on
+
+
+func _tell_subtitles() -> void:
+	var st = Extensions.get_extension("subtitles")
+	if st != null and st.enabled:
+		st.box_mods(_dia_mods)
 
 
 ## Dialogue words [EM_FCLEAR], [EM_FONT<name>], [EM_FSIZE<n>], [EM_FCOLOR<hex>]: done at once, the line goes on.
@@ -771,8 +789,10 @@ func _reset() -> void:
 func _reset_other() -> void:
 	if body != null:
 		body.reset()
-	if _dia_mods and _dia_box != null and is_instance_valid(_dia_box):
-		_dia_box.visible = true
+	if _dia_mods:
+		_dia_mods = false
+		_game_box(true)
+		_tell_subtitles()
 	_dia_mods = false
 	var dc = g.dialogueControl
 	if dc != null and (_dia_font or _dia_color != null or _dia_size != null):

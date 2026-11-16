@@ -127,6 +127,7 @@ func step(_frame: int) -> void:
 				_mood_checks()
 				_blink_veto_checks()
 				_template_checks()
+				_subtitles_checks()
 				_extramod_checks()
 				_shock_spray_veto_checks()
 				_extramodhim_checks()
@@ -321,6 +322,49 @@ func _template_checks() -> void:
 	_check("TemplateExtension on again", helpers.has("CostumeArmwear") and te._layers.size() == 8)
 
 
+## Subtitles (the dialogue look): on by default, the game's box hidden behind a shade, the text centred in Inter
+## with the game font's missing glyphs still hidden; "Classic box" puts the game's box and text back exactly.
+func _subtitles_checks() -> void:
+	var st: SDTExtension = Extensions.get_extension("subtitles")
+	_check("Subtitles on by default", st != null and st.enabled and st.get_setting("look") == "Subtitles")
+	if st == null or not st.enabled:
+		return
+	var dc: Dialogue = g.dialogueControl
+	var field: FlashTextField = dc.tfContainer.dialogueField
+	var boxes := func() -> Array:
+		var r := []
+		for i in dc.numChildren:
+			var c = dc.getChildAt(i)
+			if c is FlashShape and Dialogue.BOX_FILL_ALPHA.has(c._char_id):
+				r.append(c.visible)
+		return r
+	_check("Subtitles: box hidden, shade, centred text", not boxes.call().has(true) and dc.has_meta(&"subtitle_shade")
+		and field.defaultTextFormat["align"] == "center" and field.glyph_font == dc.originalFont
+		and field.defaultTextFormat["font"] != dc.originalFont, str([boxes.call(), field.defaultTextFormat["align"]]))
+	var old := field.text
+	field.text = "a ББ b"
+	_check("Subtitles: characters without a glyph in the game's dialogue font stay hidden", field._control.text == "a  b",
+		field._control.text)
+	field.text = old
+	st.set_setting("look", "Classic box")
+	var r := Rect2(field.x, field.y, field.width, field.height)
+	_check("Classic box: the game's box and text back", boxes.call().size() > 0 and not boxes.call().has(false)
+		and not dc.has_meta(&"subtitle_shade") and field.glyph_font == null
+		and field.defaultTextFormat["font"] == dc.originalFont and field.defaultTextFormat["align"] == "left"
+		and r.position.is_equal_approx(Vector2(-247, -24)) and is_equal_approx(r.size.x, 498.05)
+		and is_equal_approx(r.size.y, 52.0) and is_equal_approx(dc.tfContainer.x, 349.1)
+		and is_equal_approx(dc.tfContainer.y, -49.0) and dc.tfContainer.filters.size() == 1
+		and dc.tfContainer.filters[0].type == "Glow", str([boxes.call(), r, dc.tfContainer.x, dc.tfContainer.y]))
+	st.set_setting("look", "Subtitles")
+	_check("Subtitles again", dc.has_meta(&"subtitle_shade") and not boxes.call().has(true)
+		and is_equal_approx(field.width, st.WIDTH))
+	st.box_mods(true)
+	_check("a dialogue box mod: the Classic box, the setting kept", not dc.has_meta(&"subtitle_shade")
+		and is_equal_approx(field.width, 498.05) and st.get_setting("look") == "Subtitles")
+	st.box_mods(false)
+	_check("the box mod off: Subtitles again", dc.has_meta(&"subtitle_shade") and is_equal_approx(field.width, st.WIDTH))
+
+
 ## ExtraMod (stage 1: her head and eyes): types, containers next to her parts, a clear that changes nothing.
 func _extramod_checks() -> void:
 	var em: SDTExtension = Extensions.get_extension("extramod")
@@ -356,6 +400,8 @@ func _extramod_checks() -> void:
 		and helpers["Futa"].targetDictionary["target"] == her.torso.penisContainer
 		and cat.picker_types.get("Futa") == "extramod_futa" and cat.picker_types.get("Overlay") == "extramod_overlays")
 	var dc = g.dialogueControl
+	var sub = Extensions.get_extension("subtitles")
+	sub.set_setting("look", "Classic box")   # the game's box (with Subtitles a box mod shows it anyway: _subtitles_checks)
 	var field = dc.tfContainer.dialogueField
 	var box = dc.getChildAt(0)
 	var color0: int = field.textColor
@@ -379,6 +425,7 @@ func _extramod_checks() -> void:
 		futa._flash_parent == her.torso.penisContainer and futa.visible == (her._penisControl.currentPenisID != 0))
 	cel.clearInstancedMods()
 	_check("ExtraMod cleared: the game's dialogue box and text colour back", box.visible and field.textColor == color0)
+	sub.set_setting("look", "Subtitles")
 	# BodyExpanded: parts beside her own, vanillaOverwrite hides hers (the calf: her children 0 and 2), clearing
 	# brings them back
 	_check("ExtraMod body type", helpers.has("BodyExpanded") and cat.picker_types.get("BodyExpanded") == "extramod_body")

@@ -640,8 +640,15 @@ func _dmod_checks() -> void:
 	_check("dialogpatch: cascade priority limit", dp._best_state(dc, ["hiB", "midC"], 1) == "")
 	dc.states = saved
 	g.her.intro = intro
-	# dialogdisplayedit
+	# dialogdisplayedit, with the Subtitles look: the box colour goes to its shade
 	var de = Extensions.get_extension("dialogdisplayedit")
+	var sub = Extensions.get_extension("subtitles")
+	_say("alt two", {"style": "HimAlt2"})
+	var shade = dc.get_meta(&"subtitle_shade") if dc.has_meta(&"subtitle_shade") else null
+	_check("dialogdisplayedit with Subtitles: HimAlt2 colours the shade", shade != null and dc.currentFrame == 3
+		and shade._tint == Color8(150, 150, 0), str(shade._tint if shade != null else "no shade"))
+	# with the game's box
+	sub.set_setting("look", "Classic box")
 	_say("alt two", {"style": "HimAlt2"})
 	var ct: FlashColorTransform = dc.getChildAt(0).colorTransform
 	_check("dialogdisplayedit: HimAlt2 is his box in the Alt 2 colour", dc.currentFrame == 3 and ct.redMultiplier == 0.0
@@ -665,6 +672,7 @@ func _dmod_checks() -> void:
 	_say("[ARMS_BACK]", {"style": "Thought"})
 	_check("dialogdisplayedit: no empty box for an actions-only line", dc.alpha == 0.0 and not dc.fadingIn)
 	dc.stopSpeaking()
+	sub.set_setting("look", "Subtitles")
 	# gaggeddialog
 	var gd = Extensions.get_extension("gaggeddialog")
 	var her = g.her

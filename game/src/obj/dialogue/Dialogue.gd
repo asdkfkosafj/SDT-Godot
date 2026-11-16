@@ -765,11 +765,15 @@ func _gotoStyle(label: String) -> void:
 			c.alpha = BOX_ALPHA / BOX_FILL_ALPHA[c._char_id]
 	tfContainer.alpha = 1.0
 	tfContainer.dialogueField.embolden = TEXT_EMBOLDEN
+	if Hooks.has(&"Dialogue.gotoStyle"):   # HOOK (args: "speaking" / "thought" / "him"; after the box and text are set)
+		Hooks.after(&"Dialogue.gotoStyle", self, [label])
 
 
 func updateTextField() -> void:
 	tfContainer.dialogueField.text = currentText
 	tfContainer.dialogueField.scrollV = maxi(0, tfContainer.dialogueField.numLines - 1)
+	if Hooks.has(&"Dialogue.updateTextField"):   # HOOK (after the text changed, every letter)
+		Hooks.after(&"Dialogue.updateTextField", self, [])
 
 
 func randomInterrupt() -> String:

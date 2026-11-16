@@ -13,6 +13,7 @@ extends SDTExtension
 ##   goes back to the settings' colours, "default" to the game's.
 ## - A line with only actions (no words) does not show an empty box.
 ## Opacity multiplies the game's (0..3; above 1 makes the see-through box more solid).
+## With the Subtitles look (extension subtitles) there is no box: the box colour and opacity apply to its shade.
 
 const NAMED := {"red": Color8(255, 50, 50), "orange": Color8(255, 128, 50), "yellow": Color8(255, 255, 50),
 	"limegreen": Color8(128, 255, 50), "green": Color8(50, 255, 50), "aquamarine": Color8(50, 255, 128),
@@ -67,6 +68,9 @@ func _disable() -> void:
 	if dc != null and dc.numChildren > 0:
 		dc.getChildAt(0).colorTransform = FlashColorTransform.new()
 		dc.tfContainer.colorTransform = FlashColorTransform.new()
+		var shade = dc.get_meta(&"subtitle_shade") if dc.has_meta(&"subtitle_shade") else null
+		if shade != null and is_instance_valid(shade):
+			shade.set_look(null, 1.0)
 
 
 func _setting_changed(_key: String, _value) -> void:
@@ -155,10 +159,14 @@ func _apply(dc: Dialogue, base: String, alt: int) -> void:
 		box = get_setting(st + "_box") if get_setting(st + "_box_recolour") else null
 		text = get_setting(st + "_text") if get_setting(st + "_text_recolour") else null
 	var alpha_st := st if alt >= 1 and alt <= 3 else base
+	dc.tfContainer.colorTransform = _transform(text, get_setting(alpha_st + "_text_alpha"))
+	var shade = dc.get_meta(&"subtitle_shade") if dc.has_meta(&"subtitle_shade") else null
+	if shade != null and is_instance_valid(shade):   # the Subtitles look (extension subtitles): no box, its shade
+		shade.set_look(box, get_setting(alpha_st + "_box_alpha"))
+		return
 	var bg = dc.getChildAt(0)
 	var game_alpha: float = Dialogue.BOX_ALPHA / Dialogue.BOX_FILL_ALPHA[bg._char_id] 		if bg is FlashShape and Dialogue.BOX_FILL_ALPHA.has(bg._char_id) else 1.0   # as Dialogue._gotoStyle sets it
 	bg.colorTransform = _transform(box, game_alpha * get_setting(alpha_st + "_box_alpha"))
-	dc.tfContainer.colorTransform = _transform(text, get_setting(alpha_st + "_text_alpha"))
 
 
 ## A solid colour (null: the picture's own) at `alpha` times the picture's opacity.
