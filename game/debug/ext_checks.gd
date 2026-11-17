@@ -364,7 +364,13 @@ func _subtitles_checks() -> void:
 	_check("Subtitles: characters without a glyph in the game's dialogue font stay hidden", field._control.text == "a  b",
 		field._control.text)
 	field.text = old
+	st.set_setting("border", 3)
+	_check("Subtitle border: an outline around the letters", field.outline_size == 3
+		and field._control.label_settings.outline_size == 3, str(field.outline_size))
 	st.set_setting("look", "Classic box")
+	_check("Classic box: no subtitle border", field.outline_size == 0
+		and field._control.label_settings.outline_size == 0, str(field.outline_size))
+	st.set_setting("border", 0)
 	var r := Rect2(field.x, field.y, field.width, field.height)
 	_check("Classic box: the game's box and text back", boxes.call().size() > 0 and not boxes.call().has(false)
 		and not dc.has_meta(&"subtitle_shade") and field.glyph_font == null

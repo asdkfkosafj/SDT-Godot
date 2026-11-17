@@ -1,7 +1,8 @@
 extends SDTExtension
 ## Port addition (not a Loader mod): the "Subtitles" dialogue look. Her lines, his lines and her thoughts show as
 ## centred text over a soft dark shade along the bottom of the window, instead of the game's speech box: Inter
-## Medium (her lines warm white, his blue, thoughts italic), with a drop shadow. "Classic box" (or this extension
+## Medium (her lines warm white, his blue, thoughts italic), with a drop shadow and, if set, a dark border
+## (FlashTextField.outline_size). "Classic box" (or this extension
 ## off, as in Vanilla mode) shows the game's box.
 ##
 ## The text is still the game's dialogue field, typed out as before; only its look and place change. Characters
@@ -23,6 +24,7 @@ const MAX_LINES := 3
 const WIDTH := 680.0            # centred on the stage
 const BOTTOM := 24.0            # under the last line
 const SHADE_HEIGHT := 172.0     # at the default size; grows with the text
+const BORDER_COLOR := Color8(8, 12, 20)   # the text border (setting "border"), the shade's colour
 ## Text colour per style (frame label).
 const COLORS := {"speaking": 0xFFF7F0, "thought": 0xECEBF4, "him": 0xC4DCFF}
 const FRAME_LABEL := {1: "speaking", 2: "thought", 3: "him"}
@@ -50,6 +52,8 @@ func _setup() -> void:
 		"desc": "Subtitles: her and his lines as text over a soft shade along the bottom of the screen. Classic box: the game's speech box."})
 	setting("size", DEFAULT_SIZE, {"label": "Subtitle size", "min": 14, "max": 32,
 		"desc": "Text size of the subtitles."})
+	setting("border", 0, {"label": "Subtitle border", "min": 0, "max": 8,
+		"desc": "Width of a dark border around the letters of the subtitles (0: none). Makes them easier to read on light backgrounds."})
 
 
 func _enable() -> void:
@@ -62,6 +66,7 @@ func _enable() -> void:
 		"Subtitles: her and his lines as text over a soft shade along the bottom of the screen. Classic box: the game's speech box. A dialogue box mod shows the Classic box while it is on.",
 		LOOKS, func(): return LOOKS[1] if _box_mods else str(get_setting("look")), func(v: String): set_setting("look", v)))
 	menu_control("dialogue", "Dialogue", MenuSchema.setting_control(self, "size"))
+	menu_control("dialogue", "Dialogue", MenuSchema.setting_control(self, "border"))
 	var em = Extensions.get_extension("extramod")
 	_box_mods = em != null and em.enabled and em._dia_mods
 	_refresh()
@@ -136,6 +141,8 @@ func _style(dc: Dialogue, label: String) -> void:
 	tfc.filters = _filters
 	tfc.x = g.screenSize.x / 2.0
 	field.embolden = 0.0
+	field.outline_size = int(get_setting("border"))
+	field.outline_color = BORDER_COLOR
 	var fmt := {"size": _size(), "align": "center", "color": COLORS.get(label, COLORS["speaking"]), "leading": LEADING,
 		"letterSpacing": 0.0}
 	if field.embedFonts:   # not a font a dialogue chose (extramod [EM_FONT...])
@@ -206,6 +213,7 @@ func _classic(dc) -> void:
 	tfc.y = _orig["tfc"].y
 	var r: Rect2 = _orig["field"]
 	field.glyph_font = null
+	field.outline_size = 0
 	var fmt: Dictionary = dc.originalTextFormat.duplicate()
 	if not field.embedFonts:
 		fmt.erase("font")

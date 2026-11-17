@@ -20,6 +20,18 @@ var embolden := 0.0:
 		if value != embolden:
 			embolden = value
 			_apply_format()
+## Port extension (not in Flash): an outline around the glyphs (LabelSettings.outline_size, in the field's units),
+## e.g. the Subtitles dialogue look's text border. 0: none. Labels only.
+var outline_size := 0:
+	set(value):
+		if value != outline_size:
+			outline_size = value
+			_apply_format()
+var outline_color := Color.BLACK:
+	set(value):
+		if value != outline_color:
+			outline_color = value
+			_apply_format()
 var _font_size: float = 12.0
 var _color := Color.BLACK
 var _align := "left"
@@ -180,6 +192,9 @@ func _apply_format() -> void:
 		ls.font_size = int(round(_font_size))
 		ls.font_color = _color
 		ls.line_spacing = _leading
+		if outline_size > 0:
+			ls.outline_size = outline_size
+			ls.outline_color = outline_color
 		_control.label_settings = ls
 		_control.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if _word_wrap else TextServer.AUTOWRAP_OFF
 		_control.horizontal_alignment = _halign()
