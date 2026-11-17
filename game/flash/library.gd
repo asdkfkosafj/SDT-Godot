@@ -248,6 +248,33 @@ func is_texture_cached(img: String) -> bool:
 	return _textures.get(img) != null
 
 
+## The texture of img, waiting for its background load (request_texture) if one runs; the shapes waiting for it get
+## it too. A shape that needs a new picture starts its load with request_texture and calls this only when it draws, so
+## the loads of one change (a skin, a character) run on the worker threads side by side instead of one by one here.
+func finish_texture(img: String) -> Texture2D:
+	var t: Texture2D = _textures.get(img)
+	if t != null:
+		_touch(img)
+		return t
+	if _jobs.has(img):
+		Flash.hitch_note("texture wait")
+		return _finish_job(img)
+	if not _pending.has(img):
+		return get_texture(img)
+	Flash.hitch_note("texture wait")
+	var p := shape_path(img)
+	t = ResourceLoader.load_threaded_get(p)   # waits for the worker
+	if t == null:
+		t = load(p)
+	var waiters: Array = _pending[img]
+	_pending.erase(img)
+	_cache(img, t)
+	for w in waiters:
+		if is_instance_valid(w):
+			w._texture_ready(img, t)
+	return t
+
+
 ## Waits for every background load to finish (before quitting: worker threads must not outlive the renderer).
 static func drain_streaming() -> void:
 	for lib in _streaming:
@@ -275,6 +302,8 @@ static func poll_streaming() -> void:
 
 
 func _poll_one(img: String) -> bool:
+	if not _pending.has(img):   # taken already (finish_texture)
+		return true
 	if _jobs.has(img):
 		if not WorkerThreadPool.is_task_completed(_jobs[img][0]):
 			return false

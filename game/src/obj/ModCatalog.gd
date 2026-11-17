@@ -59,7 +59,6 @@ var _busy := false
 var _names: Dictionary = {}   # lower-case file path -> [name, slot] from names.txt
 var _scanned := false         # every mod has been looked at
 var _wanted: Array = []       # [picker, name, callback] asked for before the scan finished (find_named)
-var _due := 0                 # find_named answers found but not called yet (they run deferred)
 var _known: Dictionary = {}   # lower-case paths of the files scanned, so rescan() only adds new ones
 var _total := 0               # .swf files queued by the current scan (the loading notice's count)
 var _notice: Node = null      # the "Loading mods" notice (mod_load_notice.gd) while a scan runs
@@ -363,8 +362,7 @@ func _answer_wanted(first_new: int) -> void:
 			var e: Dictionary = entries[i]
 			if n in e.get("names", []) and (w[0] == null or is_same(e.get("helper", e.get("picker")), w[0])):
 				_wanted.erase(w)
-				_due += 1
-				_answer.call_deferred(w[2], e)
+				_queue_answer(w[0], w[2], e)
 				break
 
 
@@ -526,21 +524,47 @@ func find_named(picker, name: String, found: Callable) -> void:
 	var n := g.dataName(name)
 	for e in entries:
 		if n in e.get("names", []) and (picker == null or is_same(e.get("helper", e.get("picker")), picker)):
-			# after the code has finished loading, as the original's mods arrived (loading its hair clears hair
-			# costumes, e.g. an earring made as one)
-			_due += 1
-			_answer.call_deferred(found, e)
+			_queue_answer(picker, found, e)
 			return
 
 
-func _answer(found: Callable, e: Dictionary) -> void:
-	found.call(e)
-	_due -= 1
+## Mods found for a character code, put on a few per frame (_put_on), after the code has finished loading, as the
+## original's mods arrived (loading its hair clears hair costumes, e.g. an earring made as one). One mod takes 4-40 ms
+## to put on; a character with several of them put on all at once was a 50-160 ms frame.
+var _answers: Array = []   # [picker, found, entry], oldest first
+var _put_on_queued := false
+var _putting_on := false
+const PUT_ON_BUDGET_US := 4000   # per frame; at least one mod per frame
+
+
+func _queue_answer(picker, found: Callable, e: Dictionary) -> void:
+	if picker != null:   # a newer request for the same picker replaces one still waiting
+		_answers = _answers.filter(func(a): return not is_same(a[0], picker))
+	_answers.append([picker, found, e])
+	if not _put_on_queued:   # from the next frame on: the frame of the code has its cost already
+		_put_on_queued = true
+		Flash.get_tree().process_frame.connect(_put_on, CONNECT_ONE_SHOT)
+
+
+func _put_on() -> void:
+	_put_on_queued = false
+	var t0 := Time.get_ticks_usec()
+	while not _answers.is_empty():
+		var a: Array = _answers.pop_front()
+		_putting_on = true   # still pending while it goes on (a save it starts waits for it)
+		a[1].call(a[2])
+		_putting_on = false
+		# tests that compare runs frame by frame put them all on at once (the time limit would make runs differ)
+		if Time.get_ticks_usec() - t0 >= PUT_ON_BUDGET_US and not Flash._deterministic:
+			break
+	if not _answers.is_empty():   # the rest in the next frames
+		_put_on_queued = true
+		Flash.get_tree().process_frame.connect(_put_on, CONNECT_ONE_SHOT)
 
 
 ## Whether mods a character code named are still to be put on (find_named): her code lacks them until then.
 func is_pending() -> bool:
-	return _due > 0 or not _wanted.is_empty()
+	return _putting_on or not _answers.is_empty() or not _wanted.is_empty()
 
 
 ## Looks at the mods folders again (files added since, e.g. by LoaderImport): new mods are added, names.txt is read
@@ -573,6 +597,7 @@ func has_named(picker, name: String) -> bool:
 ## character is loading).
 func forget_named(picker) -> void:
 	_wanted = _wanted.filter(func(w): return picker != null and not is_same(w[0], picker))
+	_answers = _answers.filter(func(a): return picker != null and not is_same(a[0], picker))
 
 
 ## A dynamic hair item hanging from her collar. Its own mod type, as in dynamicHairExtender: it is worn with her hair,

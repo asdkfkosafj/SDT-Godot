@@ -85,9 +85,10 @@ class AmbientPainter extends Node2D:
 		draw_set_transform_matrix(xf)
 		if o is FlashShape:
 			var s := o as FlashShape
-			if s._texture != null and not s._draw_entry.is_empty():
+			var tex := s.texture_now()
+			if tex != null and not s._draw_entry.is_empty():
 				var e: Dictionary = s._draw_entry
-				draw_texture_rect(s._texture, Rect2(Vector2(e["x"], e["y"]), Vector2(s._texture.get_size()) / s._library.scale),
+				draw_texture_rect(tex, Rect2(Vector2(e["x"], e["y"]), Vector2(tex.get_size()) / s._library.scale),
 					false, tint)
 		elif o is FlashBitmap:
 			var b := o as FlashBitmap

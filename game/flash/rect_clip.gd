@@ -54,7 +54,7 @@ static func rect_of(mask: FlashDisplayObject) -> Rect2:
 			and mask._graphics == null:
 		shape = mask._children[0]
 		offset = shape.transform
-	if shape == null or shape._texture == null or offset.x.y != 0.0 or offset.y.x != 0.0:
+	if shape == null or (shape._texture == null and shape._await == "") or offset.x.y != 0.0 or offset.y.x != 0.0:
 		return Rect2()
 	if not _is_opaque_rect(shape):
 		return Rect2()

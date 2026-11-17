@@ -42,7 +42,7 @@ func set_ratio(ratio: int) -> void:
 	_entry = e
 	_content_changed()
 	if load_now:
-		_show(e, _library.get_texture(e["img"]))
+		_show_when_loaded(e)
 		return
 	var t: Texture2D = _library.request_texture(e["img"], self)
 	if t != null:
@@ -114,16 +114,50 @@ func _nearest_ratio(ratio: int):
 func _set_entry(e: Dictionary) -> void:
 	_entry = e
 	_content_changed()
-	_show(e, _library.get_texture(e["img"]) if e.has("img") else null)
+	if e.has("img"):
+		_show_when_loaded(e)
+	else:
+		_show(e, null)
+
+
+## Shows e's picture: at once if its texture is in memory, else its load starts on a worker thread and the shape
+## waits for it when it next draws (texture_now). Flash shows a new picture in the same frame, so this never shows
+## the old one meanwhile; the gain is that the loads of one change run side by side (FlashLibrary.finish_texture).
+func _show_when_loaded(e: Dictionary) -> void:
+	var t: Texture2D = _library.request_texture(e["img"], self)
+	if t != null:
+		_show(e, t)
+		return
+	_draw_entry = e
+	_texture = null
+	_await = e["img"]
+	queue_redraw()
+
+
+var _await := ""   # image whose background load the next draw waits for (_show_when_loaded)
+
+
+## The texture to draw, waiting for its load if it is still on a worker thread. Code that draws a shape's picture
+## itself (masks, clips) reads it here, not from _texture.
+func texture_now() -> Texture2D:
+	if _await != "":
+		var img := _await
+		var t: Texture2D = _library.finish_texture(img)   # also calls _texture_ready on this shape
+		if _await == img:
+			_await = ""
+			_texture = t
+	return _texture
 
 
 ## The library switched the file of the entry's picture (FlashLibrary.use_drawn_fills): load it again.
 func _picture_changed() -> void:
 	if _entry.has("img"):
+		_await = ""
 		_show(_entry, _library.get_texture(_entry["img"]))
 
 
 func _show(e: Dictionary, t: Texture2D) -> void:
+	_await = ""
 	if t == _texture and e == _draw_entry:
 		return
 	_draw_entry = e
@@ -132,7 +166,7 @@ func _show(e: Dictionary, t: Texture2D) -> void:
 
 
 func _draw() -> void:
-	if _texture == null:
+	if texture_now() == null:
 		return
 	var s: float = _library.scale
 	draw_texture_rect(_texture, Rect2(_draw_entry["x"], _draw_entry["y"], _texture.get_width() / s, _texture.get_height() / s), false)
