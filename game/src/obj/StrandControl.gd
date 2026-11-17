@@ -12,6 +12,7 @@ var strands: Array = []
 var cumStrands: Array = []
 var lockedStrands: Array = []
 const maxStrands := 20
+const MAX_SPLIT_STRANDS := 600   # port: splits make no new strand above this many (native: MAX_STRANDS in fluids.cpp)
 var cumMinThickness := 1.0   # port: a cum strand link is drawn at least this thick (the game: 1; morecumspurts)
 
 static var native_enabled: bool = ClassDB.class_exists(&"SDTFluids") and not "--nonative" in OS.get_cmdline_user_args()

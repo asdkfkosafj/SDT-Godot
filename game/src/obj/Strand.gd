@@ -228,6 +228,11 @@ func updateStrand() -> void:
 		if distSq > maxDist and i > 0:
 			if distSplitDelay == 0:
 				distSplitDelay = 10
+				if strandLength == 2:
+					# port: a 2-link strand pulled apart snaps (as in the native SDTFluids). The original split it into
+					# two 2-link strands that, on her fast-moving head, were pulled apart again and doubled.
+					killMe()
+					break
 				splitStrand(i)
 		if i < strandLength:
 			if link.y < highest:
@@ -516,7 +521,8 @@ func splitStrand(at: int, addMiddle: bool = true, removeFirst: bool = false) -> 
 		head.append(middle)
 		if not removeFirst:
 			links.push_front(middle)
-	if head.size() > 1:
+	# port: no new strand above StrandControl.MAX_SPLIT_STRANDS (as in the native SDTFluids), the head part goes away
+	if head.size() > 1 and g.strandControl.strands.size() + g.strandControl.cumStrands.size() < StrandControl.MAX_SPLIT_STRANDS:
 		g.strandControl.addStrand(self, head, lM)
 	strandLength = links.size()
 	setNeighbours()

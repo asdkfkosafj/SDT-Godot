@@ -12,7 +12,8 @@ Currently native:
   `hit_flat` tests against a tree flattened once per tick (many tests of the same body part).
 - `SDTFluids` (fluids.cpp) - the spit / cum strands simulated as plain data and drawn as one mesh per strand layer
   (used by StrandControl, with NativeStrand handles for the game); a layer whose mesh input did not change is not
-  rebuilt (`get_mesh_changed`).
+  rebuilt (`get_mesh_changed`). Unlike the original, a 2-link strand pulled apart snaps, and splits make no new
+  strand above 600 (the original's splits could double strands to tens of thousands in fast strokes).
 - `SDTSweat` (sweat.cpp) - the sweat droplets, drawn by one SweatBatch node per body part (used by Sweat.gd).
 - `SDTCrashNote` (crash_note.cpp) - notes which plugin's code was running when the game crashed (Windows: a
   vectored exception handler), so the next start can switch it off (game/src/ext/extensions.gd, "guard").

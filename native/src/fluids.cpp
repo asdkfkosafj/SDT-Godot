@@ -16,9 +16,14 @@
 // The logic follows the game's Strand / StrandLink (see their GDScript ports, which remain the fallback), with
 // these deliberate differences: neighbours are always the previous and next link (the original's setNeighbours
 // left one link with stale neighbours), stored inter points are gone (never created), and a strand stays in the
-// list it was created in (the original delisted by its cum flag, which spit drool changes).
+// list it was created in (the original delisted by its cum flag, which spit drool changes). Two port fixes stop a
+// runaway of split strands (thousands of them, single-digit fps): a 2-link strand pulled apart snaps instead of
+// splitting into two 2-link strands (update), and no split makes a new strand while MAX_STRANDS live (split).
 
 namespace {
+
+// Splits make no new strand above this many (alive and just killed). Normal play stays well under 100.
+constexpr int MAX_STRANDS = 600;
 
 float randf() {
 	return (float)UtilityFunctions::randf();
@@ -491,7 +496,14 @@ int SDTFluids::split(int id, int at, bool add_middle, bool remove_first) {
 		}
 	}
 	s.links = std::move(tail);
-	if (head.size() > 1) {
+	if (head.size() > 1 && (int)order.size() >= MAX_STRANDS) {
+		// port: the cap (see the top of the file); the head part goes away
+		for (const Link &l : head) {
+			if (l.on_eye) {
+				event(EV_EYE_CLEAR);
+			}
+		}
+	} else if (head.size() > 1) {
 		// StrandControl.addStrand: the head becomes a strand of its own (cloned links, same age)
 		int layer = s.layer, age = s.age, age_max = s.age_max;
 		bool cum = s.cum, listed = s.listed_cum;
@@ -649,6 +661,13 @@ void SDTFluids::update(int id) {
 		}
 		if (dist_sq > s.max_dist && i > 0 && s.dist_split_delay == 0) {
 			s.dist_split_delay = 10;
+			if (s.links.size() == 2) {
+				// port: a 2-link strand pulled apart snaps and goes away. The original split it into two 2-link
+				// strands (each with a new middle link); on her fast-moving head both halves were pulled apart again
+				// 10 ticks later, so they doubled until thousands of them died of age together.
+				kill(id);
+				break;
+			}
 			split(id, i);
 		}
 		n = (int)s.links.size();
