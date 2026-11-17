@@ -616,45 +616,23 @@ func _show() -> void:
 		_scroll.scroll_vertical = 0
 
 
-## One section's (or the search results') cards, added to the content and kept for the next visit. The cards are
-## made now; their rows are built a few per frame (_pump), so opening a big section never stalls a frame. A section
-## with "fold" ({group title: folded at first}) gets a fold button and a reset button on each card (MenuFold; not in
-## search results).
+## One section's (or the search results') view, added to the content and kept for the next visit. Its cards and
+## rows are made a few per frame (_pump), so opening a big section never stalls a frame: each card just before its
+## first row (a section of ten folding cards took ~9 ms at once). A section with "fold" ({group title: folded at
+## first}) gets a fold button and a reset button on each card (MenuFold; not in search results).
 func _build_view(groups: Array, empty_text: String, sec := {}) -> Control:
 	var view := VBoxContainer.new()
 	view.add_theme_constant_override("separation", 6)
 	view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var pending: Array = []   # [card's VBoxContainer, spec]
+	var pending: Array = []   # [card holder, spec]; the holder [card's body] is filled by the card's own item
 	for grp in groups:
 		var specs: Array = grp["controls"].filter(_shown)
 		if specs.is_empty():
 			continue
-		var card := PanelContainer.new()
-		var cv := VBoxContainer.new()
-		cv.add_theme_constant_override("separation", 3)
-		card.add_child(cv)
-		var h := HBoxContainer.new()
-		# title, count and tag wrap (the tag goes to a second line) instead of widening the dock past the window
-		var title := HFlowContainer.new()
-		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		title.add_theme_constant_override("h_separation", 5)
-		title.add_theme_constant_override("v_separation", 2)
-		title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		h.add_child(title)
-		var hl := Label.new()
-		hl.text = str(grp["title"]).to_upper()
-		hl.add_theme_font_size_override("font_size", MenuTheme.HEADING)
-		hl.add_theme_color_override("font_color", MenuTheme.MUTED)
-		title.add_child(hl)
-		if grp["owner"] != "":
-			title.add_child(MenuWidgets.tag(grp["owner"]))
-		cv.add_child(h)
-		view.add_child(card)
-		var body: VBoxContainer = cv
-		if sec.has("fold"):
-			body = MenuFold.card(h, hl, cv, sec, grp, specs, _refresh_rows)
+		var holder := [null]
+		pending.append([holder, {"_card": grp, "_specs": specs, "_sec": sec}])
 		for spec in specs:
-			pending.append([body, spec])
+			pending.append([holder, spec])
 	if pending.is_empty() and empty_text != "":
 		var l := Label.new()
 		l.text = empty_text
@@ -683,11 +661,43 @@ func _pump(view: Control, budget: int) -> bool:
 	var t0 := Time.get_ticks_usec()
 	while not pending.is_empty() and Time.get_ticks_usec() - t0 < budget:
 		var item: Array = pending.pop_front()
+		if item[1].has("_card"):
+			item[0][0] = _make_card(view, item[1]["_card"], item[1]["_specs"], item[1]["_sec"])
+			continue
 		var row := MenuWidgets.build(item[1], _show_help)
-		item[0].add_child(row)
+		item[0][0].add_child(row)
 		rows.append(row)
 		row.get_meta("refresh").call()
 	return pending.is_empty()
+
+
+## A group's card (title, owner tag, fold and reset buttons when the section folds), added to view; returns the
+## container its rows go in.
+func _make_card(view: Control, grp: Dictionary, specs: Array, sec: Dictionary) -> VBoxContainer:
+	var card := PanelContainer.new()
+	var cv := VBoxContainer.new()
+	cv.add_theme_constant_override("separation", 3)
+	card.add_child(cv)
+	var h := HBoxContainer.new()
+	# title, count and tag wrap (the tag goes to a second line) instead of widening the dock past the window
+	var title := HFlowContainer.new()
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_constant_override("h_separation", 5)
+	title.add_theme_constant_override("v_separation", 2)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(title)
+	var hl := Label.new()
+	hl.text = str(grp["title"]).to_upper()
+	hl.add_theme_font_size_override("font_size", MenuTheme.HEADING)
+	hl.add_theme_color_override("font_color", MenuTheme.MUTED)
+	title.add_child(hl)
+	if grp["owner"] != "":
+		title.add_child(MenuWidgets.tag(grp["owner"]))
+	cv.add_child(h)
+	view.add_child(card)
+	if sec.has("fold"):
+		return MenuFold.card(h, hl, cv, sec, grp, specs, _refresh_rows)
+	return cv
 
 
 ## Builds everything pending at once (tests).

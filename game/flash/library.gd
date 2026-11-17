@@ -33,6 +33,7 @@ var _all_decoded := false        # decode_all has run: it is for a mod's first u
 ## are streamed: loaded on worker threads on first use and kept in an LRU cache of at most morph_cache_bytes.
 static var morph_cache_bytes: int = 1024 * 1048576
 static var _streaming: Array[FlashLibrary] = []   # libraries with loads in flight
+static var frame_wait_us := 0   # time finish_texture waited in the current frame (the frame monitor's HITCH lines)
 var _lru: Dictionary = {}        # img -> bytes, least recently used first (insertion order)
 var _lru_bytes := 0
 var _pending: Dictionary = {}    # img -> Array of FlashShape waiting for it
@@ -235,6 +236,8 @@ func request_texture(img: String, waiter: Object = null) -> Texture2D:
 			_jobs[img] = [WorkerThreadPool.add_task(func(): holder[0] = _decode(p, fix)), holder]
 		elif ResourceLoader.load_threaded_request(p, "Texture2D") != OK:
 			return get_texture(img)
+		else:
+			_rl_requested[img] = true
 		Flash.prof_count("#texture loads (background)")
 		_pending[img] = []
 		if _streaming.is_empty() or not _streaming.has(self):
@@ -242,6 +245,36 @@ func request_texture(img: String, waiter: Object = null) -> Texture2D:
 	if waiter != null and not _pending[img].has(waiter):
 		_pending[img].append(waiter)
 	return null
+
+
+## For a picture needed in this frame (FlashShape._show_when_loaded): like request_texture, but as a high-priority
+## worker task. Godot's threaded loads run on a few low-priority workers, behind the morph frames streaming in while she
+## moves: a needed picture waited there (8 of them took 50 ms in play). A background request of the same picture that
+## is already queued is left to finish on its own (_stale).
+func request_now(img: String, waiter: Object = null) -> Texture2D:
+	if not _threaded or _decoded.has(img) or _textures.get(img) != null or _jobs.has(img):
+		return request_texture(img, waiter)
+	_used[img] = true
+	var p := shape_path(img)
+	var holder := [null]
+	if p.begins_with("res://"):
+		_jobs[img] = [WorkerThreadPool.add_task(func(): holder[0] = ResourceLoader.load(p, "Texture2D",
+			ResourceLoader.CACHE_MODE_IGNORE), true), holder]
+	else:
+		var fix := not edges_fixed
+		_jobs[img] = [WorkerThreadPool.add_task(func(): holder[0] = _decode(p, fix), true), holder]
+	Flash.prof_count("#texture loads (needed now)")
+	if not _pending.has(img):
+		_pending[img] = []
+	if not _streaming.has(self):
+		_streaming.append(self)
+	if waiter != null and not _pending[img].has(waiter):
+		_pending[img].append(waiter)
+	return null
+
+
+var _rl_requested: Dictionary = {}    # img -> true: a ResourceLoader threaded request (background) runs for it
+var _stale: PackedStringArray = []    # paths of such requests whose picture came another way: fetched when done
 
 
 func is_texture_cached(img: String) -> bool:
@@ -256,14 +289,19 @@ func finish_texture(img: String) -> Texture2D:
 	if t != null:
 		_touch(img)
 		return t
+	var t0 := Time.get_ticks_usec()
 	if _jobs.has(img):
 		Flash.hitch_note("texture wait")
-		return _finish_job(img)
+		t = _finish_job(img)
+		frame_wait_us += Time.get_ticks_usec() - t0
+		return t
 	if not _pending.has(img):
 		return get_texture(img)
 	Flash.hitch_note("texture wait")
 	var p := shape_path(img)
 	t = ResourceLoader.load_threaded_get(p)   # waits for the worker
+	frame_wait_us += Time.get_ticks_usec() - t0
+	_rl_requested.erase(img)
 	if t == null:
 		t = load(p)
 	var waiters: Array = _pending[img]
@@ -283,8 +321,12 @@ static func drain_streaming() -> void:
 				WorkerThreadPool.wait_for_task_completion(lib._jobs[img][0])
 			else:
 				ResourceLoader.load_threaded_get(lib.shape_path(img))
+		for p in lib._stale:
+			ResourceLoader.load_threaded_get(p)
 		lib._jobs.clear()
 		lib._pending.clear()
+		lib._rl_requested.clear()
+		lib._stale.clear()
 	_streaming.clear()
 
 
@@ -295,7 +337,9 @@ static func poll_streaming() -> void:
 		var lib := _streaming[i]
 		for img in lib._pending.keys():
 			lib._poll_one(img)
-		if lib._pending.is_empty():
+		if not lib._stale.is_empty():
+			lib._drop_stale()
+		if lib._pending.is_empty() and lib._stale.is_empty():
 			_streaming.remove_at(i)
 		else:
 			i += 1
@@ -314,6 +358,7 @@ func _poll_one(img: String) -> bool:
 	if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
 		return false
 	var t: Texture2D = ResourceLoader.load_threaded_get(p) if st == ResourceLoader.THREAD_LOAD_LOADED else null
+	_rl_requested.erase(img)
 	var waiters: Array = _pending[img]
 	_pending.erase(img)
 	if t == null:
@@ -325,17 +370,33 @@ func _poll_one(img: String) -> bool:
 	return true
 
 
-## A mod image's worker decode (request_texture): waits for it if it is still running, makes the texture, hands it to
-## the shapes waiting for it.
-var _jobs: Dictionary = {}   # img -> [WorkerThreadPool task id, [Image]]
+## Fetches (and drops) the background requests in _stale that have finished: their picture came from request_now.
+func _drop_stale() -> void:
+	var left := PackedStringArray()
+	for p in _stale:
+		if ResourceLoader.load_threaded_get_status(p) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			left.append(p)
+		else:
+			ResourceLoader.load_threaded_get(p)
+	_stale = left
+
+
+## A worker job (a mod image's decode, or request_now's load): waits for it if it is still running, makes the texture,
+## hands it to the shapes waiting for it.
+var _jobs: Dictionary = {}   # img -> [WorkerThreadPool task id, [Image or Texture2D]]
 
 
 func _finish_job(img: String) -> Texture2D:
 	var job: Array = _jobs[img]
 	_jobs.erase(img)
 	WorkerThreadPool.wait_for_task_completion(job[0])
-	var image: Image = job[1][0]
-	var t: Texture2D = ImageTexture.create_from_image(image) if image != null else null
+	var r = job[1][0]
+	var t: Texture2D = r if r is Texture2D else (ImageTexture.create_from_image(r) if r != null else null)
+	if t == null and shape_path(img).begins_with("res://"):
+		t = load(shape_path(img))
+	if _rl_requested.has(img):   # a background request of it still runs: dropped when it is done
+		_rl_requested.erase(img)
+		_stale.append(shape_path(img))
 	_cache(img, t)
 	var waiters: Array = _pending.get(img, [])
 	_pending.erase(img)

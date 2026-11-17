@@ -172,7 +172,10 @@ func loadDataPairs(pairs: Array) -> void:
 			"hisBody":
 				for i in bodyNameList.size():
 					if g.dataName(pair[1]) == g.dataName(bodyNameList[i]):
-						setBody(i)
+						# port: the first body (Male) is set again below once the penis and balls are in (as in the
+						# original); while he has it already, setting it here too only rebuilt it twice (~6 ms)
+						if i > 0 or currentBodyID != 0:
+							setBody(i)
 						bodySet = i > 0
 						break
 			"hisPenis":

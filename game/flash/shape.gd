@@ -124,7 +124,7 @@ func _set_entry(e: Dictionary) -> void:
 ## waits for it when it next draws (texture_now). Flash shows a new picture in the same frame, so this never shows
 ## the old one meanwhile; the gain is that the loads of one change run side by side (FlashLibrary.finish_texture).
 func _show_when_loaded(e: Dictionary) -> void:
-	var t: Texture2D = _library.request_texture(e["img"], self)
+	var t: Texture2D = _library.request_now(e["img"], self)
 	if t != null:
 		_show(e, t)
 		return

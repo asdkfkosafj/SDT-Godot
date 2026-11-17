@@ -564,6 +564,7 @@ func _setup_frame_monitor() -> void:
 		n.process_priority = -1000000 if k == "process_first" else 1000000
 		n.process_physics_priority = -1000000
 		add_child(n)
+	Input.joy_connection_changed.connect(func(_dev: int, on: bool): hitch_note("controller connected" if on else "controller disconnected"))
 	RenderingServer.frame_pre_draw.connect(func(): _ph["pre_draw"] = Time.get_ticks_usec())
 	RenderingServer.frame_post_draw.connect(_end_frame)
 	_log_system.call_deferred()
@@ -640,6 +641,8 @@ func _end_frame() -> void:
 	_ph_prev_end = now
 	var notes := _hitch_notes
 	_hitch_notes = {}
+	var wait_us := FlashLibrary.frame_wait_us
+	FlashLibrary.frame_wait_us = 0
 	if prev_end == 0 or ph.has("skip"):
 		return
 	var total := now - prev_end
@@ -648,9 +651,11 @@ func _end_frame() -> void:
 	# phase durations in order; missing phases (no tick this frame) are skipped
 	var parts: Array = []
 	var last := prev_end
-	for k in ["first_physics", "physics_start", "tick_start", "tick_end", "process_first", "process_last", "pre_draw"]:
+	if ph.has("input") and ph["input"] > ph.get("first_physics", ph.get("process_first", ph["input"])):
+		ph.erase("input")   # handed out later in the frame (not by the OS event pass): not a phase boundary
+	for k in ["input", "first_physics", "physics_start", "tick_start", "tick_end", "process_first", "process_last", "pre_draw"]:
 		if ph.has(k):
-			parts.append([k, ph[k] - last])
+			parts.append([("input+" + k) if k != "input" and last == ph.get("input", -1) else k, ph[k] - last])
 			last = ph[k]
 	parts.append(["post_draw", now - last])
 	var input_us := _frame_input_us
@@ -671,6 +676,10 @@ func _end_frame() -> void:
 		line += "; input handlers %.1f ms" % (input_us / 1000.0)
 		if input_max != "":
 			line += " (slowest: %s %.1f ms)" % [input_max, input_max_us / 1000.0]
+		if wait_us > 0:
+			line += "; waited %.1f ms for pictures" % (wait_us / 1000.0)
+		if not _active_channels.is_empty():
+			line += "; %d sounds playing" % _active_channels.size()
 		if not notes.is_empty():
 			line += "; " + str(notes)
 		print(line)
@@ -684,8 +693,24 @@ func _end_frame() -> void:
 			_prof_frames["worst frame ms"] = total / 1000.0
 
 
+## Window and app events noted on HITCH lines (_notification).
+const _WINDOW_NOTES := {
+	NOTIFICATION_APPLICATION_FOCUS_OUT: "app focus out", NOTIFICATION_APPLICATION_FOCUS_IN: "app focus in",
+	NOTIFICATION_WM_WINDOW_FOCUS_OUT: "window focus out", NOTIFICATION_WM_WINDOW_FOCUS_IN: "window focus in",
+	NOTIFICATION_WM_MOUSE_ENTER: "mouse entered the window", NOTIFICATION_WM_MOUSE_EXIT: "mouse left the window",
+	NOTIFICATION_WM_SIZE_CHANGED: "window size changed", NOTIFICATION_WM_POSITION_CHANGED: "window moved",
+	NOTIFICATION_APPLICATION_PAUSED: "app paused", NOTIFICATION_APPLICATION_RESUMED: "app resumed",
+}
+
+
+## Phase names on HITCH lines and in the --profile frame statistics. Godot runs a frame as: the end of the previous
+## frame (audio server update, frame pacing), the OS event pass (window messages; the frame's input is handed out at
+## its end), the physics steps (ticks), _process, deferred calls, then the render.
 static func _phase_label(k: String) -> String:
+	if k.begins_with("input+"):   # the phase that starts with the frame's input
+		return "input" + ("" if k == "input+first_physics" else ", then " + _phase_label(k.substr(6)))
 	match k:
+		"input": return "end of last frame + OS events"
 		"first_physics": return "wait/begin (OS events, input)"
 		"physics_start": return "earlier ticks"
 		"tick_start": return "pre-tick"
@@ -1081,6 +1106,8 @@ func _input(event: InputEvent) -> void:
 	if stage == null:
 		return
 	var t0 := Time.get_ticks_usec()
+	if not _ph.has("input"):   # frame monitor: Godot hands out the frame's input at the end of its OS event pass
+		_ph["input"] = t0
 	_handle_input(event)
 	if event is InputEventMouseMotion and not _gui_wants_motion(event):
 		get_viewport().set_input_as_handled()
@@ -1169,6 +1196,8 @@ func _handle_input(event: InputEvent) -> void:
 
 
 func _notification(what: int) -> void:
+	if _WINDOW_NOTES.has(what):   # frame monitor: window events in a slow frame are named on its HITCH line
+		hitch_note(_WINDOW_NOTES[what])
 	if what == NOTIFICATION_WM_MOUSE_EXIT and stage != null:
 		stage.dispatchEvent(FlashEvent.new(FlashEvent.MOUSE_LEAVE))
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
