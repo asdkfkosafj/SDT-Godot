@@ -319,6 +319,7 @@ The value points in the game, with the field that keeps the result for code that
 | `Him.penisAngle` | his penis's angle this tick, after easing and the game's -10..25 limits (`him.penisTilt`: the eased angle before them) | `him.penis.rotation_degrees` |
 | `Him.penisMask` | the mask that hides his penis inside her mouth, every tick: `{x, scale}` (the game's x: -100 + his depth x 200 in her mouth, -100 hides it all; scale 1) | `him.penisMask` |
 | `Him.mouthSmoothing` | how much her mouth holds his penis's tilt while he is in it (0..1, the game's rises by 0.4 a tick) | `him.mouthConstraintSmoothing` |
+| `Him.cumCaught` | whether this link of a spurt stays in (a condom: `false` in the game), once per link (every `linkFreq` ticks while he spurts): a caught link makes no strand and does not fill her mouth; the cum sound (the in-mouth one) and her reactions stay, and the hook point `Him.catchCum` (after, args `[mass]`: what the strand link would weigh, 0.3-0.7; one load is 15-25 of mass) reports it | |
 | `Him.ballScale` | his balls' scale (his ball size), when it is set: after changing its modifiers call `g.him.updateBalls()` | `him.balls.scaleX` / `scaleY` |
 | `Him.ballsOffset` | how far his balls sit from their place in the art (`him.ballsHome`; `Vector2.ZERO`), when his ball size is set: `g.him.updateBalls()` as above | `him.balls.x` / `y` |
 | `Her.pullOff` | how hard she pulls back off him and its power, every tick after the game's update: `{pull, power}` (`her.pullOff`, `her.pullOffPower["current"]`; return a new one) | `her.pullOff` |

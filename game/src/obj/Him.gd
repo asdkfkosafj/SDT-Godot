@@ -656,41 +656,48 @@ func move(p: float, mx: float, my: float) -> void:
 			if bmTimer > 0:
 				bmTimer -= 1
 				if bmTimer % linkFreq == 0:
+					var caught := _cumCaught()   # caught (a condom): like a spurt in her mouth that does not fill it
+					var into := inMouth or caught
 					if startedSpurt:
 						timerScale = float(bmTimer) / bmTimerStart
 						if spurting:
 							twitchFactor += 0.2
-							if inMouth:
+							if into:
 								g.soundControl.switchCumInside()
 								spurting = false
-								g.her.fillMouth()
+								if not caught:
+									g.her.fillMouth()
 								currentSpurt.detachSourceLink(Vector2(0, 0), 0)
 							else:
 								startSpeed = Vector2(cos(bmSpurtAngle) * (randomSpurtSpeed - randf() * 2.0 + absf(my)),
 									sin(bmSpurtAngle) * (randomSpurtSpeed - randf() * 2.0 + absf(my)))
 								currentSpurt.insertLink(startSpeed, randomSpurtCollisionDelay + int(floor(timerScale * 2.0)), g.randomCumMass())
 								g.soundControl.adjustCumVolume(timerScale, 0.3)
-						elif not inMouth:
+						elif not into:
 							g.soundControl.switchCumOutside()
 							currentSpurt = g.strandControl.newCumStrand(tipMid, penis)
 							spurting = true
 						else:
 							g.soundControl.adjustCumVolume(timerScale, 0.2)
-							g.her.fillMouth()
+							if not caught:
+								g.her.fillMouth()
 					else:
-						if not inMouth:
+						if not into:
 							currentSpurt = g.strandControl.newCumStrand(tipMid, penis)
 							startedSpurt = true
 							spurting = true
 						else:
-							g.her.lastSpurt()
+							if not caught:
+								g.her.lastSpurt()
 							startedSpurt = true
 						g.her.ejaculating()
-						g.soundControl.playCum(inMouth)
+						g.soundControl.playCum(into)
 						playingCumSound = true
 						if not twitching:
 							twitchFactor = randf()
 							twitching = true
+					if caught:
+						catchCum(g.randomCumMass())
 			elif spurting:
 				currentSpurt.detachSourceLink(Vector2(0, 0), 0)
 				spurting = false
@@ -703,39 +710,45 @@ func move(p: float, mx: float, my: float) -> void:
 			spurtTimer -= 1
 			twitchFactor += 0.2
 			if spurtTimer % linkFreq == 0:
+				var caught := _cumCaught()   # caught (a condom): like a spurt in her mouth that does not fill it
+				var into := inMouth or caught
 				if startedSpurt:
 					timerScale = float(spurtTimer) / spurtTimerStart
 					if spurting:
-						if inMouth:
+						if into:
 							g.soundControl.switchCumInside()
 							spurting = false
-							g.her.fillMouth()
+							if not caught:
+								g.her.fillMouth()
 							currentSpurt.detachSourceLink(Vector2(0, 0), 0)
 						else:
 							var ang := randomSpurtAngle + sin(timerScale * PI) * randomSpurtAngleRange
 							startSpeed = Vector2(cos(ang) * (randomSpurtSpeed - randf()), sin(ang) * (randomSpurtSpeed - randf()))
 							currentSpurt.insertLink(startSpeed, randomSpurtCollisionDelay + int(floor(timerScale * 2.0)), g.randomCumMass())
 							g.soundControl.adjustCumVolume(timerScale, 0.3)
-					elif not inMouth:
+					elif not into:
 						g.soundControl.switchCumOutside()
 						currentSpurt = g.strandControl.newCumStrand(tipMid, penis)
 						spurting = true
 					else:
 						g.soundControl.adjustCumVolume(timerScale, 0.2)
-						g.her.fillMouth()
+						if not caught:
+							g.her.fillMouth()
 				else:
-					if not inMouth:
+					if not into:
 						currentSpurt = g.strandControl.newCumStrand(tipMid, penis)
 						startedSpurt = true
 						spurting = true
 					else:
 						startedSpurt = true
 					g.her.ejaculating()
-					g.soundControl.playCum(inMouth)
+					g.soundControl.playCum(into)
 					playingCumSound = true
 					if not twitching:
 						twitchFactor = randf() + ejaculation.size() / 3.0
 						twitching = true
+				if caught:
+					catchCum(g.randomCumMass())
 		else:
 			if spurting:
 				currentSpurt.detachSourceLink(Vector2(cos(randomSpurtAngle) * randomSpurtSpeed, sin(randomSpurtAngle) * randomSpurtSpeed), 0)
@@ -829,6 +842,22 @@ func nextSpurt() -> void:
 	g.her.tongueContainer.tongue.ejaculating()
 	if Hooks.has(&"Him.nextSpurt"):   # HOOK
 		Hooks.after(&"Him.nextSpurt", self)
+
+
+## Port extension: whether this link of a spurt stays in a condom (value point Him.cumCaught, false in the game).
+## A caught link makes no strand and does not fill her mouth; the sounds and her reactions stay (the in-mouth
+## sound), and catchCum() gets its mass.
+func _cumCaught() -> bool:
+	if Hooks.has_value(&"Him.cumCaught"):   # HOOK value point: true keeps this link of a spurt in (a condom)
+		return Hooks.value(&"Him.cumCaught", self, false)
+	return false
+
+
+## Port extension: a link of a spurt that was caught (see _cumCaught); mass: what a strand link would weigh (0.3-0.7,
+## about 30-50 of them in one load). Extensions collect it with an after-hook (the condoms plugin fills its condom).
+func catchCum(mass: float) -> void:
+	if Hooks.has(&"Him.catchCum"):   # HOOK
+		Hooks.after(&"Him.catchCum", self, [mass])
 
 
 func startBMSpurt() -> void:
