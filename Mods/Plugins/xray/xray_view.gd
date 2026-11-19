@@ -34,9 +34,12 @@ const WALL := 6.0          # thickness of the throat wall
 const GLOW := 10.0         # a soft red glow around her throat
 const CLOSED := 2.5        # half width of her throat where he is not
 const ROOM := 3.0          # her throat around him
+const ROOM_TIP := 0.8      # and round what sits on his tip (Him.tipExtra: soft, it fills her throat)
 const EDGE := 3.0          # penis-local margin around his outline in the strip taken from his render
 const PAST_TIP := 12.0     # penis-local length taken past his tip point (the rounded end of the art)
 const CLOSE_LEN := 15.0    # past his tip her throat closes over this length
+const CLOSE_SOFT := 36.0   # past what sits on his tip (Him.tipExtra), smoothly over this one: it is not on his
+                           # centre line, so her throat comes back to its own middle without a jog
 const HAND_FADE := 6       # samples over which the stomach's pipe takes over, past that (its PIPE_TOP)
 const SPLIT_AT := 0.7      # the lower painter takes over this far down her neck (0 jaw .. 1 chest): above her
                            # shoulder, below her earrings
@@ -136,6 +139,12 @@ var _e1 := PackedFloat32Array()
 var _y0 := PackedFloat32Array()      # the strip taken from his render at each sample, penis-local y
 var _y1 := PackedFloat32Array()
 var _inside := 0.0                   # length of him inside her, along the centre line
+var _reach := 0.0                    # the same to the end of what sits on his tip (Him.tipExtra), if anything does
+var _extra := []                     # that ({x, y, r} circles, penis-local)
+var _gate_rest_t := 0.0              # _gate_point's sample (between samples) on the line it was called on
+var _ring_rest := -1.0               # her throat ring's depth along her throat at rest (her units: Her.throatRing; < 0:
+                                     # not known yet). From her alone, not him: no loop through his pull on her head
+var _close := CLOSE_LEN               # how far past his tip (or what sits on it) her throat closes
 var _drawn := 0.0                    # length of the strip taken from his render (a little past his tip)
 var _x_lips := 0.0                   # penis-local x at her lips
 var _tip_x := 0.0
@@ -298,7 +307,8 @@ func _close_gate(her: Her) -> void:
 		var ring := 0.5 + 0.5 * cos(PI * (i - _gate_f) / GATE_LEN)
 		var k := ring * (1.0 - open)
 		if _with_penis:   # held open where he is, and ahead of his tip as her throat closes past it (CLOSE_LEN)
-			k *= smoothstep(_inside, _inside + CLOSE_LEN, i * STEP)
+			var held := maxf(_inside, _reach)   # (what sits on his tip holds it open too)
+			k *= smoothstep(held, held + _close, i * STEP)
 		var c := (_e0[i] + _e1[i]) * 0.5
 		var a := lerpf(_e0[i], c - GATE_MIN, k)
 		var b := lerpf(_e1[i], c + GATE_MIN, k)
@@ -323,7 +333,16 @@ func _gate_point() -> Vector2:
 			break
 		prev = d
 	t = clampf(t + GATE_SHIFT / STEP, _m0 + 1.0, _path.size() - 1.001)
+	_gate_rest_t = t
 	return _path[int(t)].lerp(_path[int(t) + 1], t - int(t))
+
+
+## Her throat ring's depth in her (Her.penisInMouthDist units: Her.throatRing) where this draws it, or v while it does
+## not show or his depth has not been seen yet.
+func ring_depth(v: float) -> float:
+	if shown <= 0.0 or _ring_rest < 0.0:
+		return v
+	return _ring_rest
 
 
 ## The centre line's sample nearest `p` (between samples).
@@ -420,12 +439,17 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	# her mouth at rest (as closed, without him): its walls, which stay where he does not push them out
 	_with_penis = false
 	_inside = 0.0
+	_reach = 0.0
+	_extra = []
+	_close = CLOSE_LEN
 	_drawn = 0.0
 	_hand = CLOSE_LEN / STEP + HAND_FADE
 	_line(lips_mid, _edge_in, tail, axis)
 	_outline(him)
 	_pocket(top_lip, bottom_lip, jaw_at)
 	var gate_at := _gate_point()
+	var her_k := (inv * her.localToGlobal(Vector2(1, 0))).distance_to(inv * her.localToGlobal(Vector2.ZERO))   # local per her unit
+	_ring_rest = maxf(0.0, _gate_rest_t * STEP - START_OUT) / maxf(0.001, her_k)   # (from between her lips, as his depth)
 	_rest_mouth(top_lip, lips_meet)
 	var start := lips_mid
 	var pv := Transform2D()
@@ -445,10 +469,18 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 		start = pv * Vector2(x_at_lips, 0.0)
 		_x_lips = x_at_lips + START_OUT / _len_scale   # the centre line begins START_OUT outside that point
 		_inside = maxf(0.0, (_x_lips - _tip_x) * _len_scale)
-		_drawn = _inside + PAST_TIP * _len_scale if _inside > 0.0 else 0.0
-		_hand = (_inside + CLOSE_LEN) / STEP + HAND_FADE
+		_extra = him.tipExtra()
+		_close = CLOSE_SOFT if not _extra.is_empty() else CLOSE_LEN
+		var ahead := 0.0   # how far that reaches past his tip point (penis-local)
+		for c in _extra:
+			ahead = maxf(ahead, _tip_x - (float(c["x"]) - float(c["r"])))
+		_reach = _inside + ahead * _len_scale if _inside > 0.0 else 0.0
+		_drawn = _inside + maxf(PAST_TIP, ahead + 2.0) * _len_scale if _inside > 0.0 else 0.0
+		_hand = (maxf(_inside, _reach) + _close) / STEP + HAND_FADE
 		# along him, towards his tip; past what is drawn of him, her throat at rest
-		_line(start, -pv.x.normalized(), tail, axis, rest_path, _drawn / STEP + 1.0)
+		# (only his own art is stiff: what sits on his tip is soft and follows her throat)
+		var stiff := minf(_drawn, _inside + PAST_TIP * _len_scale) if not _extra.is_empty() else _drawn
+		_line(start, -pv.x.normalized(), tail, axis, rest_path, stiff / STEP + 1.0)
 		_side = 1.0 if _norm[0].dot(pv.y) >= 0.0 else -1.0
 		_outline(him)
 		_pocket(top_lip, bottom_lip, jaw_at)
@@ -599,23 +631,61 @@ func _outline(him: Him) -> void:
 		return
 	var cp: Penis = him.currentPenis
 	var tip_e := Vector2.ZERO
+	var cov := []   # what sits on his tip (Him.tipExtra): the circles that reach each sample
+	if not _extra.is_empty():
+		cov.resize(n)
+		for c in _extra:
+			var sc := (_x_lips - float(c["x"])) * _len_scale
+			var rr := float(c["r"]) * _len_scale
+			for j in range(maxi(0, floori((sc - rr) / STEP)), mini(n - 1, ceili((sc + rr) / STEP)) + 1):
+				if cov[j] == null:
+					cov[j] = []
+				cov[j].append(c)
 	for i in n:
 		var s := i * STEP
 		var x := _x_lips - minf(s, _drawn) / _len_scale
 		var w: Array = cp._widthAt(maxf(x, _tip_x - PAST_TIP))
-		_y0[i] = float(w[1]) - EDGE
-		_y1[i] = float(w[1]) + float(w[0]) + EDGE
-		var a := _side * float(w[1]) * _wid_scale
-		var b := _side * (float(w[1]) + float(w[0])) * _wid_scale
-		var e := Vector2(minf(a, b) - ROOM, maxf(a, b) + ROOM)
-		_p0[i] = minf(a, b) if s <= _inside else 0.0
-		_p1[i] = maxf(a, b) if s <= _inside else 0.0
-		if s <= _inside:
+		var lo := float(w[1])
+		var hi := float(w[1]) + float(w[0])
+		if x < _tip_x - PAST_TIP:
+			lo = INF   # (past his art's end: only what sits on his tip)
+			hi = -INF
+		for c in (cov[i] if not cov.is_empty() and cov[i] != null else []):   # what sits on his tip: its width here too
+			var dx := x - float(c["x"])
+			if absf(dx) < float(c["r"]):
+				var hc := sqrt(float(c["r"]) * float(c["r"]) - dx * dx)
+				lo = minf(lo, float(c["y"]) - hc)
+				hi = maxf(hi, float(c["y"]) + hc)
+		if lo > hi:
+			lo = float(w[1])
+			hi = lo
+		_y0[i] = lo - EDGE
+		_y1[i] = hi + EDGE
+		var a := _side * lo * _wid_scale
+		var b := _side * hi * _wid_scale
+		var room := lerpf(ROOM, ROOM_TIP, clampf((_tip_x - 2.0 - x) / 6.0, 0.0, 1.0)) if not _extra.is_empty() else ROOM
+		var e := Vector2(minf(a, b) - room, maxf(a, b) + room)
+		var on := s <= maxf(_inside, _reach)
+		_p0[i] = minf(a, b) if on else 0.0
+		_p1[i] = maxf(a, b) if on else 0.0
+		if on:
 			tip_e = e
 		else:   # closing past his tip
-			e = tip_e.lerp(Vector2(-CLOSED, CLOSED), clampf((s - _inside) / CLOSE_LEN, 0.0, 1.0))
+			var kc := clampf((s - maxf(_inside, _reach)) / _close, 0.0, 1.0)
+			e = tip_e.lerp(Vector2(-CLOSED, CLOSED), kc if _extra.is_empty() else smoothstep(0.0, 1.0, kc))
 		_e0[i] = e.x
 		_e1[i] = e.y
+	if not _extra.is_empty():   # round where her throat goes from his glans to what sits on it (no notch; only out)
+		var i0 := maxi(1, int(_inside / STEP) - 4)
+		var i1 := mini(n - 2, int(_inside / STEP) + 6)   # (round his tip only)
+		for _k in 4:
+			var a0 := _e0.duplicate()
+			var a1 := _e1.duplicate()
+			for i in range(i0, i1 + 1):
+				a0[i] = minf(_e0[i], (_e0[i - 1] + 2.0 * _e0[i] + _e0[i + 1]) * 0.25)
+				a1[i] = maxf(_e1[i], (_e1[i - 1] + 2.0 * _e1[i] + _e1[i + 1]) * 0.25)
+			_e0 = a0
+			_e1 = a1
 
 
 ## The centre line: from `start` (between her lips) along `dir` (into her), one bend down into her chest along her
@@ -710,7 +780,7 @@ func _fit_mouth(rest: Array) -> void:
 	# another centre line): smoothed across, never in closer to him than the room round him
 	var i0 := maxi(1, _mouth_end - 2 * MOUTH_BACK)
 	var i1 := mini(_path.size() - 2, _mouth_end + 2 * MOUTH_BACK)
-	var last := mini(i1, int(_inside / STEP))   # (where he is)
+	var last := mini(i1, int(maxf(_inside, _reach) / STEP))   # (where he is)
 	for _pass in MOUTH_SMOOTH:
 		var a0 := _e0.duplicate()
 		var a1 := _e1.duplicate()
@@ -720,6 +790,14 @@ func _fit_mouth(rest: Array) -> void:
 			if i <= last:
 				_e0[i] = minf(_e0[i], room0[i])
 				_e1[i] = maxf(_e1[i], room1[i])
+	if not _extra.is_empty():   # what sits on his tip fills her mouth and throat ahead of him: they close round it, and
+		# past it they close as her throat does past his tip (no room left open by the smoothing above), then let go
+		var free := maxf(_inside, _reach) + _close
+		for i in mini(_path.size(), int((free + CLOSE_LEN) / STEP) + 1):
+			var k := smoothstep(_inside, _inside + CLOSE_LEN, i * STEP) * (1.0 - smoothstep(free, free + CLOSE_LEN, i * STEP))
+			if k > 0.0:
+				_e0[i] = lerpf(_e0[i], room0[i], k)
+				_e1[i] = lerpf(_e1[i], room1[i], k)
 
 
 ## NAN values filled in from the nearest values each side (straight between them; at an end, the nearest one).
@@ -844,7 +922,7 @@ func _pool() -> void:
 	var pen := PackedVector2Array()
 	var strip := PackedVector2Array()
 	if _with_penis:
-		var last := mini(end, int(_inside / STEP))
+		var last := mini(end, int(maxf(_inside, _reach) / STEP))
 		for i in range(_m0, last + 1):
 			pen.append(_at(i, _p0[i]))
 		for i in range(last, _m0 - 1, -1):

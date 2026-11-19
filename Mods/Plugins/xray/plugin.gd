@@ -99,6 +99,8 @@ func _enable() -> void:
 	on_key(0, func(): set_setting("on", not on), "X-ray on / off")
 	on_key(0, func(): set_setting("stomach", not stomach_on), "X-ray stomach on / off", "stomach")
 	modify(&"Him.penisMask", {"phase": Hooks.FINAL, "op": "fn", "fn": _mask})
+	# her throat ring is where the view draws it (the condoms plugin's sack gets stuck behind it)
+	modify(&"Her.throatRing", {"op": "fn", "fn": func(v, _her): return _view.ring_depth(v) if _view != null else v})
 	hook_before(&"Her.gulp", func(_c): _in_mouth_before = g.her.cumInMouth)
 	hook_after(&"Her.gulp", func(_c): _swallowed(_in_mouth_before - g.her.cumInMouth))
 	hook_after(&"Her.fillMouth", func(c): _cum_in(c.args[0] if not c.args.is_empty() else false))

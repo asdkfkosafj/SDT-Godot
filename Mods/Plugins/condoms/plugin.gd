@@ -3,8 +3,11 @@ extends SDTExtension
 ## penis's outline (every type, size and penis mod; not the strap-on) and hides in her mouth with it.
 ## His cum stays in it (no strands, her mouth does not fill) and hangs from his tip in a teardrop sack that grows with
 ## it (no more once it is full): a weight on stretchy latex with real gravity, heavier the more cum is in it, drawn
-## smoothly between ticks.
-## Planned next: the sack hits her face, gets stuck in her throat, is taken off, tied and pinned on her.
+## smoothly between ticks. It rests and rubs on her face, squeezes in through her lips after him and lies in her
+## mouth (the x-ray view draws it there). Past her throat ring it is stuck: pulled out, the latex to it stretches and
+## holds her head back until it pops out; pushed in, it presses against the ring until it goes through; in her
+## throat it makes a swallow lump in her neck.
+## Planned next: it is taken off, tied and pinned on her.
 
 const ROLL_TICKS := 15     # rolling it on or off takes half a second
 const CUT_R := 70.0        # round his tip the bulb draws the outline of the sleeve and the sack as one line
@@ -42,6 +45,18 @@ func _enable() -> void:
 	modify(&"Him.cumCaught", {"op": "set", "value": true, "phase": Hooks.FINAL,
 		"when": func(_him): return roll > 0.0 and condom != null and condom.sprite.parent != null})
 	hook_after(&"Him.catchCum", func(c): add_cum(c.args[0]))
+	# stuck behind her throat ring the sack's stretched latex pulls her head back to him (pushed against it, it holds
+	# her back a little); in her throat it makes a swallow lump in her neck
+	modify(&"Her.drag", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, her):
+		if condom == null:
+			return v
+		return v + condom.drag_add + minf(0.0, her.speed) * condom.grip_out + maxf(0.0, her.speed) * condom.grip_in})
+	modify(&"Neck.bumps", {"op": "fn", "fn": func(v, _neck): return v + condom.bumps if condom != null else v})
+	# the x-ray view draws it in her mouth with him
+	modify(&"Him.tipExtra", {"op": "fn", "fn": func(v, _him):
+		if condom == null or cum <= 0.0 or not condom.has_inside():
+			return v
+		return v + condom.tip_extra()})
 	menu_control("him", "Condom", MenuSchema.toggle("Condom", "He wears a condom. It rolls on while he is out of her "
 		+ "mouth (Q).", func(): return worn, func(on: bool): set_worn(on)))
 	menu_control("him", "Condom", MenuSchema.colour("Colour", "The condom's colour.", _colour_dict,
@@ -151,18 +166,19 @@ func _tick() -> void:
 		condom.sack_ok = false
 	else:
 		condom.attach(g.him.penis, art)   # keeps it right above the art
+	if cum > 0.0:
+		condom.step_sack(sack_length(), bulb_radius(), cum / FULL)   # (drawn every frame while it moves: condom.gd)
+	# while there is a sack the sleeve leaves its outline round the tip to it (one line round both)
+	var cut := CUT_R if cum > 0.0 else 0.0
+	if cut != condom.cut_r:
+		condom.cut_r = cut
+		_dirty = true
 	if _dirty:
 		_dirty = false
 		var k := 1.0 - pow(1.0 - roll, 2.0)   # eases out as it reaches its place
 		var end: float = lerpf(condom.tip_x, condom.tip_x + (condom.base_x - condom.tip_x) * get_setting("cover"), k)
 		condom.draw(end, roll, get_setting("colour"), get_setting("density"))
 		_bulb_dirty = true
-	var cut := CUT_R if cum > 0.0 else 0.0
-	if cut != condom.cut_r:   # the sack came or went: the sleeve leaves its outline round the tip to it, or not
-		condom.cut_r = cut
-		_dirty = true   # (drawn again next tick)
-	if cum > 0.0:
-		condom.step_sack(sack_length(), bulb_radius(), cum / FULL)   # (drawn every frame while it moves: condom.gd)
 	if g.cumRGB != _cum_rgb:
 		_cum_rgb = g.cumRGB
 		_bulb_dirty = true
@@ -178,6 +194,18 @@ func _remove() -> void:
 	cum = 0.0   # (for now: taking it off and tying it comes later)
 	if condom != null:
 		condom.sack_ok = false
+		condom.past = false
+		condom.in_share = 0.0
+		condom._pass_t = -1.0
+		condom._strain = 0.0
+		condom._rel_t = 0.0
+		condom._lip_t = -1.0
+		condom.cum_from = 0.0
+		condom.drag_add = 0.0
+		condom.grip_out = 0.0
+		condom.grip_in = 0.0
+		condom.bumps = []
+		condom.prof.clear()
 	if condom != null and condom.sprite.parent != null:
 		condom.detach()
 		_dirty = true

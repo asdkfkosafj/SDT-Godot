@@ -844,6 +844,14 @@ func nextSpurt() -> void:
 		Hooks.after(&"Him.nextSpurt", self)
 
 
+## Port extension: what sits on his tip past its point, penis-local circles [{x, y, r}] ([] in the game; the condoms
+## plugin's full tip while it is in her mouth). The x-ray view draws them with him and opens her throat round them.
+func tipExtra() -> Array:
+	if Hooks.has_value(&"Him.tipExtra"):   # HOOK value point: what sits on his tip past its point ([{x, y, r}], penis-local)
+		return Hooks.value(&"Him.tipExtra", self, [])
+	return []
+
+
 ## Port extension: whether this link of a spurt stays in a condom (value point Him.cumCaught, false in the game).
 ## A caught link makes no strand and does not fill her mouth; the sounds and her reactions stay (the in-mouth
 ## sound), and catchCum() gets its mass.

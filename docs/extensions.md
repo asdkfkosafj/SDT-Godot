@@ -320,6 +320,7 @@ The value points in the game, with the field that keeps the result for code that
 | `Him.penisMask` | the mask that hides his penis inside her mouth, every tick: `{x, scale}` (the game's x: -100 + his depth x 200 in her mouth, -100 hides it all; scale 1) | `him.penisMask` |
 | `Him.mouthSmoothing` | how much her mouth holds his penis's tilt while he is in it (0..1, the game's rises by 0.4 a tick) | `him.mouthConstraintSmoothing` |
 | `Him.cumCaught` | whether this link of a spurt stays in (a condom: `false` in the game), once per link (every `linkFreq` ticks while he spurts): a caught link makes no strand and does not fill her mouth; the cum sound (the in-mouth one) and her reactions stay, and the hook point `Him.catchCum` (after, args `[mass]`: what the strand link would weigh, 0.3-0.7; one load is 15-25 of mass) reports it | |
+| `Him.tipExtra` | what sits on his tip past its point: `[]`, or circles `{x, y, r}` in penis-local units (`Him.tipExtra()`; the x-ray view draws them with him and opens her throat round them); the condoms plugin's full tip in her mouth | |
 | `Him.ballScale` | his balls' scale (his ball size), when it is set: after changing its modifiers call `g.him.updateBalls()` | `him.balls.scaleX` / `scaleY` |
 | `Him.ballsOffset` | how far his balls sit from their place in the art (`him.ballsHome`; `Vector2.ZERO`), when his ball size is set: `g.him.updateBalls()` as above | `him.balls.x` / `y` |
 | `Her.pullOff` | how hard she pulls back off him and its power, every tick after the game's update: `{pull, power}` (`her.pullOff`, `her.pullOffPower["current"]`; return a new one) | `her.pullOff` |
@@ -330,12 +331,14 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.limpResistance` | the same while she is passed out (0: the game holds nothing then) | (subtracted from her speed) |
 | `Her.pushBack` | how far her head is pushed back off him this tick (0), before the `minPos`/`maxPos` clamp | `her.pos` |
 | `Her.drag` | how much her head is slowed this tick (0; subtracted from her speed before friction, positive: away from him), e.g. her arms resisting | `her.speed` |
+| `Her.throatRing` | how deep in her her throat ring is, as `her.penisInMouthDist` (`Her.throatRing()`; the game has none: `Her.THROAT_RING`, 120); the x-ray view sets where it draws it while it shows; the condoms plugin's sack gets stuck behind it | |
 | `Her.passOutExtra` | how much closer to passing out she gets this tick on top of the game's own (0), with or without air, while she is awake | `her.passOutFactor` |
 | `Scene.backgroundBrightness` | how bright the background is (1; its colour multipliers), every tick while it has modifiers | `g.bg.colorTransform` |
 | `Neck.depth` | how deep the throat bulge sits (his depth / 400) | `neck.lastDepth` |
 | `Neck.throatBulge` | how much her throat bulges (her throat bulge setting) | |
 | `Neck.swallowScale` | how a swallow pushes her neck out, while she swallows (`Vector2(0.8, 0.5)`: out, down) | |
 | `Neck.bulgeCap` | the most the bulge pushes the neck out, px (35); throatcumbulge's "Neck follows his size" scales it with his width | |
+| `Neck.bumps` | swallow lumps held in her throat, asked once per render: `[]`, or `{at, size}` each (`at`: where along the front of her neck, as `Neck.depth`; `size`: as `neck.swallowSize`, 10 for a swallow): the swallow's own lump (`Neck.lump`, pushed by `Neck.swallowScale`), before `Neck.band`; the condoms plugin's cum in her throat | `neck.renderedPoints` |
 | `Neck.band` | a band that holds the front of her neck in, asked once per render: `null`, or `{top, bottom, inside, soft}` (edges as depth along the front, px her neck may push out between them, depth over which that blends into the free bulge past each edge); a second holder returns `Neck.narrower(value, its own)` | `neck.renderedPoints` |
 
 `Hooks.explain(name)` returns the last evaluation step by step (recording starts with the first call),

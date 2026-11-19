@@ -2707,3 +2707,12 @@ var penisControl: HerPenisControl:
 var penisOn: bool:
 	get:
 		return _penisControl.currentPenisID > 0
+
+
+## Port extension: how deep in her (as penisInMouthDist) her throat ring is, for extensions; the game has none
+## (THROAT_RING: about where the x-ray view draws it, which moves it to where it draws it while it shows).
+const THROAT_RING := 120.0
+func throatRing() -> float:
+	if Hooks.has_value(&"Her.throatRing"):   # HOOK value point: her throat ring's depth (as penisInMouthDist; 120 in the game)
+		return Hooks.value(&"Her.throatRing", self, THROAT_RING)
+	return THROAT_RING

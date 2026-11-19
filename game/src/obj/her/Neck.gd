@@ -116,6 +116,11 @@ static func narrower(a, b):
 	return a if a["inside"] <= b["inside"] else b
 
 
+## The swallow's lump at `at` along the front of her neck, at f (0..1 of its size).
+static func lump(f: float, at: float) -> float:
+	return maxf(0.0, 2.0 / (2.0 + pow(8.0 * (f - at), 2.0)) - 0.2)
+
+
 func swallow() -> void:
 	swallowing = true
 	swallowProgress = swallowStart
@@ -138,6 +143,9 @@ func render(depth: float) -> void:
 	var swallowScale := Vector2(0.8, 0.5)
 	if swallowing and Hooks.has_value(&"Neck.swallowScale"):   # HOOK value point: how a swallow pushes her neck out (x out, y down)
 		swallowScale = Hooks.value(&"Neck.swallowScale", self, swallowScale)
+	var bumps: Array = []
+	if Hooks.has_value(&"Neck.bumps"):   # HOOK value point: swallow lumps held in her throat ([] in the game; {at, size})
+		bumps = Hooks.value(&"Neck.bumps", self, bumps)
 	var band = null
 	if Hooks.has_value(&"Neck.band"):   # HOOK value point: a band that holds the front of her neck in (a collar), or null
 		band = Hooks.value(&"Neck.band", self, null)
@@ -148,8 +156,10 @@ func render(depth: float) -> void:
 			var bulge := 1.0 / (1.0 + pow(2.0, rel * 35.0)) * bulgeAmount
 			var amt := minf(1.0, 0.6 + 0.6 * depth) * minf(bulgeCap, bulgeSize * bulge * pow(1.0 - f, 1.4))
 			pts[i] = pts[i] + Vector2(amt, 0.3 * amt)
+		for b in bumps:   # (port extension: the swallow's lump, held where something is in her throat)
+			pts[i] = pts[i] + float(b["size"]) * lump(f, float(b["at"])) * swallowScale
 		if swallowing:
-			var sw := swallowSize * maxf(0.0, 2.0 / (2.0 + pow(8.0 * (f - swallowProgress), 2.0)) - 0.2)
+			var sw := swallowSize * lump(f, swallowProgress)
 			sw *= minf(1.0, minf((swallowProgress - swallowStart) * 5.0, 2.0 - swallowProgress * 2.0))
 			pts[i] = pts[i] + sw * swallowScale
 		if band != null:
