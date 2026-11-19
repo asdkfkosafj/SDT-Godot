@@ -7,13 +7,33 @@ extends SDTExtension
 ## mouth (the x-ray view draws it there). Past her throat ring it is stuck: pulled out, the latex to it stretches and
 ## holds her head back until it pops out; pushed in, it presses against the ring until it goes through; in her
 ## throat it makes a swallow lump in her neck.
-## Planned next: it is taken off, tied and pinned on her.
+## With cum in it, Q has his left hand take it off: his hand goes to his tip, pulls it off (the empty latex stretched
+## from his glans to his fist; a drop of cum stays on his tip), ties it and holds it by the knot, the sack hanging from
+## his fist and swinging with it. (His left arm must show and hang loose; else it only rolls off.)
+## Planned next: it is pinned on her.
 
 const ROLL_TICKS := 15     # rolling it on or off takes half a second
 const CUT_R := 70.0        # round his tip the bulb draws the outline of the sleeve and the sack as one line
 const FULL := 80.0         # cum (strand link masses, one load is about 15-25) that fills the bulb to its biggest
+const REACH_TICKS := 12    # taking a full one off: his hand goes to his tip,
+const PULL_TICKS := 14     #   pulls it off,
+const TIE_TICKS := 16      #   and ties it
+const PULL_DIST := 170.0   # it pulls it this far off his tip (penis units)
+const AHEAD := 3.0         # it takes it by its tip just this far past his glans (penis units)
+const DROP_LINKS := 2      # ... made of this many strand links
+const DROP_TICKS := 50     # the drop of cum left on his tip hangs there this long, then falls
 
 var Condom: GDScript
+var Tied: GDScript
+var tied = null            # tied.gd: the one he took off, in his hand
+var _off := 0              # taking it off: 0 not, 1 his hand goes to his tip, 2 pulls it off, 3 ties it
+var _off_t := 0            # ticks into that
+var _grip0 := Vector2()    # where the knot point of his hand was as it started (stage coordinates)
+var _end0 := 0.0           # where the sleeve ended as he started pulling it off (penis-local x)
+var _tie_at := Vector2()   # where his hand pulled it to (his coordinates)
+var _rest_at := Vector2()  # where the knot point of his hand was as it started (his coordinates)
+var _drop = null           # the drop of cum on his tip (a cum strand), and its ticks left
+var _drop_t := 0
 var condom = null          # condom.gd, while he wears one (or it is rolling)
 var worn := false          # he wears one (or it is rolling on)
 var roll := 0.0            # 0 at his tip .. 1 rolled all the way on
@@ -40,10 +60,13 @@ func _setup() -> void:
 
 func _enable() -> void:
 	Condom = load_script("condom.gd")
+	Tied = load_script("tied.gd")
 	on_late_tick(_tick)
 	on_key(KEY_Q, toggle, "condom on / off", "condom")
 	modify(&"Him.cumCaught", {"op": "set", "value": true, "phase": Hooks.FINAL,
-		"when": func(_him): return roll > 0.0 and condom != null and condom.sprite.parent != null})
+		"when": func(_him): return roll > 0.0 and _off < 2 and condom != null and condom.sprite.parent != null})
+	# taking a full one off: his left hand
+	modify(&"HimMaleBody.leftHand", {"op": "fn", "fn": func(v, _body): return _hand_target(v)})
 	hook_after(&"Him.catchCum", func(c): add_cum(c.args[0]))
 	# stuck behind her throat ring the sack's stretched latex pulls her head back to him (pushed against it, it holds
 	# her back a little); in her throat it makes a swallow lump in her neck
@@ -66,6 +89,11 @@ func _enable() -> void:
 
 
 func _disable() -> void:
+	_off = 0
+	_let_drop()
+	if tied != null:
+		tied.release()
+		tied = null
 	_remove()
 	if condom != null:
 		condom.free_drawer()
@@ -109,12 +137,20 @@ func _set_colour(c: Dictionary) -> void:
 
 
 func toggle() -> void:
+	if _off != 0:
+		return
+	if worn and _dir == 0 and cum > 0.0 and condom != null and _hand_ok() and not g.him.inMouth:
+		_off = 1   # a full one: his hand takes it off
+		_off_t = 0
+		_grip0 = _hand().localToGlobal(Tied.GRIP)
+		_rest_at = g.him.globalToLocal(_grip0)
+		return
 	set_worn(not worn)
 
 
 ## Puts the condom on (rolls on) or takes it off. Only while he is out of her mouth, and not on the strap-on.
 func set_worn(on: bool) -> void:
-	if on == worn or g.him == null:
+	if on == worn or g.him == null or _off != 0:
 		return
 	if g.him.inMouth or (on and _strapon()):
 		return
@@ -139,6 +175,7 @@ func _art() -> FlashDisplayObject:
 func _tick() -> void:
 	if g.him == null or g.him.penis == null:
 		return
+	_tick_off()
 	if worn and _strapon():
 		worn = false
 		roll = 0.0
@@ -177,6 +214,8 @@ func _tick() -> void:
 		_dirty = false
 		var k := 1.0 - pow(1.0 - roll, 2.0)   # eases out as it reaches its place
 		var end: float = lerpf(condom.tip_x, condom.tip_x + (condom.base_x - condom.tip_x) * get_setting("cover"), k)
+		if _off == 2:   # (pulled off: its end slides to his tip)
+			end = lerpf(_end0, condom.tip_x, smoothstep(0.0, 1.0, float(_off_t) / PULL_TICKS))
 		condom.draw(end, roll, get_setting("colour"), get_setting("density"))
 		_bulb_dirty = true
 	if g.cumRGB != _cum_rgb:
@@ -209,3 +248,130 @@ func _remove() -> void:
 	if condom != null and condom.sprite.parent != null:
 		condom.detach()
 		_dirty = true
+
+
+## His left hand can take it off: his male body, the arm showing and hanging loose (not holding a leash).
+func _hand_ok() -> bool:
+	var him: Him = g.him
+	return him.currentBody is HimMaleBody and him.currentLeftArmPosition == 1 and him.leftArmContainer.visible
+
+
+func _hand() -> FlashDisplayObject:
+	return g.him.leftArmContainer.arm.foreArm.hand
+
+
+## Where his hand's knot point goes while he takes it off (stage coordinates).
+func _hand_goal() -> Vector2:
+	var pen: FlashDisplayObject = g.him.penis
+	var tip: Vector2 = condom._outline[condom._ti] if condom != null and condom._outline.size() > 0 else g.him.tipMid
+	var a := pen.localToGlobal(tip)
+	var out := pen.localToGlobal(tip + Vector2(-1, 0)) - a   # one penis unit out past his tip
+	match _off:
+		1:
+			return _grip0.lerp(a + out * AHEAD, smoothstep(0.0, 1.0, float(_off_t) / REACH_TICKS))
+		2:
+			var u := smoothstep(0.0, 1.0, float(_off_t) / PULL_TICKS)
+			# off his tip, then down and back towards him (his arm reaches no further forwards; not up into her face)
+			var fw := (Vector2(0, 0.9) - out.normalized() * 0.35).normalized() * out.length()
+			var d := PULL_DIST * u
+			return a + out * (AHEAD + minf(d, 20.0)) + fw * maxf(0.0, d - 20.0)
+		3:   # tying it (a little twist) on the way back to where his hand hangs (with his body)
+			var u := float(_off_t) / TIE_TICKS
+			var w := sin(PI * u) * 10.0 * out.length()
+			var at := g.him.localToGlobal(_tie_at).lerp(g.him.localToGlobal(_rest_at), smoothstep(0.0, 1.0, u))
+			return at + Vector2(cos(TAU * 2.0 * u) - 1.0, sin(TAU * 2.0 * u)) * w * 0.5
+	return Vector2()
+
+
+## HimMaleBody.leftHand: while he takes it off, his hand's wrist where its knot point is at _hand_goal().
+func _hand_target(v: Vector2) -> Vector2:
+	if _off == 0 or not _hand_ok():
+		return v
+	var hand := _hand()
+	var off := hand.localToGlobal(Tied.GRIP) - hand.localToGlobal(Vector2.ZERO)
+	return g.him.leftArmContainer.globalToLocal(_hand_goal() - off)   # (the arm's IK works in its container's units)
+
+
+## Taking it off, a tick at a time; and the one in his hand.
+func _tick_off() -> void:
+	if _drop != null:
+		_drop_t -= 1
+		if DROP_TICKS - _drop_t <= DROP_LINKS:   # (a link a tick after the strand starts, as his spurts do)
+			_drop.insertLink(Vector2(0.0, 1.0), 2, g.randomCumMass())
+		if _drop_t <= 0 or g.him.inMouth:
+			_let_drop()
+	if _off != 0 and (not _hand_ok() or condom == null):
+		_off = 0   # (his arm went away: it stays on, or is gone if already off)
+	if _off != 0:
+		_off_t += 1
+	match _off:
+		1:
+			if g.him.inMouth:
+				_off = 0   # (he went back in: it stays on)
+			elif _off_t >= REACH_TICKS:
+				_take()
+		2:
+			_dirty = true
+			tied.tail = g.him.penis.localToGlobal(condom._outline[condom._ti] + Vector2(1.0, 0.0))
+			if _off_t >= PULL_TICKS:
+				_tie_at = g.him.globalToLocal(_hand_goal())
+				worn = false
+				_dir = 0
+				_remove()
+				_start_drop()
+				_off = 3
+				_off_t = 0
+		3:
+			# the sleeve's end springs back into his fist and is tied: a short end over the knot
+			var u := smoothstep(0.0, 1.0, float(_off_t) / TIE_TICKS)
+			var stub: Vector2 = tied.stub_point()
+			if is_nan(tied.tail.x):
+				tied.tail = stub
+			tied.tail = tied.tail.lerp(stub, lerpf(0.35, 1.0, u))
+			tied.tail_w = lerpf(tied.tail_w, 2.0, 0.3)
+			if _off_t >= TIE_TICKS:
+				_off = 0
+				tied.tied = true
+	if tied != null:
+		if not _hand_ok():
+			tied.release()   # (his arm went away: so did it)
+			tied = null
+			return
+		tied.attach(_hand())
+		tied.set_look(get_setting("colour"), get_setting("density"), Color.hex((g.cumRGB << 8) | 0xFF))
+		tied.step()
+
+
+## His hand has it by its tip: the sack goes from his penis to his hand.
+func _take() -> void:
+	if tied != null:
+		tied.release()   # (the one he still held is gone: pinning it on her comes later)
+	tied = Tied.new(condom)
+	tied.attach(_hand())
+	var neck: Array = condom._neck(bulb_radius())
+	var a: Vector2 = g.him.penis.localToGlobal(neck[0])
+	var unit: float = g.him.penis.localToGlobal(neck[0] + Vector2(-1, 0)).distance_to(a)
+	var at: Vector2 = condom.sack_p if condom.sack_ok else a + Vector2(0, sack_length() * unit)
+	tied.take(at, condom.sack_v if condom.sack_ok else Vector2.ZERO, bulb_radius(), sack_length(), cum / FULL, unit)
+	var e: Vector2 = condom.edges_at(condom.tip_x + 10.0)
+	tied.tail_w = absf(e.y - e.x) * 0.5
+	var k := 1.0 - pow(1.0 - roll, 2.0)
+	_end0 = lerpf(condom.tip_x, condom.tip_x + (condom.base_x - condom.tip_x) * get_setting("cover"), k)
+	cum = 0.0   # (no sack on his penis any more)
+	_bulb_dirty = true
+	condom.sack_ok = false
+	_off = 2
+	_off_t = 0
+
+
+## A small drop of cum left on his tip: a short cum strand that hangs there a while, then falls.
+func _start_drop() -> void:
+	_let_drop()
+	_drop = g.strandControl.newCumStrand(g.him.tipMid, g.him.penis)
+	_drop_t = DROP_TICKS
+
+
+func _let_drop() -> void:
+	if _drop != null:
+		_drop.detachSourceLink(Vector2.ZERO, 0)
+		_drop = null

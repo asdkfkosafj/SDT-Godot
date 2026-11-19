@@ -176,6 +176,7 @@ const VALUES := {
 	&"Him.penisMask": true,
 	&"Him.penisTiltTarget": true,
 	&"Him.tipExtra": true,
+	&"HimMaleBody.leftHand": true,
 	&"IKController.tapPower": true,
 	&"IKController.tapSpeed": true,
 	&"Neck.band": true,

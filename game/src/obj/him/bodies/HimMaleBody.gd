@@ -103,6 +103,11 @@ func updateArmPosition() -> void:
 	leftArmSpeed.y += (leftArmDefaultPoint.y - leftArmTarget.y) * 0.1 - absf(xMovement * 0.05)
 	leftArmTarget += leftArmSpeed
 	leftArmSpeed *= 0.8
+	if Hooks.has_value(&"HimMaleBody.leftHand"):   # HOOK value point: where his loose left hand goes this tick
+		var to: Vector2 = Hooks.value(&"HimMaleBody.leftHand", self, leftArmTarget)
+		if to != leftArmTarget:   # (moved there: his hand swings back from there once let go)
+			leftArmTarget = to
+			leftArmSpeed = Vector2()
 	leftArmIK.newTarget(leftArmTarget, _him)
 	leftArmIK.update(null, true)
 
