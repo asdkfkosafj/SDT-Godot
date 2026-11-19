@@ -631,6 +631,7 @@ func _outline(him: Him) -> void:
 		return
 	var cp: Penis = him.currentPenis
 	var tip_e := Vector2.ZERO
+	var end_mid := NAN   # what sits on his tip: the middle of its last covered sample (its round end closes there)
 	var cov := []   # what sits on his tip (Him.tipExtra): the circles that reach each sample
 	if not _extra.is_empty():
 		cov.resize(n)
@@ -656,8 +657,10 @@ func _outline(him: Him) -> void:
 				var hc := sqrt(float(c["r"]) * float(c["r"]) - dx * dx)
 				lo = minf(lo, float(c["y"]) - hc)
 				hi = maxf(hi, float(c["y"]) + hc)
+		if lo <= hi and not _extra.is_empty():
+			end_mid = (lo + hi) * 0.5
 		if lo > hi:
-			lo = float(w[1])
+			lo = float(w[1]) if is_nan(end_mid) else end_mid   # (between its circles' ends: on its middle)
 			hi = lo
 		_y0[i] = lo - EDGE
 		_y1[i] = hi + EDGE
@@ -672,7 +675,11 @@ func _outline(him: Him) -> void:
 			tip_e = e
 		else:   # closing past his tip
 			var kc := clampf((s - maxf(_inside, _reach)) / _close, 0.0, 1.0)
-			e = tip_e.lerp(Vector2(-CLOSED, CLOSED), kc if _extra.is_empty() else smoothstep(0.0, 1.0, kc))
+			var from_e := tip_e
+			if not _extra.is_empty() and not is_nan(end_mid):   # past what sits on it: as wide as the pipe on from its
+				var m := _side * end_mid * _wid_scale             #   round end's point (not from the last sample's width,
+				from_e = Vector2(m - CLOSED, m + CLOSED)          #   which jumps as it moves)
+			e = from_e.lerp(Vector2(-CLOSED, CLOSED), kc if _extra.is_empty() else smoothstep(0.0, 1.0, kc))
 		_e0[i] = e.x
 		_e1[i] = e.y
 	if not _extra.is_empty():   # round where her throat goes from his glans to what sits on it (no notch; only out)
