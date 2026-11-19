@@ -82,6 +82,18 @@ const PASS_MARGIN := 1.2   # ... "off her": nothing of her within this many bulb
 const HIT_FRICTION := 0.15 # how much of its sliding along her it loses per physics step
 const SQUASH_PRESS := 1.2  # this much pushing into her (as a share of gravity, per tick) squashes it fully
 const SQUASH_MAX := 0.35   # fully squashed it is flat this far in (share of its radius)
+const JET_K := 0.3         # a spurt's cum shoots into the sack this much as fast as it would fly out (the latex in the
+#   way), in penis units per tick for the game's stage pixels per tick (its speed: 25 to 40)
+const JET_REF := 40.0      # ... in a sack this long from his tip to the cum (in any other the same time: shares of it)
+const JET_DRAG := 0.9      # ... and keeps this much of its speed each tick (the latex and the cum in it slow it)
+const JET_V_MIN := 2.0     # ... but goes on at least this fast
+const JET_W := 1.0         # the stream's half width: this many of the neck's half widths for a strand link as thick as
+#   1 (a link's thickness as cum strands draw it: its mass and the cum strand thickness setting)
+const RIPPLE_HIT := 0.35   # a stream going into the cum sets its level rippling: this much (of the most) per link,
+const RIPPLE_DECAY := 0.9  #   dying down to this much each tick;
+const RIPPLE_A := 0.06     #   the most: waves this high (share of the bulb's radius),
+const RIPPLE_L := 0.7      #   this long (share of it),
+const RIPPLE_W := 1.2      #   moving out from where it went in this fast (radians per tick)
 const SACK_STRETCH := 1.5  # past this much of the full weight's stretch the latex gets much stiffer
 
 var sprite: FlashSprite
@@ -158,6 +170,15 @@ var _bulb_args := []                   # set_bulb's
 var _bulb_need := false
 var _drawn_us := 0
 var _refresh_us := -1
+var jets := []             # the links of spurts in the sack, flying to the cum, oldest first: [along the path last tick,
+#   this tick, speed (shares of the path), half width (share of the neck's), spurt (one stream), ticks since it came]
+var _rip0 := 0.0           # the cum's level rippling (0..1), last tick and this tick
+var _rip1 := 0.0
+var _rip_t := 0.0          # ticks it has been rippling (the waves move on with it)
+var _jet_top := Vector2()  # their path (penis-local, as last drawn): from the sack's top along _jet_ax,
+var _jet_ax := Vector2()
+var _jet_len := 0.0        #   this far to the cum's level (0: no sack drawn hanging free: none shown)
+var _jet_f := 1.0          # (this frame's share of the way from last tick to this tick)
 var _drawer: Node = null             # where the bulb was last drawn (penis units) and gravity there
 
 
@@ -1198,6 +1219,44 @@ func set_bulb(r: float, col: Color, alpha: float, cum: Color) -> void:
 		(Engine.get_main_loop() as SceneTree).root.add_child(_drawer)
 
 
+## A link of a spurt shoots into the sack: speed as the game's spurt (stage pixels per tick), thickness as cum strands
+## draw the link, sid: its spurt (the links of one spurt make one stream).
+func spurt(speed: float, thick: float, sid: int) -> void:
+	jets.append([0.0, 0.0, speed * JET_K / JET_REF, JET_W * clampf(thick, 0.4, 3.0), sid, 0])
+	_bulb_need = true
+
+
+## Moves the spurts in the sack on (each tick); one reaching the cum's level is gone into it.
+func step_jets() -> void:
+	if jets.is_empty() and _rip1 <= 0.0 and _rip0 <= 0.0:
+		return
+	if _jet_len <= 0.0 or mouth_state != 0:
+		jets.clear()
+		_rip0 = 0.0
+		_rip1 = 0.0
+		return
+	_rip0 = _rip1
+	_rip1 *= RIPPLE_DECAY
+	if _rip1 < 0.01:
+		_rip1 = 0.0
+	_rip_t += 1.0
+	var keep := []
+	for j in jets:
+		j[0] = j[1]
+		if j[0] >= 1.0:
+			continue
+		j[1] = j[0] + j[2]
+		j[5] += 1
+		if j[1] >= 1.0:   # (into the cum: its level ripples)
+			if _rip1 <= 0.0 and _rip0 <= 0.0:
+				_rip_t = 0.0
+			_rip1 = minf(1.0, _rip1 + RIPPLE_HIT * clampf(j[3] / JET_W, 0.4, 2.0))
+		j[2] = maxf(JET_V_MIN / JET_REF, j[2] * JET_DRAG)
+		keep.append(j)
+	jets = keep
+	_bulb_need = true
+
+
 ## Takes the per-frame drawing away (the plugin is switched off).
 func free_drawer() -> void:
 	if _drawer != null:
@@ -1215,6 +1274,9 @@ func _frame() -> void:
 	var hn := _hn0.lerp(_hn1, f).normalized() if _hn0 != Vector2.ZERO else _hn1
 	var lt := _lt0.lerp(_lt1, f)
 	var sh := lerpf(_sh0, _sh1, f)
+	_jet_f = f
+	if not jets.is_empty() or _rip0 > 0.0 or _rip1 > 0.0:
+		_bulb_need = true   # (spurts in it, or its level rippling: every frame)
 	var key := Vector4(pe.x, pe.y, dn.x * 50.0 + sq * 40.0, dn.y * 50.0 + mouth_state * 1000.0 + sh * 300.0)   # (a turn of about a
 	# degree counts like a unit)
 	if not is_nan(lt.x):
@@ -1364,6 +1426,9 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 	var side := Vector2(-down.y, down.x) * 400.0
 	var lv := pe - down * r * 0.45
 	var below := PackedVector2Array([lv - side, lv + side, lv + side + down * 400.0, lv - side + down * 400.0])
+	var rip := lerpf(_rip0, _rip1, _jet_f) * RIPPLE_A * r   # (rippling: how high its waves are now)
+	if rip > 0.05 and not pressed and not from_lip:
+		below = _rippled(lv, down, r, rip, (top + ax * _jet_len - lv).dot(Vector2(-down.y, down.x)))
 	var pools := []
 	if pressed:   # all of it from where the cum starts (stuck behind her throat ring: past it, the latex this side clear)
 		pools = [fill]
@@ -1388,9 +1453,59 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 			continue
 		var parts := _split(pool, mouth)
 		for q in parts[1]:
-			_pool(pts, cols, idx, q, pe, down, r, cum, lv, alpha)
+			_pool(pts, cols, idx, q, pe, down, r, cum, lv, alpha, rip)
 		for q in parts[0]:
-			_pool(tp, tc, tix, q, pe, down, r, cum, lv, alpha)
+			_pool(tp, tc, tix, q, pe, down, r, cum, lv, alpha, rip)
+	# spurts shooting from his tip down the sack to the cum (hanging free only)
+	_jet_len = 0.0
+	if not from_lip and not pressed and not going_in:
+		_jet_top = top
+		_jet_ax = ax
+		_jet_len = maxf(0.0, (lv - top).dot(down) / maxf(0.2, ax.dot(down)))
+		var jw := rn * JET_W
+		var blobs := []
+		var streams := {}   # one stream per spurt: its links along the path, front first
+		for j in jets:
+			if not streams.has(j[4]):
+				streams[j[4]] = []
+			streams[j[4]].append(j)
+		for sid in streams:
+			var ls: Array = streams[sid]
+			var at := PackedFloat32Array()   # along the path, front to back
+			var ws := PackedFloat32Array()   # half widths there
+			for j in ls:
+				at.append(lerpf(j[0], j[1], _jet_f) * _jet_len)
+				ws.append(rn * j[3])
+			var last: Array = ls[ls.size() - 1]
+			if last[5] <= 2:   # (still spurting: the stream goes on back to his tip)
+				at.append(0.0)
+				ws.append(rn * last[3])
+			var tail := at[at.size() - 1]
+			var front := at[0]
+			if front - tail < 0.5:
+				tail = maxf(0.0, front - ws[0] * 2.0)
+				at[at.size() - 1] = tail
+			var side_a := PackedVector2Array()   # the stream: its two sides, round at its front
+			var side_b := PackedVector2Array()
+			for i in at.size():
+				side_a.append(top + ax * at[i] + pp * ws[i])
+				side_b.append(top + ax * at[i] - pp * ws[i])
+			var cap := PackedVector2Array()
+			var hw := ws[0]   # (its front round, as wide as the stream)
+			for i in 9:
+				cap.append(top + ax * front + (-pp * cos(PI * i / 8.0) + ax * sin(PI * i / 8.0)) * hw)
+			var body := side_a.duplicate()
+			for i in range(1, 6):   # (a round back end)
+				body.append(top + ax * tail + (pp * cos(PI * i / 6.0) - ax * sin(PI * i / 6.0)) * ws[ws.size() - 1])
+			side_b.reverse()
+			body.append_array(side_b)
+			blobs.append(cap)
+			blobs.append(body)
+		for cap in blobs:
+			for q in Geometry2D.intersect_polygons(cap, fill):   # (in the sack, above the cum's level)
+				for q2 in Geometry2D.clip_polygons(q, below):
+					if q2.size() >= 3:
+						_pool(pts, cols, idx, q2, pe, down, r, cum, lv - down * 4000.0, alpha)
 	var latex := _a(col, 0.5 * alpha)   # (as dense as the sleeve's latex: no step where they meet)
 	var fills := _split(fill, mouth)
 	for k in range(1, fill_all.size()):
@@ -1498,7 +1613,7 @@ static func _poly(pts: PackedVector2Array, cols: PackedColorArray, idx: PackedIn
 
 ## The cum pool q into a mesh: shaded down to its bottom, a light line along its level lv.
 func _pool(pts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32Array, q: PackedVector2Array, pe: Vector2,
-		down: Vector2, r: float, cum: Color, lv: Vector2, alpha: float) -> void:
+		down: Vector2, r: float, cum: Color, lv: Vector2, alpha: float, rip := 0.0) -> void:
 	var tri := Geometry2D.triangulate_polygon(q)
 	var o := pts.size()
 	for v in q:
@@ -1509,10 +1624,33 @@ func _pool(pts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32Arra
 		idx.append(o + k)
 	var surf := PackedVector2Array()
 	for v in q:
-		if absf((v - lv).dot(down)) < 0.2:
+		if absf((v - lv).dot(down)) < 0.2 + rip:
 			surf.append(v)
-	if surf.size() == 2:
+	if rip > 0.0 and surf.size() > 2:   # (rippling: along it, side to side)
+		var sd := Vector2(-down.y, down.x)
+		var arr := Array(surf)
+		arr.sort_custom(func(a, b): return a.dot(sd) < b.dot(sd))
+		surf = PackedVector2Array(arr)
+	if surf.size() == 2 or (rip > 0.0 and surf.size() > 2):
 		_strip(pts, cols, idx, surf, [-1.2, 0.0, 1.2], [Color(1, 1, 1, 0), Color(1, 1, 1, 0.5 * alpha), Color(1, 1, 1, 0)])
+
+
+## Below the cum's level lv as it ripples: waves `rip` high moving out from x0 (along the level, from lv), dying out
+## away from it.
+func _rippled(lv: Vector2, down: Vector2, r: float, rip: float, x0: float) -> PackedVector2Array:
+	var sd := Vector2(-down.y, down.x)
+	var out := PackedVector2Array([lv - sd * 400.0])
+	var k := TAU / maxf(2.0, r * RIPPLE_L)
+	var n := 28
+	for i in n + 1:
+		var x := lerpf(-r * 1.3, r * 1.3, float(i) / n)
+		var d := absf(x - x0)
+		var h := rip * sin(k * d - RIPPLE_W * (_rip_t + _jet_f)) * exp(-d / (r * 1.2))
+		out.append(lv + sd * x - down * h)
+	out.append(lv + sd * 400.0)
+	out.append(lv + sd * 400.0 + down * 400.0)
+	out.append(lv - sd * 400.0 + down * 400.0)
+	return out
 
 
 ## The line p with its inner corners near the sack (within r + 2 of the line from top to pe) bridged the way

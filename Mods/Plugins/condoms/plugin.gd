@@ -42,6 +42,8 @@ var roll := 0.0            # 0 at his tip .. 1 rolled all the way on
 var _dir := 0              # +1 rolling on, -1 rolling off
 var _sig := ""             # what the outline was scanned for (penis type, skin, art)
 var _dirty := true
+var _spurt_id := 0         # the spurt the last caught link was of (a new one: Him's spurt timer went up again)
+var _spurt_left := 0
 var cum := 0.0             # cum in it (strand link masses; stops at FULL)
 var _bulb_dirty := true
 var _cum_rgb := -1
@@ -73,7 +75,7 @@ func _enable() -> void:
 		"when": func(_him): return roll > 0.0 and _off < 2 and condom != null and condom.sprite.parent != null})
 	# taking a full one off: his left hand
 	modify(&"HimMaleBody.leftHand", {"op": "fn", "fn": func(v, _body): return _hand_target(v)})
-	hook_after(&"Him.catchCum", func(c): add_cum(c.args[0]))
+	hook_after(&"Him.catchCum", func(c): _caught(c.args[0]))
 	# stuck behind her throat ring the sack's stretched latex pulls her head back to him (pushed against it, it holds
 	# her back a little); in her throat it makes a swallow lump in her neck
 	modify(&"Her.drag", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, her):
@@ -115,6 +117,19 @@ func _disable() -> void:
 func _setting_changed(_key: String, _value) -> void:
 	_dirty = true
 	_bulb_dirty = true
+
+
+## A link of a spurt caught: it shoots into the sack (seen when it hangs free), its cum into the bulb.
+func _caught(mass: float) -> void:
+	add_cum(mass)
+	if condom != null and g.him != null:
+		var h = g.him
+		var left: int = h.bmTimer if g.bukkakeMode else h.spurtTimer   # (counts down in a spurt: up again, a new one)
+		if left >= _spurt_left:
+			_spurt_id += 1
+		_spurt_left = left
+		var thick := maxf(g.strandControl.cumMinThickness if g.strandControl != null else 1.0, pow(mass * 2.0, 1.5))
+		condom.spurt(h.randomSpurtSpeed, thick, _spurt_id)   # (as cum strands: Him's speed, Strand's thickness)
 
 
 ## Cum into the condom (strand link masses); the bulb at its tip grows with it up to FULL.
@@ -218,6 +233,7 @@ func _tick() -> void:
 		condom.attach(g.him.penis, art)   # keeps it right above the art
 	if cum > 0.0:
 		condom.step_sack(sack_length(), bulb_radius(), cum / FULL)   # (drawn every frame while it moves: condom.gd)
+		condom.step_jets()
 	# while there is a sack the sleeve leaves its outline round the tip to it (one line round both)
 	var cut := CUT_R if cum > 0.0 else 0.0
 	if cut != condom.cut_r:
