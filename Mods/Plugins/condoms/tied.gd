@@ -14,8 +14,9 @@ const STUB := 6.5                 # tied: the end over the knot is this long (pe
 const TIE_W := 2.0                # ... and this wide each side at its end
 const PIN_UP := Vector2(0, -1)    # pinned (or off his hand): the tied end points this way, straight up
 const KNOT_WIDE := 1.35           # tied: the knot this many times as wide as the sleeve there,
-const KNOT_DENSE := 0.92          #   its latex this opaque (the rest: 0.5)
+const KNOT_DENSE := 0.90          #   its latex this opaque (the rest: 0.5)
 const SACK_UP := 5.0              # tied: the sack drawn this far up, its top inside the knot (penis units)
+const TRI_UP := 2.0               # the open end over it this far up from the knot's top (penis units),
 const TRI_H := 13.0               # the open end over it: an upside-down triangle this tall (penis units),
 const TRI_W := 11.0               #   this wide each side at its top edge (the rim),
 const TRI_SAG := 0.3              #   its other two sides bent in this much (share of the way to its middle line),
@@ -385,7 +386,7 @@ func draw(pe: Vector2, dn: Vector2, tl: Vector2, kn := GRIP) -> void:
 		tw *= wk
 		if closed and bow > 0.0:   # the open end: an upside-down triangle of flat latex, the rolled rim its top edge (under
 			#   the tied end: its point is drawn over by it)
-			var tip := tl - dir * tw * 0.5
+			var tip := tl + dir * (TRI_UP * s * bow - tw * 0.5)
 			var top := tip + dir * TRI_H * s * bow
 			var a := top + nv * TRI_W * s * bow
 			var b := top - nv * TRI_W * s * bow
