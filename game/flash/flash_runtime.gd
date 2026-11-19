@@ -1169,6 +1169,8 @@ func _handle_input(event: InputEvent) -> void:
 				if _mouse_down_target == target:
 					_dispatch_mouse(target, FlashEvent.CLICK)
 				_mouse_down_target = null
+		elif mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+			_dispatch_mouse(target, FlashEvent.RIGHT_MOUSE_DOWN)
 		elif mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 			var e := FlashEvent.mouse(FlashEvent.MOUSE_WHEEL)
 			e.delta = 3 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else -3

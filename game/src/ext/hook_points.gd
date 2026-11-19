@@ -118,6 +118,7 @@ const VALUES := {
 	&"BreastController.kick": true,
 	&"BreastController.push": true,
 	&"CharacterControl.skinSaturation": true,
+	&"DT.mousePos": true,
 	&"Her.angryEyebrows": true,
 	&"Her.biteRarity": true,
 	&"Her.blinks": true,

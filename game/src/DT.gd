@@ -271,10 +271,13 @@ func tick() -> void:
 		if not g.gamePaused:
 			if not g.controlLocked:
 				var mirroredControls: bool = (g.mirrored or g.invertControls) and not (g.mirrored and g.invertControls)
-				var mx: float = g.screenSize.x - currentMousePos.x if mirroredControls else currentMousePos.x
+				var mp := currentMousePos
+				if Hooks.has_value(&"DT.mousePos"):   # HOOK value point: the screen point the mouse steers her by
+					mp = Hooks.value(&"DT.mousePos", self, mp)
+				var mx: float = g.screenSize.x - mp.x if mirroredControls else mp.x
 				mx = (mx - 100) / 500
 				g.currentMousePos.x = minf(1.2, mx)
-				g.currentMousePos.y = maxf(-1, minf(1, (currentMousePos.y - 100) / 200 - 1))
+				g.currentMousePos.y = maxf(-1, minf(1, (mp.y - 100) / 200 - 1))
 				if g.autoModeOn:
 					g.currentPos = automaticControl.getPos()
 				else:
@@ -451,9 +454,7 @@ func registerHotkeys() -> void:
 	k.call("mute", "Mute", 77, func():
 		soundControl.toggleMute()
 		g.saveData.saveOptionsData())
-	k.call("quality", "Quality", 81, func():
-		g.toggleQuality()
-		g.saveData.saveOptionsData())
+	# port: no Quality key (the game's Q): stage quality changes nothing here (graphics: Settings, MSAA)
 
 func closeMainMenu() -> void:
 	fadingBG = true

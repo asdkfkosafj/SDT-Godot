@@ -10,7 +10,8 @@ extends SDTExtension
 ## With cum in it, Q has his left hand take it off: his hand goes to his tip, pulls it off (the empty latex stretched
 ## from his glans to his fist; a drop of cum stays on his tip), ties it and holds it by the knot, the sack hanging from
 ## his fist and swinging with it. (His left arm must show and hang loose; else it only rolls off.)
-## Planned next: it is pinned on her.
+## While he holds it, a short Q press starts pin mode (pins.gd: the mouse moves his hand, a click pins it on her,
+## right click / Esc / Q stops); a long Q press drops it. He puts on a new one once it is pinned or dropped.
 
 const ROLL_TICKS := 15     # rolling it on or off takes half a second
 const CUT_R := 70.0        # round his tip the bulb draws the outline of the sleeve and the sack as one line
@@ -25,6 +26,7 @@ const DROP_TICKS := 50     # the drop of cum left on his tip hangs there this lo
 
 var Condom: GDScript
 var Tied: GDScript
+var pins = null            # pins.gd: pin mode, and the ones pinned on her or falling
 var tied = null            # tied.gd: the one he took off, in his hand
 var _off := 0              # taking it off: 0 not, 1 his hand goes to his tip, 2 pulls it off, 3 ties it
 var _off_t := 0            # ticks into that
@@ -61,8 +63,12 @@ func _setup() -> void:
 func _enable() -> void:
 	Condom = load_script("condom.gd")
 	Tied = load_script("tied.gd")
+	pins = load_script("pins.gd").new(self)
 	on_late_tick(_tick)
-	on_key(KEY_Q, toggle, "condom on / off", "condom")
+	on_key(KEY_Q, toggle, "condom: on / off, take off, pin (hold: drop)", "condom")
+	on_key(27, func(): pins.stop_aim(), "condom: stop pinning", "pin_cancel")
+	# pin mode: her head stays where it was while the mouse moves his hand
+	modify(&"DT.mousePos", {"op": "fn", "fn": func(v, _dt): return pins.mouse_pos(v)})
 	modify(&"Him.cumCaught", {"op": "set", "value": true, "phase": Hooks.FINAL,
 		"when": func(_him): return roll > 0.0 and _off < 2 and condom != null and condom.sprite.parent != null})
 	# taking a full one off: his left hand
@@ -90,6 +96,9 @@ func _enable() -> void:
 
 func _disable() -> void:
 	_off = 0
+	if pins != null:
+		pins.free_all()
+		pins = null
 	_let_drop()
 	if tied != null:
 		tied.release()
@@ -139,6 +148,9 @@ func _set_colour(c: Dictionary) -> void:
 func toggle() -> void:
 	if _off != 0:
 		return
+	if tied != null and not worn:   # he holds one: a short press pins it, a long one drops it (pins.gd)
+		pins.q_pressed()
+		return
 	if worn and _dir == 0 and cum > 0.0 and condom != null and _hand_ok() and not g.him.inMouth:
 		_off = 1   # a full one: his hand takes it off
 		_off_t = 0
@@ -150,7 +162,7 @@ func toggle() -> void:
 
 ## Puts the condom on (rolls on) or takes it off. Only while he is out of her mouth, and not on the strap-on.
 func set_worn(on: bool) -> void:
-	if on == worn or g.him == null or _off != 0:
+	if on == worn or g.him == null or _off != 0 or (on and tied != null):   # (one in his hand: pinned or dropped first)
 		return
 	if g.him.inMouth or (on and _strapon()):
 		return
@@ -176,6 +188,7 @@ func _tick() -> void:
 	if g.him == null or g.him.penis == null:
 		return
 	_tick_off()
+	pins.tick()
 	if worn and _strapon():
 		worn = false
 		roll = 0.0
@@ -285,11 +298,12 @@ func _hand_goal() -> Vector2:
 
 ## HimMaleBody.leftHand: while he takes it off, his hand's wrist where its knot point is at _hand_goal().
 func _hand_target(v: Vector2) -> Vector2:
-	if _off == 0 or not _hand_ok():
+	if (_off == 0 and not pins.aiming) or not _hand_ok():
 		return v
 	var hand := _hand()
 	var off := hand.localToGlobal(Tied.GRIP) - hand.localToGlobal(Vector2.ZERO)
-	return g.him.leftArmContainer.globalToLocal(_hand_goal() - off)   # (the arm's IK works in its container's units)
+	var goal: Vector2 = pins.aim_goal() if pins.aiming else _hand_goal()
+	return g.him.leftArmContainer.globalToLocal(goal - off)   # (the arm's IK works in its container's units)
 
 
 ## Taking it off, a tick at a time; and the one in his hand.
@@ -304,6 +318,8 @@ func _tick_off() -> void:
 		_off = 0   # (his arm went away: it stays on, or is gone if already off)
 	if _off != 0:
 		_off_t += 1
+	if tied != null and worn and _off == 0:   # (a new one went on while he held one: the held one falls)
+		pins.drop()
 	match _off:
 		1:
 			if g.him.inMouth:
@@ -319,6 +335,8 @@ func _tick_off() -> void:
 				_dir = 0
 				_remove()
 				_start_drop()
+				tied.closed = true
+				tied.bow = 0.0
 				_off = 3
 				_off_t = 0
 		3:
@@ -328,14 +346,14 @@ func _tick_off() -> void:
 			if is_nan(tied.tail.x):
 				tied.tail = stub
 			tied.tail = tied.tail.lerp(stub, lerpf(0.35, 1.0, u))
-			tied.tail_w = lerpf(tied.tail_w, 2.0, 0.3)
+			tied.tail_w = lerpf(tied.tail_w, Tied.TIE_W, 0.3)
+			tied.bow = smoothstep(0.3, 1.0, u)   # (the rim's loops open as the sleeve's end goes into the knot)
 			if _off_t >= TIE_TICKS:
 				_off = 0
 				tied.tied = true
 	if tied != null:
 		if not _hand_ok():
-			tied.release()   # (his arm went away: so did it)
-			tied = null
+			pins.drop()   # (his arm went away: it falls)
 			return
 		tied.attach(_hand())
 		tied.set_look(get_setting("colour"), get_setting("density"), Color.hex((g.cumRGB << 8) | 0xFF))
@@ -345,7 +363,7 @@ func _tick_off() -> void:
 ## His hand has it by its tip: the sack goes from his penis to his hand.
 func _take() -> void:
 	if tied != null:
-		tied.release()   # (the one he still held is gone: pinning it on her comes later)
+		pins.drop()   # (not while he holds one: set_worn waits; but to be safe it falls)
 	tied = Tied.new(condom)
 	tied.attach(_hand())
 	var neck: Array = condom._neck(bulb_radius())

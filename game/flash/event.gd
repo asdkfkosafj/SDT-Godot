@@ -20,6 +20,7 @@ const CLICK := "click"
 const DOUBLE_CLICK := "doubleClick"
 const MOUSE_DOWN := "mouseDown"
 const MOUSE_UP := "mouseUp"
+const RIGHT_MOUSE_DOWN := "rightMouseDown"   # (Flash Player 11.2+; the game does not use it)
 const MOUSE_MOVE := "mouseMove"
 const MOUSE_OVER := "mouseOver"
 const MOUSE_OUT := "mouseOut"

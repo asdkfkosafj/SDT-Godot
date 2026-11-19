@@ -488,6 +488,27 @@ func hitTestPoint(x: float, y: float, shape_flag: bool = false) -> bool:
 	return _hit_shape(lp)
 
 
+## Port addition: like hitTestPoint(x, y, true), but only what shows there: hidden or see-through (alpha 0)
+## objects do not count (Flash's counts invisible children: hit areas, hidden clothes), and the object's and its
+## parents' masks cut it. (x, y) in stage coordinates. In GDScript (slower than hitTestPoint): for clicks.
+func hitTestVisible(x: float, y: float) -> bool:
+	if not is_visible_in_tree():
+		return false
+	var o: FlashDisplayObject = self
+	while o != null:
+		if o.alpha <= 0.01:
+			return false
+		if o._mask != null and not o._mask.hitTestPoint(x, y, true):
+			return false
+		o = o._flash_parent
+	return _hit_visible(flash_global_transform().affine_inverse() * Vector2(x, y))
+
+
+## hitTestVisible below this object; p in its local space (it shows: checked by the caller).
+func _hit_visible(p: Vector2) -> bool:
+	return _hit_shape(p)
+
+
 ## The native extension (native/, game/bin/) is used for hot paths when loaded; --nonative forces the GDScript code.
 static var native: bool = ClassDB.class_exists(&"SDTNative") and not "--nonative" in OS.get_cmdline_user_args()
 static var native_exclude: bool = native and ClassDB.class_has_method(&"SDTNative", &"hit_shape_excluding")

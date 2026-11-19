@@ -345,6 +345,24 @@ func _hit_shape(p: Vector2) -> bool:
 	return false
 
 
+## hitTestVisible: as _hit_shape, but only children that show (visible, not see-through, their masks cut them).
+func _hit_visible(p: Vector2) -> bool:
+	if not _hit_bounds().has_point(p):
+		return false
+	if _graphics != null and _graphics.hit(p):
+		return true
+	for i in range(_children.size() - 1, -1, -1):
+		var c: FlashDisplayObject = _children[i]
+		if c._clip_depth > 0 or not c._masking.is_empty() or c == hit_exclude or not c.visible or c.alpha <= 0.01:
+			continue
+		var cp := c.transform.affine_inverse() * p
+		if c._mask != null and not c._mask.hitTestPoint(c.localToGlobal(cp).x, c.localToGlobal(cp).y, true):
+			continue
+		if c._hit_visible(cp) and _clip_allows(c, p):
+			return true
+	return false
+
+
 ## For children under a timeline clip mask, a hit only counts inside the mask.
 func _clip_allows(c: FlashDisplayObject, p: Vector2) -> bool:
 	if c._depth < 0:
