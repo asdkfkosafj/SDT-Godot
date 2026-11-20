@@ -17,8 +17,10 @@ extends FlashDisplayObject
 ## round him down to it: the pool goes on down there, and runs on down (drain: the plugin takes it out of her mouth).
 ##
 ## The stomach (stomach_part.gd) is a display object of its own, above her near arm; this one gives it her throat's
-## line every tick (update_stomach). This one ends (fades out) a little past the ring, or past his tip; while the
-## stomach shows, its pipe takes over there, along this one's centre line, so the pipe goes on over her arm. Its part
+## line every tick (update_stomach). This one ends a little past the ring, or past his tip, at the first sample where
+## her throat is the pipe as it is (_seam): while the stomach shows, its pipe goes on from that sample, along this
+## one's centre line, so the pipe goes on over her arm; both draw that sample, so they meet without a seam (no
+## cross-fade: nothing shows twice). Without the pipe this one fades out past there. Its part
 ## low on her neck is then drawn by a second painter (_lower) in the stomach's layer, over her arm too (her
 ## shoulder would cut him off); both draw the same row of the centre line there, so they meet without a seam. His
 ## penis there is drawn by a third painter (_lower_top), above what flows down the pipe (the stomach part's _flow).
@@ -39,10 +41,11 @@ const EDGE := 3.0          # penis-local margin around his outline in the strip 
 const PAST_TIP := 12.0     # penis-local length taken past his tip point (the rounded end of the art)
 const CLOSE_LEN := 15.0    # past his tip her throat closes over this length
 const CLOSE_SOFT := 36.0   # past what sits on his tip (Him.tipExtra) her throat is the pipe's width at once, on that
-                           # one's middle (_mid); this part goes on this far past it before the hand-over
-const HAND_FADE := 6      # samples over which the stomach's pipe takes over, past that (its PIPE_TOP)
-const HAND_PAST := 2       # (at her throat's curve's end: the hand-over starts at least this many samples past what
-                           # sits on his tip)
+                           # one's middle (_mid); her ring closes over this length past it
+const HAND_FADE := 6       # where the stomach's pipe does not show, this part fades out over this many samples past
+                           # its seam (_seam)
+const SEAM_EPS := 0.05     # her throat is the pipe where its walls are this near the pipe's (local units: no step)
+const TIP_ROUND := 6       # her throat is rounded round his tip this many samples past it (what sits on his tip)
 const SPLIT_AT := 0.7      # the lower painter takes over this far down her neck (0 jaw .. 1 chest): above her
                            # shoulder, below her earrings
 const SPLIT_MIN := 0.4     # ... or higher, where her near arm covers her throat above that (_split_above_arm), but
@@ -121,9 +124,11 @@ const GATE_LEN := 5        # her throat is closed there (what is in her mouth st
                            # way from its middle (in her, not on the centre line, which follows him)
 const GATE_MIN := 0.5      # to this half width (a seam)
 const GATE_RING := 5.0     # and its wall is this much thicker there, out from it (a ring of muscle)
+const GATE_OVER := 0.6     # a condom's neck in it (gripped): the ring shows over it, in from its edges, this share of
+const GATE_OVER_MAX := 0.4 #   GATE_RING, but not over more than this share of its half width (it is round: in front)
+const GATE_OVER_OUT := 2.0 # and out over the wall this far (it covers the rim of his art there)
 const GATE_PRE := 0.5      # as she gets ready to swallow it opens this much (of the way to her throat's own width);
-                           # what she swallows opens it the rest of the way (the lump, LUMP_ROOM)
-const LUMP_ROOM := 1.0     # her throat bulges round a swallowed lump this far out from it
+                           # what she swallows opens it the rest of the way (the lump: _bulge)
 const DRAIN := 0.25        # while he holds the ring open, what is in her mouth runs down her throat round him this
                            # fast (the game's units per tick: a full mouth in some 5 s), while it reaches down there
                            # (her throat goes down from her mouth); from his tip at the ring's middle, faster as he
@@ -158,9 +163,10 @@ var _side := 1.0                     # which side of the line his penis-local +y
 var _penis_xf := Transform2D()       # penis-local -> his local space (UVs into his render)
 var _bounds := Rect2()
 var _curve_n := 0                    # samples of the centre line's curve (past it, it goes straight on)
-var _pipe_under := false             # the stomach's pipe shows under this part's end (it takes over there)
-var _hand := 0.0                     # the sample where this part has faded out: past her throat's closed stretch
-                                     # (GATE_LEN) or his tip; the stomach's pipe (its food pipe) takes over there
+var _seam := 0                       # the first sample where her throat is the stomach's pipe as it is (closed round its
+                                     # middle, _mid; no ring, none of him): this part ends there and the pipe goes on
+                                     # from there (both draw that sample: no seam shows)
+var _pipe_k := 0.0                   # how much the stomach's pipe shows (past _seam this part fades out the rest)
 var _mouth_end := 0                  # the sample where her mouth's roof and floor have come into her throat
 var _w := PackedFloat32Array()       # how much of this part shows at each sample (1, but where the pipe takes over)
 var _lower := Node2D.new()           # draws the part past _split, in the stomach's layer (attach_lower)
@@ -177,7 +183,7 @@ var mouth_only := false              # it shows her mouth and throat without him
 var _p0 := PackedFloat32Array()      # his outline at each sample, without the room around him (0 past his tip)
 var _p1 := PackedFloat32Array()
 var _mid := PackedFloat32Array()     # past what sits on his tip, her throat's middle off the centre line (the stomach's
-                                     # pipe follows it: _pipe_line); 0 elsewhere
+                                     # pipe follows it); 0 elsewhere
 var _m0 := 0                         # her mouth's pocket: from this sample (her lips)
 var _m1 := 0                         # to this one (where her throat starts)
 var _to_jaw := true                  # her jaw (the pocket's floor) is on the e1 side
@@ -206,6 +212,9 @@ var _pool_end := 0                   # the sample the pool reaches down to: the 
 var _gate := 0                       # the sample in the middle of the closed stretch (GATE_LEN), and exactly
 var _gate_f := 0.0                   # (between samples)
 var _thick := PackedFloat32Array()   # how much thicker the wall is at each sample (GATE_RING)
+var _grip := PackedFloat32Array()    # how far in the ring shows over what it grips (GATE_OVER)
+var _gripped := PackedByteArray()    # 1 where what sits on his tip is marked "grip" (a condom's neck: her ring grips it)
+var _grip_f := -1.0                  # the last of those samples (where the sack is held), -1: none
 var _b0 := PackedFloat32Array()      # _e0 / _e1 without the bulge round what she swallows (_bulge)
 var _b1 := PackedFloat32Array()
 
@@ -250,7 +259,6 @@ func _splitting() -> bool:
 ## Called every tick (after update_shape): updates the stomach part (stomach_part.gd), with her throat's line in its
 ## local space. `want`: the stomach should show.
 func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) -> void:
-	_pipe_under = want_pipe
 	var her: Her = g.her
 	var inv := stomach.flash_global_transform().affine_inverse()
 	var throat := _throat(her, inv)
@@ -262,14 +270,19 @@ func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) ->
 	stomach.glow_col = _glow_col
 	var line: PackedVector2Array   # what the pipe follows before it bends down into the stomach
 	var bend: Vector2              # and the way it goes on from there
-	if shown > 0.0 and _path.size() >= 2:   # this part's centre line, as far as its curve or the hand-over
-		var last := clampi(maxi(_curve_n, int(ceil(_hand)) + 1), 2, _path.size())
+	var seam := -1                 # the pipe goes on from this sample of the line (-1: no seam, the line is her throat)
+	var seam_t := Vector2.ZERO     # this part's way along its centre line there
+	if shown > 0.0 and _path.size() >= 2:   # this part's centre line, as far as its curve or the seam
+		var last := clampi(maxi(_curve_n, _seam + 2), 2, _path.size())
 		line = _path.slice(0, last)
 		if _mid.size() == _path.size():   # (past what sits on his tip: along her throat's middle, off the centre line)
 			for i in last:
 				line[i] += _norm[i] * _mid[i]
-		line = (inv * flash_global_transform()) * line
+		var xf := inv * flash_global_transform()
+		line = xf * line
 		bend = (line[-1] - line[-2]).normalized()
+		seam = mini(_seam, last - 1)
+		seam_t = xf.basis_xform(_path[mini(seam + 1, _path.size() - 1)] - _path[maxi(seam - 1, 0)]).normalized()
 	else:   # her throat, and on along its tail
 		var axis := _neck_axis(her, inv)
 		var join := int(JOIN * (throat.size() - 1))
@@ -281,8 +294,24 @@ func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) ->
 	if shown > 0.0:
 		flow_from = maxf(_inside, minf(_split * STEP, _drawn)) if _splitting() else maxf(_inside, _drawn)
 	# (while this part fades, the pipe shows under it as much as it does not: not through her mouth)
-	stomach.update(want, want_pipe, her, line, bend, _hand, shown, flow_from, _gate_f if shown > 0.0 else 0.0)
+	stomach.update(want, want_pipe, her, line, bend, seam, seam_t, shown, flow_from, _gate_f if shown > 0.0 else 0.0)
+	_fade_end(stomach.shown * stomach.pipe_shown)
 	_bulge(stomach)
+
+
+## How much of this part shows at each sample (_w): all of it down to the seam; past it, as much as the stomach's pipe
+## does not show (pipe_k), fading out over HAND_FADE samples.
+func _fade_end(pipe_k: float) -> void:
+	_pipe_k = pipe_k
+	_w.resize(_path.size())
+	for i in _path.size():
+		_w[i] = 1.0 if i <= _seam else (1.0 - pipe_k) * (1.0 - smoothstep(float(_seam), float(_seam + HAND_FADE), i))
+
+
+## The last sample this part draws: the seam while the pipe shows all of it (it draws on from there), else on past it
+## as far as this part fades out.
+func _end() -> int:
+	return mini(_path.size() - 1, _seam if _pipe_k >= 0.999 else _seam + HAND_FADE)
 
 
 ## Where what she swallows starts down (along the centre line): the back of the pool in her mouth, above where her
@@ -305,21 +334,24 @@ func drain() -> float:
 
 
 ## Her throat closed where her mouth meets it (GATE_LEN), but round him, and opening a little as she gets ready to
-## swallow (the game's swallow: from its build-up to the moment she swallows, closing again as she relaxes).
+## swallow (the game's swallow: from its build-up to the moment she swallows, closing again as she relaxes). A condom's
+## neck (Him.tipExtra marked "grip") it grips where the neck ends, at the sack it holds back: its walls right on it, the
+## ring of muscle round it as thick as when closed and over its edges (_grip).
 func _close_gate(her: Her) -> void:
 	var open := 0.0
 	if her.swallowing:
 		var t := float(her.swallowTimer)
 		var seq: Dictionary = her.swallowSequence
-		open = GATE_PRE * smoothstep(float(seq["build"]), float(seq["swallow"]), t) \
-			* (1.0 - smoothstep(float(seq["relax"]), float(seq["end"]), t))
+		open = GATE_PRE * smoothstep(float(seq["build"]), float(seq["swallow"]), t) 			* (1.0 - smoothstep(float(seq["relax"]), float(seq["end"]), t))
 	_thick.resize(_path.size())
 	_thick.fill(0.0)
+	_grip.resize(_path.size())
+	_grip.fill(0.0)
+	var held := maxf(_inside, _reach)   # (what sits on his tip holds it open too)
 	for i in range(maxi(1, ceili(_gate_f - GATE_LEN)), mini(_path.size(), floori(_gate_f + GATE_LEN) + 1)):
 		var ring := 0.5 + 0.5 * cos(PI * (i - _gate_f) / GATE_LEN)
 		var k := ring * (1.0 - open)
 		if _with_penis:   # held open where he is, and ahead of his tip as her throat closes past it (CLOSE_LEN)
-			var held := maxf(_inside, _reach)   # (what sits on his tip holds it open too)
 			k *= smoothstep(held, held + _close, i * STEP)
 		var c := (_e0[i] + _e1[i]) * 0.5
 		var a := lerpf(_e0[i], c - GATE_MIN, k)
@@ -327,6 +359,46 @@ func _close_gate(her: Her) -> void:
 		_e0[i] = a
 		_e1[i] = b
 		_thick[i] = GATE_RING * ring * lerpf(1.0, 0.5, clampf(((b - a) * 0.5 - GATE_MIN) / CLOSED, 0.0, 1.0))
+	# a condom's neck: gripped over GATE_LEN up from its end, where the sack is held
+	_grip_f = -1.0
+	for i in _gripped.size():
+		if _gripped[i] == 1 and _with_penis:
+			_grip_f = i
+	if _grip_f < 0.0:
+		return
+	for i in range(maxi(1, ceili(_grip_f - GATE_LEN)), mini(_path.size(), floori(_grip_f + GATE_LEN) + 1)):
+		var ring := 0.5 + 0.5 * cos(PI * (i - _grip_f) / GATE_LEN)
+		_thick[i] = maxf(_thick[i], GATE_RING * ring)   # (out from it on past the neck's end too: no step)
+		if _gripped[i] != 1:
+			continue
+		var k := ring * (1.0 - open)
+		var a := lerpf(_e0[i], _p0[i], k)
+		var b := lerpf(_e1[i], _p1[i], k)
+		_e0[i] = a
+		_e1[i] = b
+		_grip[i] = k * minf(GATE_RING * GATE_OVER, (b - a) * 0.5 * GATE_OVER_MAX)
+
+
+## How far along the centre line her throat is closed past him (_outline): past his bare tip once it has closed over
+## CLOSE_LEN, past what sits on his tip at once.
+func _closed_at() -> float:
+	return maxf(_inside, _reach) + (CLOSE_LEN if _extra.is_empty() else 0.0)
+
+
+## The seam (_seam): past her ring and past what of him is drawn, the first sample from which on her throat is the
+## pipe as it is (closed round its middle, _mid, its wall no thicker), whatever shaped it above (his tip and its
+## closing, her mouth handing over to her throat, what sits on his tip); its walls there exactly the pipe's.
+func _find_seam() -> void:
+	var from := mini(ceili(maxf(_gate_f + GATE_LEN + 1.0, _drawn / STEP)), _path.size() - 2)
+	_seam = _path.size() - 2
+	for i in range(_path.size() - 2, from - 1, -1):   # (from the end up, while it is)
+		var m := _mid[i] if _mid.size() == _path.size() else 0.0
+		if absf(_e0[i] - (m - CLOSED)) > SEAM_EPS or absf(_e1[i] - (m + CLOSED)) > SEAM_EPS or _thick[i] > 0.0:
+			break
+		_seam = i
+	var m := _mid[_seam] if _mid.size() == _path.size() else 0.0
+	_e0[_seam] = m - CLOSED
+	_e1[_seam] = m + CLOSED
 
 
 ## The ring's middle (called on her throat at rest, without him, so it stays in her): where the centre line has turned
@@ -372,20 +444,22 @@ func _index_near(p: Vector2) -> float:
 	return at
 
 
-## Her throat bulges round what she swallows on its way down (the stomach part's lumps, along the same line).
+## Her throat bulges round what goes down it (what she swallows, his cum past his tip) as the stomach part's pipe
+## does round it, along the same line (its samples are this part's), round her throat's middle there.
 func _bulge(stomach: FlashDisplayObject) -> void:
 	if shown <= 0.0 or _b0.size() != _path.size():
 		return
-	var lw: PackedFloat32Array = stomach.lump_w()
+	var bw: PackedFloat32Array = stomach.bulge_w()
 	_e0 = _b0.duplicate()
 	_e1 = _b1.duplicate()
-	for i in mini(lw.size(), _path.size()):
-		if lw[i] <= 0.01:
+	for i in mini(bw.size(), _path.size()):
+		if bw[i] <= 0.0:
 			continue
-		var hw := lw[i] + LUMP_ROOM
-		_e0[i] = minf(_e0[i], -hw)
-		_e1[i] = maxf(_e1[i], hw)
-		_bounds = _bounds.expand(_at(i, -hw - WALL - GLOW)).expand(_at(i, hw + WALL + GLOW))
+		var hw := bw[i]
+		var m := _mid[i] if _mid.size() == _path.size() else 0.0
+		_e0[i] = minf(_e0[i], m - hw)
+		_e1[i] = maxf(_e1[i], m + hw)
+		_bounds = _bounds.expand(_at(i, m - hw - WALL - GLOW)).expand(_at(i, m + hw + WALL + GLOW))
 
 
 ## Where the centre line's curve ends: past the base of her throat, on along her neck from its point `join`.
@@ -402,7 +476,6 @@ func _neck_axis(her: Her, inv: Transform2D) -> Vector2:
 ## Called every tick; `want`: he is in her mouth and the x-ray is on; `keep_mouth`: while he is not, it shows her
 ## mouth and throat without him (cum in her mouth, the plugin's Keep mouth).
 func update_shape(want: bool, keep_mouth := false) -> void:
-	_pipe_under = false   # (update_stomach, after this, says; drawn later in the frame)
 	var was := shown
 	# he leaves her mouth (or comes in) with his tip at her lips: the shape hardly changes, it goes over at once
 	var alone := keep_mouth and not want
@@ -456,7 +529,7 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_extra = []
 	_close = CLOSE_LEN
 	_drawn = 0.0
-	_hand = CLOSE_LEN / STEP + HAND_FADE
+	_seam = ceili(CLOSE_LEN / STEP)   # (as far as it reaches at least, for the line's length: set below)
 	_line(lips_mid, _edge_in, tail, axis)
 	_outline(him)
 	_pocket(top_lip, bottom_lip, jaw_at)
@@ -489,9 +562,7 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 			ahead = maxf(ahead, _tip_x - (float(c["x"]) - float(c["r"])))
 		_reach = _inside + ahead * _len_scale if _inside > 0.0 else 0.0
 		_drawn = _inside + maxf(PAST_TIP, ahead + 2.0) * _len_scale if _inside > 0.0 else 0.0
-		# (past his bare tip her throat closes over _close: the stomach's pipe, in from 2 HAND_FADE before the
-		# hand-over, comes in under it only past that; past what sits on his tip it is the pipe's width at once)
-		_hand = (maxf(_inside, _reach) + _close) / STEP + HAND_FADE * (2.0 if _extra.is_empty() else 1.0)
+		_seam = ceili(maxf(_closed_at(), _drawn) / STEP) + TIP_ROUND + 1   # (as far as it reaches at least: set below)
 		# along him, towards his tip; past what is drawn of him, her throat at rest
 		# (only his own art is stiff: what sits on his tip is soft and follows her throat)
 		var stiff := minf(_drawn, _inside + PAST_TIP * _len_scale) if not _extra.is_empty() else _drawn
@@ -501,18 +572,10 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 		_pocket(top_lip, bottom_lip, jaw_at)
 		_fit_mouth(rest)
 	_edge_at = start
-	# this part ends past her throat's closed stretch (where the stomach's pipe takes over), or past his tip
 	_gate_f = minf(_index_near(gate_at), float(_path.size() - 1 - GATE_LEN))
 	_gate = int(round(_gate_f))
-	_hand = maxf(_hand, _gate_f + HAND_FADE + 1.0)
-	# but not past the end of her throat's curve (past it the centre line goes straight on along her neck, not to her
-	# stomach: the stomach's pipe, which follows this part's line down to there, would bend back up into an S), unless
-	# what is in her throat goes on past that (it fades out only past its end: HAND_FADE after HAND_PAST). Only with
-	# something on his tip (Him.tipExtra): past his bare tip her throat still closes, and the pipe would show over his
-	# glans
-	if not _extra.is_empty():
-		_hand = minf(_hand, maxf(float(_curve_n - 1), maxf(_inside, _reach) / STEP + HAND_PAST + HAND_FADE))
 	_close_gate(her)
+	_find_seam()
 	_b0 = _e0.duplicate()
 	_b1 = _e1.duplicate()
 	_split = -1   # (before the pool: its part past here is drawn by the lower painter too)
@@ -525,9 +588,7 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_slosh(her, true)
 	_pool()
 	_move_shots()
-	_w.resize(_path.size())
-	for i in _path.size():
-		_w[i] = 1.0 - smoothstep(_hand - HAND_FADE, _hand, i)
+	_fade_end(_pipe_k)   # (update_stomach sets it again with the pipe as it is now)
 	_colours()
 	_bounds = Rect2(_path[0], Vector2.ZERO)
 	for i in _path.size():
@@ -624,7 +685,7 @@ func _resample(raw: PackedVector2Array, rest := PackedVector2Array(), from := IN
 	_path = _even(p)
 	_curve_n = _path.size()
 	var end_dir := (_path[-1] - _path[-2]).normalized() if _path.size() > 1 else Vector2.DOWN
-	var reach := maxf(_drawn, _hand * STEP)
+	var reach := maxf(_drawn, (_seam + HAND_FADE) * STEP)
 	while (_path.size() - 1) * STEP < reach + STEP:
 		_path.append(_path[-1] + end_dir * STEP)
 	var n := _path.size()
@@ -673,6 +734,8 @@ func _outline(him: Him) -> void:
 	_p1.resize(n)
 	_mid.resize(n)
 	_mid.fill(0.0)
+	_gripped.resize(n)
+	_gripped.fill(0)
 	if not _with_penis:   # her mouth alone: closed all along
 		_e0.fill(-CLOSED)
 		_e1.fill(CLOSED)
@@ -704,6 +767,8 @@ func _outline(him: Him) -> void:
 		for c in (cov[i] if not cov.is_empty() and cov[i] != null else []):   # what sits on his tip: its width here too
 			var dx := x - float(c["x"])
 			if absf(dx) < float(c["r"]):
+				if c.get("grip", false):
+					_gripped[i] = 1
 				var hc := sqrt(float(c["r"]) * float(c["r"]) - dx * dx)
 				lo = minf(lo, float(c["y"]) - hc)
 				hi = maxf(hi, float(c["y"]) + hc)
@@ -739,7 +804,7 @@ func _outline(him: Him) -> void:
 			_mid[i] = m * smoothstep(_inside, _reach, i * STEP)
 	if not _extra.is_empty():   # round where her throat goes from his glans to what sits on it (no notch; only out)
 		var i0 := maxi(1, int(_inside / STEP) - 4)
-		var i1 := mini(n - 2, int(_inside / STEP) + 6)   # (round his tip only)
+		var i1 := mini(n - 2, int(_inside / STEP) + TIP_ROUND)   # (round his tip only)
 		for _k in 4:
 			var a0 := _e0.duplicate()
 			var a1 := _e1.duplicate()
@@ -1113,7 +1178,7 @@ func _paint_pool(ci: RID, lower := false) -> void:
 	_paint_pool_bands(ci, false, lower)
 	var h := _half_px
 	var i0 := _split if lower else _m0
-	for side in [-1.0, 1.0]:
+	for side: float in [-1.0, 1.0]:
 		var pts := PackedVector2Array()
 		var cols := PackedColorArray()
 		var idx := PackedInt32Array()
@@ -1148,11 +1213,12 @@ func _paint() -> void:
 	_fade_mat.set_shader_parameter(&"edge_in", _edge_in)
 	_fade_mat.set_shader_parameter(&"start_len", start_len)
 	_fade_mat.set_shader_parameter(&"fade_len", maxf(fade_len, 2.0 * _half_px))
-	var last := _split if _splitting() else _path.size() - 1
+	var last := mini(_split, _end()) if _splitting() else _end()
 	_paint_range(_painter.get_canvas_item(), 0, last)
 	_paint_pool(_painter.get_canvas_item())
 	_paint_shots(_painter.get_canvas_item())   # (under him: out from under his tip)
 	_penis(_painter.get_canvas_item(), 0, last)
+	_paint_grip(_painter.get_canvas_item(), 0, last)
 	if _with_penis:
 		_paint_pool_bands(_painter.get_canvas_item(), true)
 
@@ -1283,9 +1349,9 @@ func _round(ci: RID, at: Vector2, r: float, c: Color) -> void:
 
 
 func _paint_lower() -> void:
-	if shown <= 0.0 or not _splitting() or _split >= _path.size():
+	if shown <= 0.0 or not _splitting() or _split >= _end():
 		return
-	_paint_range(_lower.get_canvas_item(), _split, _path.size() - 1)
+	_paint_range(_lower.get_canvas_item(), _split, _end())
 	if _pool_end > _split + 1:   # the pool run down there
 		_paint_pool(_lower.get_canvas_item(), true)
 
@@ -1294,6 +1360,7 @@ func _paint_lower_top() -> void:
 	if shown <= 0.0 or not _splitting() or _split >= _path.size():
 		return
 	_penis(_lower_top.get_canvas_item(), _split, _path.size() - 1)
+	_paint_grip(_lower_top.get_canvas_item(), _split, _end())
 	if _with_penis and _pool_end > _split + 1:
 		_paint_pool_bands(_lower_top.get_canvas_item(), true, true)
 
@@ -1303,7 +1370,34 @@ func _paint_range(ci: RID, i0: int, i1: int) -> void:
 	_glow(ci, _e0, -WALL, -WALL - GLOW, i0, i1)
 	_glow(ci, _e1, WALL, WALL + GLOW, i0, i1)
 	_band(ci, -WALL, WALL, _wall_col, i0, i1, true)
-	_band(ci, 0.0, 0.0, _lumen_col, i0, i1, false, _pipe_under)
+	_band(ci, 0.0, 0.0, _lumen_col, i0, i1)
+
+
+## Her ring over what it grips (_grip): its wall in from each edge, over him (it goes round him: in front of him).
+func _paint_grip(ci: RID, i0: int, i1: int) -> void:
+	var from := maxi(i0, ceili(_grip_f - GATE_LEN))
+	var to := mini(i1, mini(floori(_grip_f) + 1, _path.size() - 1))   # (one past: its edge fades out there)
+	if not _with_penis or _grip_f < 0.0 or _grip.size() != _path.size() or from >= to:
+		return
+	for side: float in [-1.0, 1.0]:
+		var edge: PackedFloat32Array = _e0 if side < 0.0 else _e1
+		var pts := PackedVector2Array()
+		var cols := PackedColorArray()
+		var idx := PackedInt32Array()
+		var c0 := _pm(_wall_col)
+		for i in range(from, to + 1):
+			var c := c0 * _w[i]
+			var g := _grip[i]
+			var out := edge[i] + side * minf(GATE_OVER_OUT, 2.0 * g)   # (over the rim of his art past his outline)
+			var inn := edge[i] - side * g
+			var soft := edge[i] - side * maxf(g - 2.0 * _half_px, 0.0)
+			pts.append_array([_at(i, out), _at(i, soft), _at(i, inn)])
+			cols.append_array([c, c * minf(g / (2.0 * _half_px), 1.0), Color(0, 0, 0, 0)])
+			if i > from:
+				var b := (i - from - 1) * 3
+				for k in 2:
+					idx.append_array([b + k, b + k + 1, b + k + 3, b + k + 1, b + k + 4, b + k + 3])
+		RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
 
 
 ## A premultiplied colour (the fade behind the start edge is FADE_SHADER's).
@@ -1313,16 +1407,14 @@ static func _pm(col: Color) -> Color:
 
 ## A strip along the centre line from his outline's e0 + lo to e1 + hi (`ring`: and out by _thick), in one colour
 ## (premultiplied), its edges fading out across one screen pixel centred on them.
-## solid: drawn whole where this part fades at its end (the pipe under it is that colour there: the wall strip under it
-## does not show through as both fade).
-func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int, ring := false, solid := false) -> void:
+func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int, ring := false) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
 	var h := _half_px
 	var c0 := _pm(col)
 	for i in range(i0, i1 + 1):
-		var c := c0 * (1.0 if solid and _w[i] > 0.001 else _w[i])
+		var c := c0 * _w[i]
 		var t := _thick[i] if ring else 0.0
 		var d0 := _e0[i] + lo - t
 		var d1 := _e1[i] + hi + t

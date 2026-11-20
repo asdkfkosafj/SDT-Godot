@@ -844,8 +844,9 @@ func nextSpurt() -> void:
 		Hooks.after(&"Him.nextSpurt", self)
 
 
-## Port extension: what sits on his tip past its point, penis-local circles [{x, y, r}] ([] in the game; the condoms
-## plugin's full tip while it is in her mouth). The x-ray view draws them with him and opens her throat round them.
+## Port extension: what sits on his tip past its point, penis-local circles [{x, y, r, grip?}] ([] in the game; the
+## condoms plugin's full tip while it is in her mouth; grip: her throat ring grips it there, a condom's neck). The x-ray
+## view draws them with him and opens her throat round them.
 func tipExtra() -> Array:
 	if Hooks.has_value(&"Him.tipExtra"):   # HOOK value point: what sits on his tip past its point ([{x, y, r}], penis-local)
 		return Hooks.value(&"Him.tipExtra", self, [])

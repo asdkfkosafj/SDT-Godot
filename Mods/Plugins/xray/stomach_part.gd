@@ -6,8 +6,8 @@ extends FlashDisplayObject
 ## The stomach is an oval, built once in its own space and placed in her torso every tick by her navel, upright along
 ## her spine, so it moves with her body. The pipe is rebuilt every tick along a line the throat part gives it (her
 ## throat, or while the throat part shows, its centre line), then bending down into the top of the stomach. While the
-## throat part shows, the pipe fades in only a little past his tip, where the throat part fades out: nothing shows
-## twice, and from there on the pipe shows over her arm.
+## throat part shows, the pipe goes on from where it ends (its seam: a sample both draw, the same there), a little
+## past his tip: nothing shows twice, and from there on the pipe shows over her arm.
 ##
 ## What is in it (amount, of capacity: fill, 0 to 1 of the inside's area) lies at the bottom, its surface level on the
 ## screen whichever way she turns; it sloshes (the surface tilts on a damped spring) when her body speeds up or slows
@@ -23,7 +23,7 @@ extends FlashDisplayObject
 ## and back up the other side, with one wall and one glow along it, and one inside. The pipe comes into the stomach
 ## straight down (STRAIGHT, the same in the stomach's own space every tick), and widens into it along the flare.
 ## The pipe shows only while the throat part does (pipe_shown, fading as the rest): without it, the oval alone, closed.
-## It runs up to where the throat part ends (below where her throat is closed, or past his tip) and takes over there.
+## It runs up to where the throat part ends (below where her throat is closed, or past his tip) and goes on from there.
 ##
 ## The game glides her body parts between ticks (physics interpolation): her head with her (her space), her torso
 ## swaying against her (up to some 20 px a tick at her belly while he thrusts). Drawn where her torso is at the tick,
@@ -47,8 +47,8 @@ const GLOW := 10.0         # the soft red glow around them
 const PIPE := 2.5          # half width of the inside of the pipe (closed, as her throat past his tip)
 const PIPE_DOWN := 0.15    # how far the pipe keeps going down past the tail before it bends (times its length)
 const PIPE_IN := 0.4       # and from how far above the stomach it comes straight down into it (same)
-const BEND_SMOOTH := 16   # smoothing passes over the pipe's bend (and the line into it, past the throat part)
-const PIPE_TOP := 6       # samples over which the pipe fades in at its top, and takes over from the throat part
+const BEND_SMOOTH := 16    # smoothing passes over the pipe's bend (and the line into it, past the throat part)
+const PIPE_TOP := 6        # samples over which the pipe fades in at its top (below her mouth, without the throat part)
 const FADE := 0.25         # per tick, in and out
 ## The oval, in torso units at Size 100: its half width (across her body) and half height (along her spine).
 const RADII := Vector2(44, 68)
@@ -143,7 +143,6 @@ var _surf := PackedVector2Array()      # the surface's ends (own space), last dr
 var _pipe := PackedVector2Array()      # the pipe's centre line, local, STEP apart
 var _pipe_n := PackedVector2Array()
 var _pipe_w := PackedFloat32Array()    # how much of the pipe shows at each sample (its top, its part in her throat)
-var _pipe_gw := PackedFloat32Array()   # ... and of its glow (taking over from the throat part's as that fades: not both)
 var _inner := PackedVector2Array()     # the inside's outline, own space (its edge under the wall)
 var _level_dir := Vector2.DOWN         # down for the contents (own space): square to their surface
 var _tilt := 0.0                       # the surface's tilt from level (radians) and how fast it changes
@@ -162,10 +161,9 @@ var _cum_w := PackedFloat32Array()     # the half width of what is in the pipe a
 var _level := 0.0                      # the contents' surface (along _level_dir, own space; past the bottom when empty)
 var _flow := Node2D.new()
 var _half_px := 0.5
-var _lump_w := PackedFloat32Array()    # the half width of the lumps alone at each sample (the throat part bulges
-                                       # round them)
-var _throat_shown := 0.0               # the throat part's fade, and where it has faded out along the pipe (its hand)
-var _hand := 0.0
+var _lump_w := PackedFloat32Array()    # the half width of the lumps alone at each sample
+var _throat_shown := 0.0               # the throat part's fade, and the sample it ends at (the pipe's seam; -1: none)
+var _seam := -1
 
 
 func _init() -> void:
@@ -228,9 +226,16 @@ func add_stream(from: float, units: float) -> void:
 		"out": 0.0})
 
 
-## The half width of the lumps at each sample along the line (none while it does not show).
-func lump_w() -> PackedFloat32Array:
-	return _lump_w if shown > 0.0 else PackedFloat32Array()
+## The half width of the pipe's inside at each sample along the line where it bulges round what goes down it (0 where
+## it does not; none while it does not show): the throat part bulges as much there, so the two meet at its seam.
+func bulge_w() -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	if shown <= 0.0:
+		return out
+	out.resize(_pipe_g.size())
+	for i in _pipe_g.size():
+		out[i] = PIPE + _pipe_g[i] if _pipe_g[i] > 0.0 else 0.0
+	return out
 
 
 ## Moves what is in the pipe on (shown or not), pours what comes out at its bottom in (straight into the contents
@@ -379,12 +384,14 @@ func _ripple_at(p: Vector2, hit: float) -> void:
 
 
 ## Called every tick by the throat part; `want`: the stomach should show. line: what the pipe follows before it bends
-## down into the stomach (local), going on along `bend` from its end; hand: the sample where the pipe has taken over
-## from the throat part (its fade: throat_shown); flow_from: what flows shows from here along the line (his tip, or
-## past the end of his penis where the throat part's upper painter draws it); pipe_from: the pipe shows only from this
-## sample on (where her throat is closed below her mouth; the line starts at her lips), fading in over PIPE_TOP samples.
-func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, bend: Vector2, hand: float,
-		throat_shown: float, flow_from: float, pipe_from := 0.0) -> void:
+## down into the stomach (local), going on along `bend` from its end; seam: the sample of the line where the throat
+## part ends (the pipe goes on from there; -1: none, the line is her throat, to be resampled), seam_t the throat part's
+## way along its centre line there; throat_shown: the throat part's fade (the pipe above the seam shows as much as it
+## does not); flow_from: what flows shows from here along the line (his tip, or past the end of his penis where the
+## throat part's upper painter draws it); pipe_from: the pipe shows only from this sample on (where her throat is
+## closed below her mouth; the line starts at her lips), fading in over PIPE_TOP samples.
+func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, bend: Vector2, seam: int,
+		seam_t: Vector2, throat_shown: float, flow_from: float, pipe_from := 0.0) -> void:
 	_advance()
 	var was := shown
 	shown = clampf(shown + (FADE if want else -FADE), 0.0, 1.0)
@@ -405,7 +412,7 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 		return
 	_flow_from = flow_from
 	_throat_shown = throat_shown
-	_hand = hand
+	_seam = seam
 	var tor: FlashDisplayObject = her.torso
 	var cc: FlashDisplayObject = tor.chestCostume
 	var bp: FlashDisplayObject = cc.bellyPiercing
@@ -430,7 +437,7 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 	var down := xf.basis_xform(Vector2.DOWN).normalized()
 	var top := xf * Vector2(0.0, _mouth_top)
 	var end := xf * (_inlet + Vector2.DOWN * (WALL / _k))
-	_pipe = _even(line)
+	_pipe = line.duplicate() if seam >= 0 else _even(line)   # (the throat part's line is even already: its samples)
 	var n_line := _pipe.size()
 	_line_len = (n_line - 1) * STEP
 	var a := _pipe[-1]
@@ -446,26 +453,24 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 		_pipe.append(top + down * (k * STEP))
 	if _pipe[-1].distance_to(end) > 0.1:
 		_pipe.append(end)
-	# rounds the bend, and the line into it past the throat part (where it is drawn, down to its hand-over, the line
-	# stays as given: its centre line runs along it); else the corner where the line ends (it goes on along her neck)
-	# turns sharply, and with her head's angle changes from tick to tick in fast strokes
-	var free := clampi(int(ceil(hand)) + 2, 1, n_line)
+	# rounds the bend, and the line into it past the seam (above it the throat part is drawn along the line as given,
+	# and at it the two meet); else the corner where the line ends (it goes on along her neck) turns sharply, and with
+	# her head's angle changes from tick to tick in fast strokes
+	var free := clampi(seam + 1, 1, n_line) if seam >= 0 else n_line - 1
 	for _pass in BEND_SMOOTH:
 		var p := _pipe.duplicate()
 		for i in range(free, _i_hand):
 			_pipe[i] = (p[i - 1] + p[i] * 2.0 + p[i + 1]) * 0.25
 	_pipe_n.resize(_pipe.size())
 	_pipe_w.resize(_pipe.size())
-	_pipe_gw.resize(_pipe.size())
 	_pipe_b.resize(_pipe.size())
 	for i in _pipe.size():
 		var t := (_pipe[mini(i + 1, _pipe.size() - 1)] - _pipe[maxi(i - 1, 0)]).normalized()
+		if i == seam:   # (as the throat part's there: the same row)
+			t = seam_t
 		_pipe_n[i] = Vector2(-t.y, t.x)
-		_pipe_w[i] = smoothstep(pipe_from, pipe_from + PIPE_TOP, i) \
-			* lerpf(1.0 - throat_shown, 1.0, smoothstep(hand - 2 * PIPE_TOP, hand - PIPE_TOP, i))   # (all there
-			# before the throat part over it fades, over its last PIPE_TOP samples: no light spot where both fade)
-		_pipe_gw[i] = smoothstep(pipe_from, pipe_from + PIPE_TOP, i) \
-			* lerpf(1.0 - throat_shown, 1.0, smoothstep(hand - PIPE_TOP, hand, i))
+		# above the seam it shows as much as the throat part does not (it fades in where the throat part fades out)
+		_pipe_w[i] = smoothstep(pipe_from, pipe_from + PIPE_TOP, i) * (1.0 if seam < 0 or i >= seam else 1.0 - throat_shown)
 		_pipe_b[i] = smoothstep(n_line - 1, _i_hand, i)   # her space along her throat, her torso from the straight
 	_pipe_len = (_pipe.size() - 1) * STEP
 	_in_pipe()
@@ -691,10 +696,13 @@ func _paint() -> void:
 	var ci := _painter.get_canvas_item()
 	var half_local := _half_px_of(_painter)
 	var j := mini(_i_hand + int(round(STRAIGHT / STEP)), _pipe.size() - 1)   # the pipe sample where the flare starts
-	var i0 := 0   # from where the pipe shows (while the throat part shows, the pipe takes over only low on her neck)
-	while i0 < j and _pipe_w[i0] <= 0.001:
-		i0 += 1
-	i0 = maxi(0, i0 - 1)
+	var i0 := 0   # from where the pipe shows (while the throat part shows, from its seam: that row, not the one above)
+	if _seam >= 0 and _throat_shown >= 1.0:
+		i0 = mini(_seam, j)
+	else:
+		while i0 < j and _pipe_w[i0] <= 0.001:
+			i0 += 1
+		i0 = maxi(0, i0 - 1)
 	var mouth := _mouth_parts(half_local)
 	var pipe := pipe_shown > 0.0
 	# the insides: the stomach's, the pipe's down into it
@@ -738,9 +746,8 @@ func _paint() -> void:
 	var w := _faded(_pipe_w.slice(i0, j + 1))
 	var bw := _pipe_b.slice(i0, j + 1)
 	if pipe:
-		var gw := _faded(_pipe_gw.slice(i0, j + 1))
 		for sd in sides:
-			_glow(ci, sd[1], sd[2], false, 0.0, 0.0, GLOW, gw, PackedFloat32Array(), bw)
+			_glow(ci, sd[1], sd[2], false, 0.0, 0.0, GLOW, w, PackedFloat32Array(), bw)
 	_add_own(mouth[1])
 	if pipe:
 		for sd in sides:
@@ -990,7 +997,7 @@ func _paint_flow() -> void:
 	w.resize(_pipe.size())
 	for i in _pipe.size():
 		var by_him := maxf(_pipe_w[i], LUMP_OVER * clampf(_lump_w[i] * 2.0, 0.0, 1.0))
-		var throat := _throat_shown * (1.0 - smoothstep(_hand - PIPE_TOP, _hand, i))
+		var throat := _throat_shown * (1.0 - smoothstep(float(_seam), float(_seam + PIPE_TOP), i)) if _seam >= 0 else 0.0
 		w[i] = clampf(_cum_w[i] * 2.0, 0.0, 1.0) * (1.0 if i * STEP >= _flow_from else by_him) \
 			* maxf(pipe_shown, throat)
 	var ci := _flow.get_canvas_item()
