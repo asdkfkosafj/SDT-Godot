@@ -828,11 +828,13 @@ func _fit_mouth(rest: Array) -> void:
 			if i <= last:
 				_e0[i] = minf(_e0[i], room0[i])
 				_e1[i] = maxf(_e1[i], room1[i])
-	if not _extra.is_empty():   # what sits on his tip fills her mouth and throat ahead of him: they close round it, and
-		# past it they close as her throat does past his tip (no room left open by the smoothing above), then let go
+	if not _extra.is_empty():   # what sits on his tip fills her throat ahead of him: it closes round it, and past it
+		# as her throat does past his tip (no room left open by the smoothing above), then lets go. Not in her mouth:
+		# there its walls stay at rest, out only where it pushes them (above), handing over as her mouth does
 		var free := maxf(_inside, _reach) + _close
 		for i in mini(_path.size(), int((free + CLOSE_LEN) / STEP) + 1):
 			var k := smoothstep(_inside, _inside + CLOSE_LEN, i * STEP) * (1.0 - smoothstep(free, free + CLOSE_LEN, i * STEP))
+			k *= smoothstep(_mouth_end - MOUTH_BACK, _mouth_end, i)
 			if k > 0.0:
 				_e0[i] = lerpf(_e0[i], room0[i], k)
 				_e1[i] = lerpf(_e1[i], room1[i], k)
