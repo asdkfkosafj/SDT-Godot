@@ -154,6 +154,7 @@ var _side := 1.0                     # which side of the line his penis-local +y
 var _penis_xf := Transform2D()       # penis-local -> his local space (UVs into his render)
 var _bounds := Rect2()
 var _curve_n := 0                    # samples of the centre line's curve (past it, it goes straight on)
+var _pipe_under := false             # the stomach's pipe shows under this part's end (it takes over there)
 var _hand := 0.0                     # the sample where this part has faded out: past her throat's closed stretch
                                      # (GATE_LEN) or his tip; the stomach's pipe (its food pipe) takes over there
 var _mouth_end := 0                  # the sample where her mouth's roof and floor have come into her throat
@@ -243,6 +244,7 @@ func _splitting() -> bool:
 ## Called every tick (after update_shape): updates the stomach part (stomach_part.gd), with her throat's line in its
 ## local space. `want`: the stomach should show.
 func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) -> void:
+	_pipe_under = want_pipe
 	var her: Her = g.her
 	var inv := stomach.flash_global_transform().affine_inverse()
 	var throat := _throat(her, inv)
@@ -390,6 +392,7 @@ func _neck_axis(her: Her, inv: Transform2D) -> Vector2:
 ## Called every tick; `want`: he is in her mouth and the x-ray is on; `keep_mouth`: while he is not, it shows her
 ## mouth and throat without him (cum in her mouth, the plugin's Keep mouth).
 func update_shape(want: bool, keep_mouth := false) -> void:
+	_pipe_under = false   # (update_stomach, after this, says; drawn later in the frame)
 	var was := shown
 	# he leaves her mouth (or comes in) with his tip at her lips: the shape hardly changes, it goes over at once
 	var alone := keep_mouth and not want
@@ -1246,7 +1249,7 @@ func _paint_range(ci: RID, i0: int, i1: int) -> void:
 	_glow(ci, _e0, -WALL, -WALL - GLOW, i0, i1)
 	_glow(ci, _e1, WALL, WALL + GLOW, i0, i1)
 	_band(ci, -WALL, WALL, _wall_col, i0, i1, true)
-	_band(ci, 0.0, 0.0, _lumen_col, i0, i1)
+	_band(ci, 0.0, 0.0, _lumen_col, i0, i1, false, _pipe_under)
 
 
 ## A premultiplied colour (the fade behind the start edge is FADE_SHADER's).
@@ -1256,14 +1259,16 @@ static func _pm(col: Color) -> Color:
 
 ## A strip along the centre line from his outline's e0 + lo to e1 + hi (`ring`: and out by _thick), in one colour
 ## (premultiplied), its edges fading out across one screen pixel centred on them.
-func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int, ring := false) -> void:
+## solid: drawn whole where this part fades at its end (the pipe under it is that colour there: the wall strip under it
+## does not show through as both fade).
+func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int, ring := false, solid := false) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
 	var h := _half_px
 	var c0 := _pm(col)
 	for i in range(i0, i1 + 1):
-		var c := c0 * _w[i]
+		var c := c0 * (1.0 if solid and _w[i] > 0.001 else _w[i])
 		var t := _thick[i] if ring else 0.0
 		var d0 := _e0[i] + lo - t
 		var d1 := _e1[i] + hi + t

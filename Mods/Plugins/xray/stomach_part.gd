@@ -142,6 +142,7 @@ var _surf := PackedVector2Array()      # the surface's ends (own space), last dr
 var _pipe := PackedVector2Array()      # the pipe's centre line, local, STEP apart
 var _pipe_n := PackedVector2Array()
 var _pipe_w := PackedFloat32Array()    # how much of the pipe shows at each sample (its top, its part in her throat)
+var _pipe_gw := PackedFloat32Array()   # ... and of its glow (taking over from the throat part's as that fades: not both)
 var _inner := PackedVector2Array()     # the inside's outline, own space (its edge under the wall)
 var _level_dir := Vector2.DOWN         # down for the contents (own space): square to their surface
 var _tilt := 0.0                       # the surface's tilt from level (radians) and how fast it changes
@@ -450,11 +451,15 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 			_pipe[i] = (p[i - 1] + p[i] * 2.0 + p[i + 1]) * 0.25
 	_pipe_n.resize(_pipe.size())
 	_pipe_w.resize(_pipe.size())
+	_pipe_gw.resize(_pipe.size())
 	_pipe_b.resize(_pipe.size())
 	for i in _pipe.size():
 		var t := (_pipe[mini(i + 1, _pipe.size() - 1)] - _pipe[maxi(i - 1, 0)]).normalized()
 		_pipe_n[i] = Vector2(-t.y, t.x)
 		_pipe_w[i] = smoothstep(pipe_from, pipe_from + PIPE_TOP, i) \
+			* lerpf(1.0 - throat_shown, 1.0, smoothstep(hand - 2 * PIPE_TOP, hand - PIPE_TOP, i))   # (all there
+			# before the throat part over it fades, over its last PIPE_TOP samples: no light spot where both fade)
+		_pipe_gw[i] = smoothstep(pipe_from, pipe_from + PIPE_TOP, i) \
 			* lerpf(1.0 - throat_shown, 1.0, smoothstep(hand - PIPE_TOP, hand, i))
 		_pipe_b[i] = smoothstep(n_line - 1, _i_hand, i)   # her space along her throat, her torso from the straight
 	_pipe_len = (_pipe.size() - 1) * STEP
@@ -728,8 +733,9 @@ func _paint() -> void:
 	var w := _faded(_pipe_w.slice(i0, j + 1))
 	var bw := _pipe_b.slice(i0, j + 1)
 	if pipe:
+		var gw := _faded(_pipe_gw.slice(i0, j + 1))
 		for sd in sides:
-			_glow(ci, sd[1], sd[2], false, 0.0, 0.0, GLOW, w, PackedFloat32Array(), bw)
+			_glow(ci, sd[1], sd[2], false, 0.0, 0.0, GLOW, gw, PackedFloat32Array(), bw)
 	_add_own(mouth[1])
 	if pipe:
 		for sd in sides:
