@@ -5,7 +5,7 @@ extends SDTExtension
 ## it (no more once it is full): a weight on stretchy latex with real gravity, heavier the more cum is in it, drawn
 ## smoothly between ticks. It rests and rubs on her face, squeezes in through her lips after him and lies in her
 ## mouth (the x-ray view draws it there). Past her throat ring it is stuck: pulled out, the latex to it stretches and
-## holds her head back until it pops out; pushed in, it presses against the ring until it goes through; in her
+## holds her head back until it pops out; pushed in, it goes through the ring with no hold; in her
 ## throat it makes a swallow lump in her neck.
 ## With cum in it, Q has his left hand take it off: his hand goes to his tip, pulls it off (the empty latex stretched
 ## from his glans to his fist; a drop of cum stays on his tip), ties it and holds it by the knot, the sack hanging from
