@@ -47,7 +47,8 @@ const GLOW := 10.0         # the soft red glow around them
 const PIPE := 2.5          # half width of the inside of the pipe (closed, as her throat past his tip)
 const PIPE_DOWN := 0.15    # how far the pipe keeps going down past the tail before it bends (times its length)
 const PIPE_IN := 0.4       # and from how far above the stomach it comes straight down into it (same)
-const PIPE_TOP := 6        # samples over which the pipe fades in at its top, and takes over from the throat part
+const BEND_SMOOTH := 16   # smoothing passes over the pipe's bend (and the line into it, past the throat part)
+const PIPE_TOP := 6       # samples over which the pipe fades in at its top, and takes over from the throat part
 const FADE := 0.25         # per tick, in and out
 ## The oval, in torso units at Size 100: its half width (across her body) and half height (along her spine).
 const RADII := Vector2(44, 68)
@@ -445,9 +446,13 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 		_pipe.append(top + down * (k * STEP))
 	if _pipe[-1].distance_to(end) > 0.1:
 		_pipe.append(end)
-	for _pass in 4:   # rounds the bend (the line stays as given: the throat part's centre line runs along it)
+	# rounds the bend, and the line into it past the throat part (where it is drawn, down to its hand-over, the line
+	# stays as given: its centre line runs along it); else the corner where the line ends (it goes on along her neck)
+	# turns sharply, and with her head's angle changes from tick to tick in fast strokes
+	var free := clampi(int(ceil(hand)) + 2, 1, n_line)
+	for _pass in BEND_SMOOTH:
 		var p := _pipe.duplicate()
-		for i in range(n_line, _i_hand):
+		for i in range(free, _i_hand):
 			_pipe[i] = (p[i - 1] + p[i] * 2.0 + p[i + 1]) * 0.25
 	_pipe_n.resize(_pipe.size())
 	_pipe_w.resize(_pipe.size())

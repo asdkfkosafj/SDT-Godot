@@ -38,9 +38,11 @@ const ROOM_TIP := 0.8      # and round what sits on his tip (Him.tipExtra: soft,
 const EDGE := 3.0          # penis-local margin around his outline in the strip taken from his render
 const PAST_TIP := 12.0     # penis-local length taken past his tip point (the rounded end of the art)
 const CLOSE_LEN := 15.0    # past his tip her throat closes over this length
-const CLOSE_SOFT := 36.0   # past what sits on his tip (Him.tipExtra), smoothly over this one: it is not on his
-                           # centre line, so her throat comes back to its own middle without a jog
-const HAND_FADE := 6       # samples over which the stomach's pipe takes over, past that (its PIPE_TOP)
+const CLOSE_SOFT := 36.0   # past what sits on his tip (Him.tipExtra) her throat is the pipe's width at once, on that
+                           # one's middle (_mid); this part goes on this far past it before the hand-over
+const HAND_FADE := 6      # samples over which the stomach's pipe takes over, past that (its PIPE_TOP)
+const HAND_PAST := 2       # (at her throat's curve's end: the hand-over starts at least this many samples past what
+                           # sits on his tip)
 const SPLIT_AT := 0.7      # the lower painter takes over this far down her neck (0 jaw .. 1 chest): above her
                            # shoulder, below her earrings
 const SPLIT_MIN := 0.4     # ... or higher, where her near arm covers her throat above that (_split_above_arm), but
@@ -174,6 +176,8 @@ var _glow_col := Color(0.85, 0.15, 0.2, 0.55)
 var mouth_only := false              # it shows her mouth and throat without him (the plugin's Keep mouth)
 var _p0 := PackedFloat32Array()      # his outline at each sample, without the room around him (0 past his tip)
 var _p1 := PackedFloat32Array()
+var _mid := PackedFloat32Array()     # past what sits on his tip, her throat's middle off the centre line (the stomach's
+                                     # pipe follows it: _pipe_line); 0 elsewhere
 var _m0 := 0                         # her mouth's pocket: from this sample (her lips)
 var _m1 := 0                         # to this one (where her throat starts)
 var _to_jaw := true                  # her jaw (the pocket's floor) is on the e1 side
@@ -260,7 +264,11 @@ func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) ->
 	var bend: Vector2              # and the way it goes on from there
 	if shown > 0.0 and _path.size() >= 2:   # this part's centre line, as far as its curve or the hand-over
 		var last := clampi(maxi(_curve_n, int(ceil(_hand)) + 1), 2, _path.size())
-		line = (inv * flash_global_transform()) * _path.slice(0, last)
+		line = _path.slice(0, last)
+		if _mid.size() == _path.size():   # (past what sits on his tip: along her throat's middle, off the centre line)
+			for i in last:
+				line[i] += _norm[i] * _mid[i]
+		line = (inv * flash_global_transform()) * line
 		bend = (line[-1] - line[-2]).normalized()
 	else:   # her throat, and on along its tail
 		var axis := _neck_axis(her, inv)
@@ -481,7 +489,9 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 			ahead = maxf(ahead, _tip_x - (float(c["x"]) - float(c["r"])))
 		_reach = _inside + ahead * _len_scale if _inside > 0.0 else 0.0
 		_drawn = _inside + maxf(PAST_TIP, ahead + 2.0) * _len_scale if _inside > 0.0 else 0.0
-		_hand = (maxf(_inside, _reach) + _close) / STEP + HAND_FADE
+		# (past his bare tip her throat closes over _close: the stomach's pipe, in from 2 HAND_FADE before the
+		# hand-over, comes in under it only past that; past what sits on his tip it is the pipe's width at once)
+		_hand = (maxf(_inside, _reach) + _close) / STEP + HAND_FADE * (2.0 if _extra.is_empty() else 1.0)
 		# along him, towards his tip; past what is drawn of him, her throat at rest
 		# (only his own art is stiff: what sits on his tip is soft and follows her throat)
 		var stiff := minf(_drawn, _inside + PAST_TIP * _len_scale) if not _extra.is_empty() else _drawn
@@ -495,6 +505,13 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_gate_f = minf(_index_near(gate_at), float(_path.size() - 1 - GATE_LEN))
 	_gate = int(round(_gate_f))
 	_hand = maxf(_hand, _gate_f + HAND_FADE + 1.0)
+	# but not past the end of her throat's curve (past it the centre line goes straight on along her neck, not to her
+	# stomach: the stomach's pipe, which follows this part's line down to there, would bend back up into an S), unless
+	# what is in her throat goes on past that (it fades out only past its end: HAND_FADE after HAND_PAST). Only with
+	# something on his tip (Him.tipExtra): past his bare tip her throat still closes, and the pipe would show over his
+	# glans
+	if not _extra.is_empty():
+		_hand = minf(_hand, maxf(float(_curve_n - 1), maxf(_inside, _reach) / STEP + HAND_PAST + HAND_FADE))
 	_close_gate(her)
 	_b0 = _e0.duplicate()
 	_b1 = _e1.duplicate()
@@ -654,6 +671,8 @@ func _outline(him: Him) -> void:
 		a.resize(n)
 	_p0.resize(n)
 	_p1.resize(n)
+	_mid.resize(n)
+	_mid.fill(0.0)
 	if not _with_penis:   # her mouth alone: closed all along
 		_e0.fill(-CLOSED)
 		_e1.fill(CLOSED)
@@ -706,13 +725,18 @@ func _outline(him: Him) -> void:
 			tip_e = e
 		else:   # closing past his tip
 			var kc := clampf((s - maxf(_inside, _reach)) / _close, 0.0, 1.0)
-			var from_e := tip_e
 			if not _extra.is_empty() and not is_nan(end_mid):   # past what sits on it: as wide as the pipe on from its
 				var m := _side * end_mid * _wid_scale             #   round end's point (not from the last sample's width,
-				from_e = Vector2(m - CLOSED, m + CLOSED)          #   which jumps as it moves)
-			e = from_e.lerp(Vector2(-CLOSED, CLOSED), kc if _extra.is_empty() else smoothstep(0.0, 1.0, kc))
+				e = Vector2(m - CLOSED, m + CLOSED)               #   which jumps as it moves), and on there: back to
+				_mid[i] = m                                       #   the centre line it would jog (the pipe follows it)
+			else:
+				e = tip_e.lerp(Vector2(-CLOSED, CLOSED), kc if _extra.is_empty() else smoothstep(0.0, 1.0, kc))
 		_e0[i] = e.x
 		_e1[i] = e.y
+	if not is_nan(end_mid) and _reach > _inside:   # the pipe under what sits on his tip goes over to its middle along it
+		var m := _side * end_mid * _wid_scale
+		for i in mini(n, ceili(_reach / STEP) + 1):
+			_mid[i] = m * smoothstep(_inside, _reach, i * STEP)
 	if not _extra.is_empty():   # round where her throat goes from his glans to what sits on it (no notch; only out)
 		var i0 := maxi(1, int(_inside / STEP) - 4)
 		var i1 := mini(n - 2, int(_inside / STEP) + 6)   # (round his tip only)
