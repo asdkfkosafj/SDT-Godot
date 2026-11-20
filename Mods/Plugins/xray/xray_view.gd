@@ -43,6 +43,8 @@ const CLOSE_SOFT := 36.0   # past what sits on his tip (Him.tipExtra), smoothly 
 const HAND_FADE := 6       # samples over which the stomach's pipe takes over, past that (its PIPE_TOP)
 const SPLIT_AT := 0.7      # the lower painter takes over this far down her neck (0 jaw .. 1 chest): above her
                            # shoulder, below her earrings
+const SPLIT_MIN := 0.4     # ... or higher, where her near arm covers her throat above that (_split_above_arm), but
+const SPLIT_MARGIN := 5    #   not above this; this many samples above the highest it covers
 const FOLD := 0.85         # inside a bend, nothing reaches further than this times the bend's radius
 const FADE := 0.25         # per tick, in and out
 ## The fade behind the start edge, per pixel (set per vertex, it would follow the strips' rows: a wide strip's
@@ -502,6 +504,7 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 		if (_path[i] - base).dot(axis) >= 0.0:
 			_split = i
 			break
+	_split_above_arm(her, throat, axis)
 	_slosh(her, true)
 	_pool()
 	_move_shots()
@@ -517,6 +520,31 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_painter.queue_redraw()
 	_lower.queue_redraw()
 	_lower_top.queue_redraw()
+
+
+## Her near arm can come up over her throat above _split (her head down low on him): the lower painter (over her arm)
+## then takes over higher, from where her arm no longer covers the centre line (SPLIT_MARGIN samples above that), so
+## her sleeve does not cut straight across what is in her throat there. Not above SPLIT_MIN down her neck.
+func _split_above_arm(her: Her, throat: PackedVector2Array, axis: Vector2) -> void:
+	if _split <= 0 or her.rightArmContainer == null:
+		return
+	var arms := [her.rightArmContainer, her.rightForeArmContainer]
+	var top: Vector2 = throat[int(SPLIT_MIN * (throat.size() - 1))]
+	var covered := -1
+	var i := _split - 1
+	while i > 0 and (_path[i] - top).dot(axis) >= 0.0:
+		var p := localToGlobal(_path[i])
+		var hit := false
+		for a in arms:
+			if a is FlashDisplayObject and a.is_visible_in_tree() and a.hitTestVisible(p.x, p.y):
+				hit = true
+				break
+		if not hit:
+			break
+		covered = i
+		i -= 1
+	if covered >= 0:
+		_split = maxi(1, covered - SPLIT_MARGIN)
 
 
 ## Her throat, from her jaw down to her chest: a part of the way (DEPTH) from the front of her neck to its back.
