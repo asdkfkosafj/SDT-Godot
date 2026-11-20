@@ -44,21 +44,26 @@ const SACK_IN := 0.6       # he is in her mouth, the sack still out: the latex o
 const MOUTH_ROOM := 1.5    # the room in her mouth in front of his tip: this many half widths of his glans
 const THROAT_ROOM := 0.8   # in her throat: this many (it opens round the sack only so far)
 const POP_BASE := 6.0      # pulled out, it is stuck behind her ring while the latex to it stretches: it pops out at
-const POP_K := 1.2         #   this stretch (units) plus this many times its radius (a bigger one: stuck longer)
+const POP_FULL := 50.0     #   this stretch (units) plus this much for a full one (as the cum in it: a bigger one has
+                           #   to be pulled much further)
 const PULL_MAX := 0.04     # the stretched latex pulls her head back to him: this much (her speed per tick) at the pop
                            #   for a full one, growing with the square of the stretch (soft at first: a steep pull
                            #   stops her head in a tick and it bounces back, a shiver); the grip holds her
 const SLACK := 0.65        # stuck behind her ring, the latex to it stretches only past this much of its length (in
                            #   her mouth) from his tip to her ring. Pushed in, it goes through as soon as it is there
-const HOLD := 0.5          # while stuck it also slows her head that way by this much (no shaking)
+const HOLD := 0.5          # while stuck it also slows her head that way by this much (no shaking), a full one;
+const HOLD_SMALL := 0.3    #   the first drop this share of that, more and more up to a full one (as sqrt of its cum)
 const LUMP := 1.4          # a full one in her throat: this many swallow lumps (Neck.bumps, size 10 each)
 const LIP_TICKS := 10.0    # squeezing in through her lips and sliding along under him to his tip takes this many ticks
 const LIP_ROOM := 0.6      # under him in her mouth it is this many glans half widths high (squeezed by her tongue)
-const PASS_TICKS := 6.0    # going through her throat ring (out or in) takes this many ticks: through, then the latex
-                           #   springs back
+const PASS_TICKS := 6.0    # pushed in, going through her throat ring takes this many ticks
+const SPRING_TICKS := 8.0  # popped out it is through her ring at once (a pop), against it in her mouth, and the latex
+                           #   springs it back to his tip over this many ticks (fast, then slower)
 const POP_HOLD := 5.0      # pulled past its limit it pops only once it stays there this many ticks, plus
 const POP_HOLD_K := 14.0   #   this many for a full one (a quick yank drags her head along instead)
 const POP_SNAP := 2.6      # pulled this far past its limit (times it) it pops at once
+const POP_LIPS := 6.0      # and once his tip is out to this near her lips (units), whatever the stretch (he cannot
+                           #   leave her mouth with it still in her throat)
 const HOLD_PAST := 1.2     # past its limit it holds her head still (away from him) this much more per unit past it
                            #   (up to 0.95)
 const RELEASE_TICKS := 12.0  # through her ring (out or in) its hold on her head lets go over this many ticks (no jerk:
@@ -67,12 +72,13 @@ const DAMP_IN := 0.6       # stuck, it slows her head's spring back towards him 
 const PROF_STEP := 1.5     # its shape in her mouth: half widths every this many units ahead of his tip
 const BASE_W := 0.55       # where it leaves his tip it is this many of his glans' half widths wide (the latex there)
 const RING_W := 0.3        # through her throat ring: this many
-const NECK_LEAVE := 0.7   # the empty latex from his glans to her ring leaves his glans where it is this many of its
-                           #   half widths wide, along it, and curves in (concave) to lie along him at her ring
+const NECK_LEAVE := 0.7    # his tip in her throat: the latex leaves his glans where it is this many of its half widths
+                           #   wide, along it
 const NECK_JOIN := 0.3     # his tip in her throat: the curve from his glans joins the sack's side this share of the
                            #   way to its widest line
-const NECK_W := 0.2        # stuck past her ring: the empty latex from his glans to it is pulled tight: at her ring
-                           #   this many glans half widths (held tight there; 30 % thinner at the pop)
+const NECK_W := 0.2        # stuck past her ring (or springing back from it): the empty latex from his glans to it is
+                           #   pulled tight: at her ring this many glans half widths (30 % thinner at the pop), and
+                           #   straight from there to his glans (_taut_sides)
 const BUNCH := 0.15        # pulled up against her ring the cum bunches up: this much shorter at the pop (so wider: the
 const BUNCH_TOP := 0.4     #   same cum), its widest line moving up from its middle to this share of its length
 const EXTRA_R := 4.0       # the x-ray view gets its outline as circles this big (Him.tipExtra)
@@ -135,12 +141,14 @@ var bumps := []                        # its lump in her neck (Neck.bumps)
 var pops := 0                          # how often it went through her throat ring (out or in)
 var _web_reach := INF                  # _fillet: webs only this near his tip
 var _cum_polys := []                   # state 2, apart from his tip: where its cum is (penis-local; empty: all of it)
-var _pass_t := -1.0                    # going through her throat ring: 0..1 (-1: not)
-var _pass_out := false                 # ... out into her mouth (else in, down her throat)
+var _pass_t := -1.0                    # going through her throat ring, in: 0..1 (-1: not)
+var _spring_t := -1.0                  # popped out: springing back from her ring to his tip, 0..1 (-1: not)
 var _hold := Vector3()                 # stuck: its hold on her head this tick (drag_add, grip_out, grip_in)
 var _rel := Vector3()                  # that as it went through her ring, let go over RELEASE_TICKS
 var _rel_t := 0.0                      # ticks of letting go left
 var _strain := 0.0                     # stuck: ticks it has been pulled past its limit
+var _clear := true                     # popped out: it goes back through her ring only once it was clear of it (not
+                                       # straight back in as he pulls out)
 var _lip_t := -1.0                     # state 1: squeezing in through her lips: 0..1 (-1: not yet)
 var lip_a := 0.0                       # ... how far along him the part in her mouth is (0 her lip .. 1 ahead of his tip)
 var _in_bag := PackedVector2Array()    # state 1: the part in her mouth (penis-local)
@@ -152,6 +160,7 @@ var in_share := 0.0                    # state 1: how much of it is in her mouth
 var _sh0 := 0.0                        # that, last tick and this tick
 var _sh1 := 0.0
 var prof := PackedFloat32Array()       # state 2: its half width every PROF_STEP units ahead of his tip (empty: none)
+var _neck_n := 0                       # its first this many prof samples are its neck (her ring grips it there)
 var _free_ticks := 0                   # ticks the let-go sack has been off her
 var passing := false                   # held, or let go while still on her: no push out, it rubs over her
 var on_her := false                    # some of the bulb lies over her (_her_contact)
@@ -600,6 +609,10 @@ func step_sack(length: float, r: float, mass: float) -> void:
 		sack_a0 = lip   # (the link now ends at her lip: no sweep from his tip)
 	elif not mouth and mouth_state != 0:
 		if mouth_state == 2:
+			if past and _her() != null:   # (still in her throat as he left her mouth between two ticks: it pops out)
+				_let_go()
+				_pop(_her(), minf(1.0, r * r / (BULB_R * BULB_R)), true)
+				past = false
 			var outw := (_penis.localToGlobal(neck[0] + Vector2(1, 0)) - a).normalized()   # along him, away from her
 			sack_p = lip + (outw * 0.5 + Vector2(0, 1)) * r * unit   # (just out, below her lower lip)
 			sack_v = a - sack_a0
@@ -726,7 +739,8 @@ func step_sack(length: float, r: float, mass: float) -> void:
 ## through her ring as soon as it is there (no hold on her head: it is not pressed flat first). In her throat it is
 ## pressed long and thin and goes along with his tip; as he pulls out past her ring it is stuck behind it, and the
 ## latex from his tip to it stretches, pulling her head back to him the more it is stretched (a bigger one harder,
-## and further); stretched POP_BASE + POP_K r it pops out at once (a wet sound; a full
+## and further); stretched POP_BASE + POP_FULL (its cum, of a full one's) it pops through at once and the latex springs it back to his tip
+## (SPRING_TICKS; a wet sound; a full
 ## one makes her wince, and gag if gagging is on). In her throat it makes a swallow lump in her neck. Sets prof (its
 ## shape) and sack_p (its middle). r: its radius (units); unit: stage px per unit.
 func _throat(r: float, unit: float) -> void:
@@ -753,6 +767,8 @@ func _throat(r: float, unit: float) -> void:
 		past = false
 		_pass_t = -1.0
 		_strain = 0.0
+		_clear = true
+		_spring_t = -1.0
 		prof.clear()
 		return
 	var hs: float = her.localToGlobal(Vector2(1, 0)).distance_to(her.localToGlobal(Vector2.ZERO))   # px per her unit
@@ -783,7 +799,11 @@ func _throat(r: float, unit: float) -> void:
 			_in_bag.append(Vector2(xc + cos(th) * lb * 0.5, yc + sin(th) * hb))
 		return
 	var l := ring - d                                # the room between his tip and her ring (< 0: his tip past it)
-	var pop_at := POP_BASE + POP_K * r
+	var pop_at := POP_BASE + POP_FULL * full
+	if _spring_t >= 0.0:
+		_spring_t += 1.0 / SPRING_TICKS
+		if _spring_t >= 1.0:
+			_spring_t = -1.0
 	if _pass_t >= 0.0:   # going through her ring
 		_pass_t += 1.0 / PASS_TICKS
 		if _pass_t >= 1.0:
@@ -792,28 +812,34 @@ func _throat(r: float, unit: float) -> void:
 		stretch = maxf(0.0, l - len_m * SLACK)   # (its slack)
 		var f := stretch / pop_at
 		_strain = _strain + 1.0 if f >= 1.0 else maxf(0.0, _strain - 1.0)
-		if f >= POP_SNAP or _strain >= POP_HOLD + POP_HOLD_K * full:   # held past its limit (or yanked): out
+		if f >= POP_SNAP or _strain >= POP_HOLD + POP_HOLD_K * full or d <= POP_LIPS:   # held past its limit (or
+			# yanked, or out to her lips): out
 			_let_go()
-			past = false
+			past = false   # (through at once, a pop: no frames with it half through)
 			_strain = 0.0
-			_pass_t = 0.0
-			_pass_out = true
+			_pass_t = -1.0
+			_spring_t = 0.0
+			stretch = 0.0
+			_clear = false
 			_pop(her, full, true)
 		elif stretch > 0.0:   # past its limit it holds her head nearly still: a quick pull drags her along
 			drag_add = -PULL_MAX * pow(full, 0.7) * pow(minf(f, 1.0), 2.0)   # (no stronger past it, and not eased: no rocking)
-			grip_out = minf(0.95, HOLD * minf(f, 1.0) + HOLD_PAST * maxf(0.0, f - 1.0))
+			grip_out = minf(0.95, (HOLD * minf(f, 1.0) + HOLD_PAST * maxf(0.0, f - 1.0)) * lerpf(HOLD_SMALL, 1.0, sqrt(full)))
 			grip_in = DAMP_IN * minf(f, 1.0)
 			_hold = Vector3(drag_add, grip_out, grip_in)
 	elif not past:
 		_strain = 0.0
 		if l <= 0.0:
 			past = true   # (his tip is past her ring: it is too)
+			_spring_t = -1.0
 			_pop(her, full, false)
-		elif len_m > l:   # pushed against her ring: through at once
+		elif len_m <= l:
+			_clear = true
+		elif _clear:   # pushed against her ring: through at once
 			_let_go()
 			past = true
 			_pass_t = 0.0
-			_pass_out = false
+			_spring_t = -1.0
 			_pop(her, full, false)
 	# its shape along him: bags [from, length, half width, widest at (share of its length)] ahead of his tip
 	var base := 0.0                                  # where it leaves his tip: the latex there
@@ -825,23 +851,22 @@ func _throat(r: float, unit: float) -> void:
 	if _pass_t >= 0.0:   # going through: what has gone through on the other side, the rest still this side
 		var t := _pass_t
 		var sv := smoothstep(0.0, 0.6, t)            # the share through
-		var vb := v * (sv if not _pass_out else 1.0 - sv)   # past her ring
+		var vb := v * sv                             # past her ring
 		var va := v - vb                             # her mouth's side
 		if vb > 1.0:
 			var lb := _len(vb, wt)
 			bags.append([lr, lb, vb / (PI * lb * 0.5), 0.5])
 			below = 0
-		if va > 1.0 and _pass_out:
-			var la := _len(va, wm)
-			var from_a := lerpf(maxf(0.0, lr - la), 0.0, smoothstep(0.35, 1.0, t))   # against her ring, then the
-			bags.append([from_a, la, va / (PI * la * 0.5), 0.5])                    # latex springs back to his tip
-		elif va > 1.0:   # going in: the rest a round bag against her ring, smaller and smaller (not pressed flat)
+		if va > 1.0:   # the rest a round bag against her ring, smaller and smaller (not pressed flat)
 			var la := _len(va, wm)
 			bags.append([maxf(0.0, lr - la), la, va / (PI * la * 0.5), 0.5])
 	elif past:
 		var lt := len_t * (1.0 - BUNCH * pull)       # pulled up against her ring: shorter and wider, the same cum
 		bags = [[maxf(0.0, l), lt, v / (PI * lt * 0.5), lerpf(0.5, BUNCH_TOP, pull)]]
 		below = 0
+	elif _spring_t >= 0.0:   # popped out: against her ring, the latex springing it back to his tip
+		var ks := 1.0 - pow(1.0 - _spring_t, 3.0)
+		bags = [[maxf(0.0, lr - len_m) * (1.0 - ks), len_m, minf(wm, sqrt(v / PI)), 0.5]]
 	else:
 		bags = [[0.0, len_m, minf(wm, sqrt(v / PI)), 0.5]]
 	var gap := INF                                   # how far past his tip it starts
@@ -852,6 +877,7 @@ func _throat(r: float, unit: float) -> void:
 	if gap <= 0.0 and not bags.is_empty():
 		base = minf(glans * BASE_W, bags[-1][2])
 	prof.clear()
+	_neck_n = 0
 	var sx := 0.0
 	while sx <= end + 0.001:
 		var h := 0.0
@@ -875,16 +901,17 @@ func _throat(r: float, unit: float) -> void:
 		var w_tube := maxf(1.0, glans * NECK_W * (1.0 - 0.3 * pull))
 		var rx := tip_x - neck_to
 		# each side curves in from his glans to lie along him at her ring
-		var curves := _neck_curves(glans, [Vector2(rx, tip_y - w_tube), Vector2(rx, tip_y + w_tube)], [Vector2(-1, 0),
-			Vector2(-1, 0)])
+		var curves := _taut_sides([Vector2(rx, tip_y - w_tube), Vector2(rx, tip_y + w_tube)])
 		var past_ring := true   # (just past her ring the bag is no thinner than the ring: no notch)
 		for i in prof.size():
 			var x := PROF_STEP * i
 			if x <= neck_to:
 				var w := maxf(_curve_w(curves[0], tip_x - x), _curve_w(curves[1], tip_x - x))
 				prof[i] = w if gap > 0.0 and _pass_t < 0.0 else maxf(prof[i], w)
+				_neck_n = i + 1
 			elif past_ring and prof[i] < w_tube:
 				prof[i] = w_tube
+				_neck_n = i + 1
 			else:
 				past_ring = false
 		if _pass_t >= 0.0:   # going through: no thinner than her ring, from his tip on through it
@@ -922,6 +949,33 @@ func _throat(r: float, unit: float) -> void:
 		bumps = [{"at": dm / k / 400.0, "size": 10.0 * LUMP * sqrt(full * share) * (1.0 + 0.6 * pull)}]
 
 
+## The empty latex pulled tight from his glans to her ring (it is under tension: no curve): each side, top and bottom,
+## runs straight from its point at her ring (ends[i]) to where that line touches his glans, as a string pulled round
+## it, and on along his glans from there. Sets _neck_tan / _neck_top / _neck_bot as _neck_curves.
+func _taut_sides(ends: Array) -> Array:
+	var curves := []
+	for k in 2:
+		var sd := -1.0 if k == 0 else 1.0
+		var p2: Vector2 = ends[k]
+		var p0 := Vector2(tip_x, p2.y)
+		var best := -INF
+		var gx := tip_x
+		while gx < tip_x + 60.0 and gx < base_x:   # (the touching point: the steepest way out from her ring)
+			var ge := edges_at(gx)
+			var e: float = ge.x if sd < 0.0 else ge.y
+			var sl := sd * (e - p2.y) / maxf(0.001, gx - p2.x)
+			if sl > best:
+				best = sl
+				p0 = Vector2(gx, e)
+			gx += 0.5
+		var cv := PackedVector2Array()
+		for q in 41:
+			cv.append(p0.lerp(p2, q / 40.0))
+		curves.append(cv)
+	_set_neck(curves)
+	return curves
+
+
 ## The latex's sides from his glans on ahead of his tip, top and bottom: each leaves his glans where that is
 ## NECK_LEAVE of its half width wide, along it, and curves (quadratic: no corner at either end) to ends[i], arriving
 ## along dirs[i] (forward). Sets _neck_tan / _neck_top / _neck_bot (the parts behind his tip go with the shape's start).
@@ -955,6 +1009,12 @@ func _neck_curves(glans: float, ends: Array, dirs: Array) -> Array:
 			var u := q / 40.0
 			cv.append(p0.lerp(p1, u).lerp(p1.lerp(p2, u), u))
 		curves.append(cv)
+	_set_neck(curves)
+	return curves
+
+
+## The parts of the neck's sides behind his tip (_neck_top / _neck_bot) and where they start (_neck_tan).
+func _set_neck(curves: Array) -> void:
 	_neck_tan = PackedVector2Array([curves[0][0], curves[1][0]])
 	_neck_top = PackedVector2Array()
 	_neck_bot = PackedVector2Array()
@@ -964,7 +1024,6 @@ func _neck_curves(glans: float, ends: Array, dirs: Array) -> Array:
 	for q in curves[1]:
 		if q.x > tip_x:
 			_neck_bot.append(q)
-	return curves
 
 
 ## A neck curve's half width (from tip_y) at x (penis-local; the curve runs from back to front).
@@ -1053,7 +1112,7 @@ func _inside_shape() -> PackedVector2Array:
 
 
 ## Its outline for the x-ray view (Him.tipExtra), penis-local: small circles along both its sides (a big circle in
-## its middle would reach past its ends).
+## its middle would reach past its ends). Its neck's are marked "grip" (her ring grips it there).
 func tip_extra() -> Array:
 	var out := []
 	if mouth_state == 1:   # squeezing in: round its outline
@@ -1063,9 +1122,15 @@ func tip_extra() -> Array:
 		var h: float = prof[i]
 		var rr := minf(h, EXTRA_R)
 		var x := tip_x - PROF_STEP * i
-		out.append({"x": x, "y": tip_y - h + rr, "r": rr})
+		var neck := i < _neck_n
+		out.append({"x": x, "y": tip_y - h + rr, "r": rr, "grip": neck})
 		if h > rr:
-			out.append({"x": x, "y": tip_y + h - rr, "r": rr})
+			out.append({"x": x, "y": tip_y + h - rr, "r": rr, "grip": neck})
+	if not prof.is_empty():   # and its neck's sides behind his tip, from where they leave his glans (round its tip: no
+		for side in [[_neck_top, 1.0], [_neck_bot, -1.0]]:   # gap between his glans and the latex)
+			for q: Vector2 in side[0]:
+				var rr := minf(absf(q.y - tip_y), EXTRA_R)
+				out.append({"x": q.x, "y": q.y + float(side[1]) * rr, "r": rr})
 	return out
 
 
@@ -1849,3 +1914,8 @@ static func _signed_area(p: PackedVector2Array) -> float:
 		var q := p[(i + 1) % p.size()]
 		s += p[i].x * q.y - q.x * p[i].y
 	return s
+
+
+## Her (step_sack's `g` is its gravity, not the game).
+func _her():
+	return g.her
