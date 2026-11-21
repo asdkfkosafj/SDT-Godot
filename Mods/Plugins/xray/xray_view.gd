@@ -606,7 +606,23 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 func _split_above_arm(her: Her, throat: PackedVector2Array, axis: Vector2) -> void:
 	if _split <= 0 or her.rightArmContainer == null:
 		return
-	var arms := [her.rightArmContainer, her.rightForeArmContainer]
+	# hitTestVisible's checks that do not depend on the point (shown, its and its parents' alpha; their masks do,
+	# so with a mask: hitTestVisible), once per arm, not per sample; [arm, stage -> arm-local, has a mask]
+	var arms := []
+	for a in [her.rightArmContainer, her.rightForeArmContainer]:
+		if not (a is FlashDisplayObject and a.is_visible_in_tree()):
+			continue
+		var shows := true
+		var masked := false
+		var o: FlashDisplayObject = a
+		while o != null:
+			if o.alpha <= 0.01:
+				shows = false
+				break
+			masked = masked or o._mask != null
+			o = o._flash_parent
+		if shows:
+			arms.append([a, a.flash_global_transform().affine_inverse(), masked])
 	var top: Vector2 = throat[int(SPLIT_MIN * (throat.size() - 1))]
 	var covered := -1
 	var i := _split - 1
@@ -614,7 +630,7 @@ func _split_above_arm(her: Her, throat: PackedVector2Array, axis: Vector2) -> vo
 		var p := localToGlobal(_path[i])
 		var hit := false
 		for a in arms:
-			if a is FlashDisplayObject and a.is_visible_in_tree() and a.hitTestVisible(p.x, p.y):
+			if a[0].hitTestVisible(p.x, p.y) if a[2] else a[0]._hit_visible(a[1] * p):
 				hit = true
 				break
 		if not hit:
@@ -755,12 +771,13 @@ func _outline(him: Him) -> void:
 				if cov[j] == null:
 					cov[j] = []
 				cov[j].append(c)
+	_width_table(cp)
 	for i in n:
 		var s := i * STEP
 		var x := _x_lips - minf(s, _drawn) / _len_scale
-		var w: Array = cp._widthAt(maxf(x, _tip_x - PAST_TIP))
-		var lo := float(w[1])
-		var hi := float(w[1]) + float(w[0])
+		_width_at(maxf(x, _tip_x - PAST_TIP))
+		var lo := _w_y
+		var hi := _w_y + _w_width
 		if x < _tip_x - PAST_TIP:
 			lo = INF   # (past his art's end: only what sits on his tip)
 			hi = -INF
@@ -775,7 +792,7 @@ func _outline(him: Him) -> void:
 		if lo <= hi and not _extra.is_empty():
 			end_mid = (lo + hi) * 0.5
 		if lo > hi:
-			lo = float(w[1]) if is_nan(end_mid) else end_mid   # (between its circles' ends: on its middle)
+			lo = _w_y if is_nan(end_mid) else end_mid   # (between its circles' ends: on its middle)
 			hi = lo
 		_y0[i] = lo - EDGE
 		_y1[i] = hi + EDGE
@@ -813,6 +830,58 @@ func _outline(him: Him) -> void:
 				a1[i] = maxf(_e1[i], (_e1[i - 1] + 2.0 * _e1[i] + _e1[i + 1]) * 0.25)
 			_e0 = a0
 			_e1 = a1
+
+
+## His width table (Penis._widths) sorted by position along him, for _width_at: the same values as Penis._widthAt,
+## without its walk over every entry and its Array per call (_outline asks for each sample, twice a tick).
+var _w_pos := PackedFloat64Array()
+var _w_wid := PackedFloat64Array()
+var _w_sy := PackedFloat64Array()
+var _w_width := 0.0   # _width_at's result: his width there,
+var _w_y := 0.0       # and where it starts (startY)
+
+
+func _width_table(cp: Penis) -> void:
+	var ws: Array = cp._widths
+	var order := range(ws.size())
+	# by position; equal positions in their order in the table (Penis._widthAt takes the first of those)
+	order.sort_custom(func(a, b):
+		var pa: float = ws[a].lengthPos
+		var pb: float = ws[b].lengthPos
+		return pa < pb or (pa == pb and a < b))
+	_w_pos.resize(ws.size())
+	_w_wid.resize(ws.size())
+	_w_sy.resize(ws.size())
+	for k in order.size():
+		var w = ws[order[k]]
+		_w_pos[k] = w.lengthPos
+		_w_wid[k] = w.positionWidth
+		_w_sy[k] = w.startY
+
+
+## Penis._widthAt(pos) from the sorted table (_width_table) into _w_width, _w_y: between the nearest entry below pos
+## (its position < pos) and the nearest at or above it, or the one there is.
+func _width_at(pos: float) -> void:
+	var n := _w_pos.size()
+	var above := 0   # the first entry at or above pos
+	while above < n and _w_pos[above] < pos:
+		above += 1
+	var below := above - 1
+	while below > 0 and _w_pos[below - 1] == _w_pos[below]:   # (the first of equal positions)
+		below -= 1
+	if below >= 0 and above < n:
+		var t := (pos - _w_pos[below]) / (_w_pos[above] - _w_pos[below])
+		_w_width = _w_wid[below] + t * (_w_wid[above] - _w_wid[below])
+		_w_y = _w_sy[below] + t * (_w_sy[above] - _w_sy[below])
+	elif below >= 0:
+		_w_width = _w_wid[below]
+		_w_y = _w_sy[below]
+	elif above < n:
+		_w_width = _w_wid[above]
+		_w_y = _w_sy[above]
+	else:
+		_w_width = 0.0
+		_w_y = 0.0
 
 
 ## The centre line: from `start` (between her lips) along `dir` (into her), one bend down into her chest along her
@@ -895,7 +964,7 @@ func _fit_mouth(rest: Array) -> void:
 		for i in n:
 			var p := 0.0   # the most any push near reaches here, less the further it is (it still clears him)
 			for j in range(maxi(0, i - MOUTH_GIVE), mini(n, i + MOUTH_GIVE + 1)):
-				p = maxf(p, push[j] * (0.5 + 0.5 * cos(PI * absf(i - j) / float(MOUTH_GIVE + 1))))
+				p = maxf(p, push[j] * _GIVE_FALL[absi(i - j)])
 			var w := 1.0 - smoothstep(_mouth_end - MOUTH_BACK, _mouth_end, i)   # (handing over to her throat)
 			var tube: float = _e0[i] if side < 0.0 else _e1[i]
 			var e := lerpf(tube, at_rest[i] + p * side, w)
@@ -929,6 +998,14 @@ func _fit_mouth(rest: Array) -> void:
 				_e1[i] = lerpf(_e1[i], room1[i], k)
 
 
+## How much of a push reaches 0 .. MOUTH_GIVE samples away (_fit_mouth): a cosine falling off.
+static var _GIVE_FALL: PackedFloat64Array = (func() -> PackedFloat64Array:
+	var t := PackedFloat64Array()
+	for d in MOUTH_GIVE + 1:
+		t.append(0.5 + 0.5 * cos(PI * absf(d) / float(MOUTH_GIVE + 1)))
+	return t).call()
+
+
 ## NAN values filled in from the nearest values each side (straight between them; at an end, the nearest one).
 static func _fill_gaps(v: PackedFloat32Array) -> void:
 	var last := -1
@@ -955,14 +1032,16 @@ func _cross(i: int, poly: PackedVector2Array, side: float, near := -1) -> float:
 	var best := NAN
 	var j0 := 0 if near < 0 else maxi(0, i - near)   # (`near` >= 0: its points i - near .. i + near only)
 	var j1 := poly.size() - 1 if near < 0 else mini(poly.size() - 1, i + near)
+	if j1 <= j0:
+		return best
+	var a := (poly[j0] - p).cross(nrm)   # (each point's side once: a segment's end is the next one's start)
 	for j in range(j0, j1):
-		var a := (poly[j] - p).cross(nrm)
 		var b := (poly[j + 1] - p).cross(nrm)
-		if (a <= 0.0) == (b <= 0.0):
-			continue
-		var off := (poly[j].lerp(poly[j + 1], a / (a - b)) - p).dot(nrm)   # (the crossing is on the normal)
-		if off * side > 0.0 and (is_nan(best) or absf(off) < absf(best)):
-			best = off
+		if (a <= 0.0) != (b <= 0.0):
+			var off := (poly[j].lerp(poly[j + 1], a / (a - b)) - p).dot(nrm)   # (the crossing is on the normal)
+			if off * side > 0.0 and (is_nan(best) or absf(off) < absf(best)):
+				best = off
+		a = b
 	return best
 
 
@@ -1383,21 +1462,24 @@ func _paint_grip(ci: RID, i0: int, i1: int) -> void:
 		var edge: PackedFloat32Array = _e0 if side < 0.0 else _e1
 		var pts := PackedVector2Array()
 		var cols := PackedColorArray()
-		var idx := PackedInt32Array()
+		pts.resize((to - from + 1) * 3)
+		cols.resize(pts.size())
 		var c0 := _pm(_wall_col)
+		var v := 0
 		for i in range(from, to + 1):
 			var c := c0 * _w[i]
 			var g := _grip[i]
 			var out := edge[i] + side * minf(GATE_OVER_OUT, 2.0 * g)   # (over the rim of his art past his outline)
 			var inn := edge[i] - side * g
 			var soft := edge[i] - side * maxf(g - 2.0 * _half_px, 0.0)
-			pts.append_array([_at(i, out), _at(i, soft), _at(i, inn)])
-			cols.append_array([c, c * minf(g / (2.0 * _half_px), 1.0), Color(0, 0, 0, 0)])
-			if i > from:
-				var b := (i - from - 1) * 3
-				for k in 2:
-					idx.append_array([b + k, b + k + 1, b + k + 3, b + k + 1, b + k + 4, b + k + 3])
-		RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
+			pts[v] = _at(i, out)
+			pts[v + 1] = _at(i, soft)
+			pts[v + 2] = _at(i, inn)
+			cols[v] = c
+			cols[v + 1] = c * minf(g / (2.0 * _half_px), 1.0)
+			cols[v + 2] = Color(0, 0, 0, 0)
+			v += 3
+		RenderingServer.canvas_item_add_triangle_array(ci, _strip_indices(3, to - from + 1), pts, cols)
 
 
 ## A premultiplied colour (the fade behind the start edge is FADE_SHADER's).
@@ -1405,14 +1487,40 @@ static func _pm(col: Color) -> Color:
 	return Color(col.r * col.a, col.g * col.a, col.b * col.a, col.a)
 
 
+## The triangles of a strip of `n` samples with `lanes` points across each (in order from one side to the other):
+## between each two samples, two triangles per gap between lanes. Kept by size, as they are the same each time.
+static var _strips := {}
+
+
+static func _strip_indices(lanes: int, n: int) -> PackedInt32Array:
+	var key := lanes * 100000 + n
+	var idx: PackedInt32Array = _strips.get(key, PackedInt32Array())
+	if idx.is_empty() and n > 1:
+		idx.resize((n - 1) * (lanes - 1) * 6)
+		var at := 0
+		for s in range(1, n):
+			var b := (s - 1) * lanes
+			for k in lanes - 1:
+				for d in [b + k, b + k + 1, b + k + lanes, b + k + 1, b + k + lanes + 1, b + k + lanes]:
+					idx[at] = d
+					at += 1
+		_strips[key] = idx
+	return idx
+
+
 ## A strip along the centre line from his outline's e0 + lo to e1 + hi (`ring`: and out by _thick), in one colour
 ## (premultiplied), its edges fading out across one screen pixel centred on them.
 func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int, ring := false) -> void:
+	if i1 < i0:
+		return
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
-	var idx := PackedInt32Array()
+	pts.resize((i1 - i0 + 1) * 4)
+	cols.resize(pts.size())
+	cols.fill(Color(0, 0, 0, 0))   # (the outer two of each sample stay so)
 	var h := _half_px
 	var c0 := _pm(col)
+	var v := 0
 	for i in range(i0, i1 + 1):
 		var c := c0 * _w[i]
 		var t := _thick[i] if ring else 0.0
@@ -1420,33 +1528,37 @@ func _band(ci: RID, lo: float, hi: float, col: Color, i0: int, i1: int, ring := 
 		var d1 := _e1[i] + hi + t
 		var m0 := minf(d0 + h, (d0 + d1) * 0.5)   # a strip thinner than a pixel: no solid middle
 		var m1 := maxf(d1 - h, (d0 + d1) * 0.5)
-		pts.append_array([_at(i, d0 - h), _at(i, m0), _at(i, m1), _at(i, d1 + h)])
-		cols.append_array([Color(0, 0, 0, 0), c, c, Color(0, 0, 0, 0)])
-		if i > i0:
-			var b := (i - i0 - 1) * 4
-			for k in 3:   # the fade in, the solid middle, the fade out
-				idx.append_array([b + k, b + k + 1, b + k + 4, b + k + 1, b + k + 5, b + k + 4])
-	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
+		pts[v] = _at(i, d0 - h)
+		pts[v + 1] = _at(i, m0)
+		pts[v + 2] = _at(i, m1)
+		pts[v + 3] = _at(i, d1 + h)
+		cols[v + 1] = c
+		cols[v + 2] = c
+		v += 4
+	# (the fade in, the solid middle, the fade out)
+	RenderingServer.canvas_item_add_triangle_array(ci, _strip_indices(4, i1 - i0 + 1), pts, cols)
 
 
 ## A strip from edge + inner (glow colour) to edge + outer (transparent), out by _thick (round the thicker wall). It
 ## starts half a pixel under the wall, so the wall's faded edge has the glow under it (no light seam between the two).
 func _glow(ci: RID, edge: PackedFloat32Array, inner: float, outer: float, i0: int, i1: int) -> void:
+	if i1 < i0:
+		return
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
-	var idx := PackedInt32Array()
+	pts.resize((i1 - i0 + 1) * 2)
+	cols.resize(pts.size())
+	cols.fill(Color(0, 0, 0, 0))   # (the outer one of each sample stays so)
 	var gc := _pm(_glow_col)
 	var under := -signf(outer - inner) * _half_px
+	var v := 0
 	for i in range(i0, i1 + 1):
 		var t := signf(outer - inner) * _thick[i]
-		pts.append(_at(i, edge[i] + inner + under + t))
-		pts.append(_at(i, edge[i] + outer + t))
-		cols.append(gc * _w[i])
-		cols.append(Color(0, 0, 0, 0))
-		if i > i0:
-			var b := (i - i0 - 1) * 2
-			idx.append_array([b, b + 1, b + 2, b + 1, b + 3, b + 2])
-	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols)
+		pts[v] = _at(i, edge[i] + inner + under + t)
+		pts[v + 1] = _at(i, edge[i] + outer + t)
+		cols[v] = gc * _w[i]
+		v += 2
+	RenderingServer.canvas_item_add_triangle_array(ci, _strip_indices(2, i1 - i0 + 1), pts, cols)
 
 
 ## His penis from his render, bent along the centre line: each sample takes the penis-local cross-section at the
@@ -1464,22 +1576,25 @@ func _penis(ci: RID, i0: int, i1: int) -> void:
 	var pen_col := Color(opacity, opacity, opacity, opacity)
 	var cols := PackedColorArray()
 	var uvs := PackedVector2Array()
-	var idx := PackedInt32Array()
 	var last := mini(mini(int(ceil(_drawn / STEP)), _path.size() - 1), i1)
 	if last <= i0:
 		return
 	var h := _half_px / _wid_scale   # half a screen pixel, penis-local
+	pts.resize((last - i0 + 1) * 4)
+	uvs.resize(pts.size())
+	cols.resize(pts.size())
+	cols.fill(Color(0, 0, 0, 0))   # (the outer two of each sample stay so)
+	var v := 0
 	for i in range(i0, last + 1):
 		var x := _x_lips - minf(i * STEP, _drawn) / _len_scale
 		# the strip's sides fade out across a pixel, like the bands
-		var ys := [_y0[i] - h, _y0[i] + h, _y1[i] - h, _y1[i] + h]
-		for j in 4:
-			pts.append(_at(i, _side * ys[j] * _wid_scale))
-			uvs.append((_penis_xf * Vector2(x, ys[j]) - rect.position) / rect.size)
-			cols.append(pen_col if j == 1 or j == 2 else Color(0, 0, 0, 0))
-		if i > i0:
-			var b := (i - i0 - 1) * 4
-			for k in 3:
-				idx.append_array([b + k, b + k + 1, b + k + 4, b + k + 1, b + k + 5, b + k + 4])
-	RenderingServer.canvas_item_add_triangle_array(ci, idx, pts, cols, uvs, PackedInt32Array(), PackedFloat32Array(),
-		grp.render_texture().get_rid())
+		var y0 := _y0[i]
+		var y1 := _y1[i]
+		for y in [y0 - h, y0 + h, y1 - h, y1 + h]:
+			pts[v] = _at(i, _side * y * _wid_scale)
+			uvs[v] = (_penis_xf * Vector2(x, y) - rect.position) / rect.size
+			v += 1
+		cols[v - 3] = pen_col
+		cols[v - 2] = pen_col
+	RenderingServer.canvas_item_add_triangle_array(ci, _strip_indices(4, last - i0 + 1), pts, cols, uvs,
+		PackedInt32Array(), PackedFloat32Array(), grp.render_texture().get_rid())
