@@ -31,6 +31,7 @@ var _mesh_rect_ok := false
 var _mesh_item := RID()
 var _mesh_mat: ShaderMaterial = null
 var _mesh_state: Dictionary = {}
+var _cm: Array = []   # effective_color_matrix() of the owner at the last _render
 
 
 func _init(owner: FlashSprite) -> void:
@@ -326,6 +327,7 @@ func _render(canvas: CanvasItem) -> void:
 				PackedColorArray([Color.WHITE]))
 		return
 	var fills := _all_fills()
+	_cm = _owner.effective_color_matrix()   # the owner's and its ancestors' colour-matrix filters (her skin tint)
 	var parent_rid := _owner.get_canvas_item()
 	while _items.size() < fills.size():
 		var rid := RenderingServer.canvas_item_create()
@@ -384,6 +386,10 @@ func _render_mesh(parent_rid: RID, after: int) -> void:
 func _configure_material(m: ShaderMaterial, style: Dictionary, state: Dictionary) -> void:
 	var off := _owner.effective_color_offset() / 255.0
 	_set_param(m, state, "offset", Vector4(off.r, off.g, off.b, off.a))
+	_set_param(m, state, "use_matrix", not _cm.is_empty())
+	if not _cm.is_empty():
+		_set_param(m, state, "cm", _cm[0])
+		_set_param(m, state, "cm_offset", _cm[1])
 	_set_param(m, state, "fill_mode", style["mode"])
 	if style["mode"] == 0:
 		_set_param(m, state, "solid", style["color"])

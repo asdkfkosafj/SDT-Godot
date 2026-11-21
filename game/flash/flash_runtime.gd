@@ -1008,15 +1008,12 @@ func shape_material(s: FlashShape) -> Material:
 				first_group = o._proxy as FlashGroupProxy
 		if blend_open and blend == "normal" and o._blend_mode != "normal" and o._blend_mode != "layer":
 			blend = o._blend_mode
-		for f in o._filters:
-			if f is FlashFilter and f.type == "ColorMatrix" and f.matrix.size() >= 20:
-				var m: Array = f.matrix
-				var b := Projection(Vector4(m[0], m[5], m[10], m[15]), Vector4(m[1], m[6], m[11], m[16]),
-					Vector4(m[2], m[7], m[12], m[17]), Vector4(m[3], m[8], m[13], m[18]))
-				cm_off = b * cm_off + Vector4(m[4], m[9], m[14], m[19]) / 255.0
-				cm = b * cm
-				has_cm = true
 		o = o._flash_parent
+	var ecm := s.effective_color_matrix()
+	if not ecm.is_empty():
+		cm = ecm[0]
+		cm_off = ecm[1]
+		has_cm = true
 	if blend != "normal":
 		paint = null   # painted shapes are plain ones (her skin; a colour matrix, her skin colour, is kept)
 	# the blend (found below the first group) applies inside that group: while the shape shows, the group may need

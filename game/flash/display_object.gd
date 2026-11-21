@@ -193,6 +193,26 @@ func _in_render_state_chain() -> bool:
 	return false
 
 
+## The ColorMatrixFilters of this object and its ancestors as one matrix (child first, like Flash):
+## [cm: Projection, cm_offset: Vector4 (0..1 units)], or [] when there are none.
+func effective_color_matrix() -> Array:
+	var cm: Projection = Projection.IDENTITY
+	var cm_off := Vector4.ZERO
+	var has_cm := false
+	var o: FlashDisplayObject = self
+	while o != null:
+		for f in o._filters:
+			if f is FlashFilter and f.type == "ColorMatrix" and f.matrix.size() >= 20:
+				var m: Array = f.matrix
+				var b := Projection(Vector4(m[0], m[5], m[10], m[15]), Vector4(m[1], m[6], m[11], m[16]),
+					Vector4(m[2], m[7], m[12], m[17]), Vector4(m[3], m[8], m[13], m[18]))
+				cm_off = b * cm_off + Vector4(m[4], m[9], m[14], m[19]) / 255.0
+				cm = b * cm
+				has_cm = true
+		o = o._flash_parent
+	return [cm, cm_off] if has_cm else []
+
+
 ## Sum of additive offsets (0..255 units) that apply to content drawn by this node, accounting for the
 ## multipliers of ancestors: Flash applies child transform first, then each parent in turn.
 func effective_color_offset() -> Color:
