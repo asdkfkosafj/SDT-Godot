@@ -262,7 +262,7 @@ func _build() -> void:
 	_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_search.focus_entered.connect(func(): g.inTextField = true)
 	_search.focus_exited.connect(func(): g.inTextField = false)
-	_search.text_changed.connect(func(t): query = t.strip_edges(); _show())
+	_search.text_changed.connect(_search_typed)
 	head.add_child(_search)
 	var close := Button.new()
 	close.text = "×"
@@ -565,6 +565,28 @@ func _groups_of(s: Dictionary) -> Array:
 		else:
 			target["controls"].append(spec)
 	return out
+
+
+## The search runs once typing pauses (SEARCH_DELAY), not on every key: each run builds a new results view, and its
+## rows' first layout cost 45-55 ms per key on a slow computer (HITCH "deferred draws", typing "xray"). A cleared
+## field shows the section at once.
+const SEARCH_DELAY := 0.2
+var _search_serial := 0
+
+
+func _search_typed(t: String) -> void:
+	_search_serial += 1
+	var text := t.strip_edges()
+	if text == "":
+		query = ""
+		_show()
+		return
+	var n := _search_serial
+	get_tree().create_timer(SEARCH_DELAY, true, false, true).timeout.connect(func():
+		# not when a newer key came, or the field was cleared or set without a signal (closing, Escape)
+		if n == _search_serial and is_instance_valid(_search) and _search.text.strip_edges() == text:
+			query = text
+			_show())
 
 
 func _show() -> void:

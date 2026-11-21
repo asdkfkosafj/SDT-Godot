@@ -74,8 +74,15 @@ static func set_msaa(v: String) -> void:
 	apply_msaa()
 
 
+## Godot's OpenGL renderer (gl_compatibility: no Vulkan / D3D12, e.g. older Intel graphics) has no 2D MSAA: each
+## target set to it only logs "2D MSAA is not yet supported for GLES3" (about 140 lines at start). The setting is
+## hidden there.
+static func msaa_supported() -> bool:
+	return RenderingServer.get_current_rendering_method() != "gl_compatibility"
+
+
 static func apply_msaa() -> void:
-	var m: Viewport.MSAA = MSAA_LEVELS[msaa()]
+	var m: Viewport.MSAA = MSAA_LEVELS[msaa()] if msaa_supported() else Viewport.MSAA_DISABLED
 	FlashProxy.msaa_level = m
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null:

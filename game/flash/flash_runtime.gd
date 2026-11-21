@@ -608,6 +608,10 @@ func _perf_frame(total: int, ph: Dictionary, now: int) -> void:
 	var pf := _perf
 	if pf["start"] == 0:
 		pf["start"] = now
+		# the listener times count every tick, but the window's ticks only from here: drop the ticks before it (the
+		# first 60, or all of them while the window did not draw yet, e.g. started minimised: the per-tick values
+		# came out up to 7 times too large)
+		_perf_listeners = {}
 	pf["frames"] += 1
 	pf["us"] += total
 	if total > 33333:

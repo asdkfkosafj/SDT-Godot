@@ -97,7 +97,7 @@ static func _opacity(n: Node) -> float:
 ## The MSAA level of the screen and of every render target; the game's MSAA setting changes it
 ## (PortSettings.apply_msaa). Render targets need it as much as the screen: a rotated shape whose image is cut off at
 ## its border shows that border as a hard polygon edge (the end of her collar, eyeliner), which only MSAA smooths.
-static var msaa_level: Viewport.MSAA = ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_2d", 0)
+static var msaa_level: Viewport.MSAA = ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_2d", 0) 	if RenderingServer.get_current_rendering_method() != "gl_compatibility" else Viewport.MSAA_DISABLED   # (PortSettings.msaa_supported)
 
 
 ## Slack around the visible area a render target still covers, as a share of the viewport's size: content glides
