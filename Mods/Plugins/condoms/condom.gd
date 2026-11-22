@@ -52,20 +52,23 @@ const PULL_MAX := 0.04     # the stretched latex pulls her head back to him: thi
 const SLACK := 0.65        # stuck behind her ring, the latex to it stretches only past this much of its length (in
                            #   her mouth) from his tip to her ring. Pushed in, it goes through as soon as it is there
 const HOLD := 0.5          # while stuck it also slows her head that way by this much (no shaking), a full one;
-const HOLD_SMALL := 0.3    #   the first drop this share of that, more and more up to a full one (as sqrt of its cum)
+const HOLD_SMALL := 0.5    #   the first drop this share of that, more and more up to a full one (as sqrt of its cum)
 const LUMP := 1.4          # a full one in her throat: this many swallow lumps (Neck.bumps, size 10 each)
 const LIP_TICKS := 10.0    # squeezing in through her lips and sliding along under him to his tip takes this many ticks
 const LIP_ROOM := 0.6      # under him in her mouth it is this many glans half widths high (squeezed by her tongue)
 const PASS_TICKS := 6.0    # pushed in, going through her throat ring takes this many ticks
 const SPRING_TICKS := 8.0  # popped out it is through her ring at once (a pop), against it in her mouth, and the latex
                            #   springs it back to his tip over this many ticks (fast, then slower)
-const POP_HOLD := 5.0      # pulled past its limit it pops only once it stays there this many ticks, plus
-const POP_HOLD_K := 14.0   #   this many for a full one (a quick yank drags her head along instead)
-const POP_SNAP := 2.6      # pulled this far past its limit (times it) it pops at once
+const STOP_FROM := 0.75    # from this share of its limit on the hold grows to all of her head's speed away from him
+                           #   at the limit (Her.holdOut: whatever moves her out): it stops her head there
+const STUCK_TIME := 1.0    # pulled to its limit it pops only once it has been pulled there this many seconds (the
+const STUCK_FULL := 3.0    #   first drop), up to this many for a full one (as the cum in it)
+const STRAIN_FROM := 0.9   # stretched this share of its limit counts as pulled (her head stops just short of it)
+const TREMBLE := 0.003     # close to popping out (TREMBLE_FROM of its time on) she trembles on him very lightly,
+const TREMBLE_FROM := 0.7  #   up to this much (Her.tremble, her position's units: about 1 px; 0.015 was too
+                           #   strong); her eyes squint all along (plugin)
 const POP_LIPS := 6.0      # and once his tip is out to this near her lips (units), whatever the stretch (he cannot
                            #   leave her mouth with it still in her throat)
-const HOLD_PAST := 1.2     # past its limit it holds her head still (away from him) this much more per unit past it
-                           #   (up to 0.95)
 const RELEASE_TICKS := 12.0  # through her ring (out or in) its hold on her head lets go over this many ticks (no jerk:
                              #   her head eases to where it is pulled, also once he is out of her mouth)
 const DAMP_IN := 0.6       # stuck, it slows her head's spring back towards him by this much (no bouncing)
@@ -135,7 +138,8 @@ var _lt1 := Vector2(NAN, NAN)
 var past := false                      # state 2: it is past her throat ring (in her throat)
 var stretch := 0.0                     # stuck behind her ring as he pulls out: how far the latex to it is stretched
 var drag_add := 0.0                    # this tick's pull on her head (Her.drag: < 0 back to him, > 0 away)
-var grip_out := 0.0                    # this tick's share of her head's speed away from him it takes (Her.drag)
+var grip_out := 0.0                    # this tick's share of her head's motion away from him it holds (Her.holdOut)
+var strain_k := 0.0                    # stuck at its limit: how far along to popping out (0..1; her wince, the tremble)
 var grip_in := 0.0                     # and towards him
 var bumps := []                        # its lump in her neck (Neck.bumps)
 var pops := 0                          # how often it went through her throat ring (out or in)
@@ -146,7 +150,7 @@ var _spring_t := -1.0                  # popped out: springing back from her rin
 var _hold := Vector3()                 # stuck: its hold on her head this tick (drag_add, grip_out, grip_in)
 var _rel := Vector3()                  # that as it went through her ring, let go over RELEASE_TICKS
 var _rel_t := 0.0                      # ticks of letting go left
-var _strain := 0.0                     # stuck: ticks it has been pulled past its limit
+var _strain := 0.0                     # stuck: ticks it has been pulled to its limit (STRAIN_FROM)
 var _clear := true                     # popped out: it goes back through her ring only once it was clear of it (not
                                        # straight back in as he pulls out)
 var _lip_t := -1.0                     # state 1: squeezing in through her lips: 0..1 (-1: not yet)
@@ -739,12 +743,13 @@ func step_sack(length: float, r: float, mass: float) -> void:
 ## through her ring as soon as it is there (no hold on her head: it is not pressed flat first). In her throat it is
 ## pressed long and thin and goes along with his tip; as he pulls out past her ring it is stuck behind it, and the
 ## latex from his tip to it stretches, pulling her head back to him the more it is stretched (a bigger one harder,
-## and further); stretched POP_BASE + POP_FULL (its cum, of a full one's) it pops through at once and the latex springs it back to his tip
-## (SPRING_TICKS; a wet sound; a full
-## one makes her wince, and gag if gagging is on). In her throat it makes a swallow lump in her neck. Sets prof (its
+## and further); stretched POP_BASE + POP_FULL (its cum, of a full one's) it stops her head, and once pulled there
+## STUCK_TIME .. STUCK_FULL seconds it pops through at once and the latex springs it back to his tip (SPRING_TICKS; a
+## wet sound; a full one makes her wince, and gag if gagging is on). In her throat it makes a swallow lump in her neck. Sets prof (its
 ## shape) and sack_p (its middle). r: its radius (units); unit: stage px per unit.
 func _throat(r: float, unit: float) -> void:
 	grip_out = 0.0
+	strain_k = 0.0
 	grip_in = 0.0
 	drag_add = 0.0
 	stretch = 0.0
@@ -811,9 +816,9 @@ func _throat(r: float, unit: float) -> void:
 	elif past and l > 0.0:   # stuck behind her ring: the latex to it stretches as he pulls out
 		stretch = maxf(0.0, l - len_m * SLACK)   # (its slack)
 		var f := stretch / pop_at
-		_strain = _strain + 1.0 if f >= 1.0 else maxf(0.0, _strain - 1.0)
-		if f >= POP_SNAP or _strain >= POP_HOLD + POP_HOLD_K * full or d <= POP_LIPS:   # held past its limit (or
-			# yanked, or out to her lips): out
+		_strain = _strain + 1.0 if f >= STRAIN_FROM else maxf(0.0, _strain - 1.0)
+		if _strain >= 30.0 * lerpf(STUCK_TIME, STUCK_FULL, full) or d <= POP_LIPS:   # pulled long enough (30 ticks a
+			# second; or out to her lips): out
 			_let_go()
 			past = false   # (through at once, a pop: no frames with it half through)
 			_strain = 0.0
@@ -822,9 +827,11 @@ func _throat(r: float, unit: float) -> void:
 			stretch = 0.0
 			_clear = false
 			_pop(her, full, true)
-		elif stretch > 0.0:   # past its limit it holds her head nearly still: a quick pull drags her along
+		elif stretch > 0.0:   # it holds her head more and more, and at its limit still (no further out)
 			drag_add = -PULL_MAX * pow(full, 0.7) * pow(minf(f, 1.0), 2.0)   # (no stronger past it, and not eased: no rocking)
-			grip_out = minf(0.95, (HOLD * minf(f, 1.0) + HOLD_PAST * maxf(0.0, f - 1.0)) * lerpf(HOLD_SMALL, 1.0, sqrt(full)))
+			var held := HOLD * minf(f, 1.0) * lerpf(HOLD_SMALL, 1.0, sqrt(full))
+			grip_out = lerpf(held, 1.0, smoothstep(STOP_FROM, 1.0, f))
+			strain_k = minf(1.0, _strain / (30.0 * lerpf(STUCK_TIME, STUCK_FULL, full)))
 			grip_in = DAMP_IN * minf(f, 1.0)
 			_hold = Vector3(drag_add, grip_out, grip_in)
 	elif not past:

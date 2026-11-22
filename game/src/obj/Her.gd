@@ -164,6 +164,8 @@ var gaggedRotation: float = 6.0
 var resistance := {"upper": 0.01, "boundary": 0.1, "lower": 0.0, "multiplier": 5.0}
 var previousResistance: float = 0.01
 var pullOff: float = 0.0
+var _holdOut := 0.0   # port: the share of her motion away from him held back this tick (value point Her.holdOut, move())
+var _trembleOff := 0.0   # port: her head's tremble offset this tick (value point Her.tremble, move())
 var pullOffPower := {"start": 0.001, "current": 0.0, "increase": 0.00005, "max": 0.008}
 var pullingOff := true
 var released := true
@@ -1139,11 +1141,24 @@ func move(targetPos: float, tilt: float) -> float:
 			speed -= pullOff
 	elif Hooks.has_value(&"Her.limpResistance") and penisInMouthDist > 0 and acceleration > 0:   # HOOK value point: what holds him back while she is passed out (the game: nothing)
 		speed -= Hooks.value(&"Her.limpResistance", self, 0.0)
+	_holdOut = 0.0
+	if Hooks.has_value(&"Her.holdOut"):   # HOOK value point: the share of her head's motion away from him held back this tick, whatever moves her (her speed, Her.pushBack, her breathing and jitter; 0..1; 0)
+		_holdOut = clampf(Hooks.value(&"Her.holdOut", self, 0.0), 0.0, 1.0)
+	if speed < 0.0:
+		speed *= 1.0 - _holdOut
 	speed *= speedFriction
 	var push := 0.0
 	if Hooks.has_value(&"Her.pushBack"):   # HOOK value point: pushes her head back off him (0 in the game; before the clamp)
 		push = Hooks.value(&"Her.pushBack", self, 0.0)
-	pos = maxf(minPos, minf(maxPos, pos + speed - push))
+		if push > 0.0:
+			push *= 1.0 - _holdOut
+	var shake := 0.0
+	if Hooks.has_value(&"Her.tremble"):   # HOOK value point: how much her head trembles on him this tick (0; along him, her position's units): an offset that turns round every tick, not her motion
+		var amp := maxf(0.0, Hooks.value(&"Her.tremble", self, 0.0))
+		if amp > 0.0:
+			shake = amp * (0.6 + 0.4 * randf()) * (-1.0 if _trembleOff > 0.0 else 1.0)
+	pos = maxf(minPos, minf(maxPos, pos + speed - push + shake - _trembleOff))
+	_trembleOff = shake
 	if intro and not g.penisOut:
 		pos -= maxf(0.0, (penisInMouthDist - maxIntroDist) * 0.0015)
 	if not mouthFull and clenchTeeth and not g.penisOut and not gagged:
@@ -1731,7 +1746,7 @@ func checkPosition() -> void:
 			nextCoughTime = int(floor(randf() * 210)) + 30
 		else:
 			cough()
-		pos += randf() * 0.01 - 0.005
+		pos += _heldOut(randf() * 0.01 - 0.005)
 	if Hooks.has_value(&"Her.pullOff"):   # HOOK value point: how hard she pulls back off him and its power, after the game's update ({pull, power})
 		var po: Dictionary = Hooks.value(&"Her.pullOff", self, {"pull": pullOff, "power": pullOffPower["current"]})
 		pullOff = po["pull"]
@@ -1746,7 +1761,7 @@ func animateBreathing() -> void:
 	if breathing:
 		var depth: float = 0.5 if passedOut else maxf(0.5, minf(2.0, g.breathLevel / g.outOfBreathPoint * 2.0))
 		breathingFactor = sin(g.soundControl.breathPosition() * PI * 2.0) * depth
-		pos += breathingFactor * 0.00625
+		pos += _heldOut(breathingFactor * 0.00625)
 		if g.soundControl.justBreathedOut() and g.herMouthOpeness > 0.4:
 			var mist := BreathMist.new()
 			var p: Vector2 = g.sceneLayer.globalToLocal(localToGlobal(midMouth))
@@ -1772,10 +1787,15 @@ func animateBreathing() -> void:
 			if not passedOut and passOutFactor >= passOutMax:
 				passOut()
 		breathingFactor *= 0.8
-		pos += getRandomMotion()
+		pos += _heldOut(getRandomMotion())
 	breathingFactor += coughFactor * 0.8
 	if Hooks.has(&"Her.animateBreathing"):   # HOOK
 		Hooks.after(&"Her.animateBreathing", self, [])
+
+
+## Port: a change of her head's position, less the share of it away from him that Her.holdOut holds back (move()).
+func _heldOut(dp: float) -> float:
+	return dp * (1.0 - _holdOut) if dp < 0.0 else dp
 
 
 ## Port: how hard she pulls back off him while held ({start, increase, max}; the value point Her.pullOffPower)

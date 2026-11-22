@@ -333,6 +333,8 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.limpResistance` | the same while she is passed out (0: the game holds nothing then) | (subtracted from her speed) |
 | `Her.pushBack` | how far her head is pushed back off him this tick (0), before the `minPos`/`maxPos` clamp | `her.pos` |
 | `Her.drag` | how much her head is slowed this tick (0; subtracted from her speed before friction, positive: away from him), e.g. her arms resisting | `her.speed` |
+| `Her.holdOut` | the share of her head's motion away from him held back this tick (0..1; 0): her speed after `Her.drag`, her resistance and her pull-off, and `Her.pushBack`; whatever moves her out (the condoms plugin's sack stuck behind her throat ring) | `her.speed` |
+| `Her.tremble` | how much her head trembles on him this tick (0; along him, in her position's units, `her.pos`): an offset that turns round every tick and does not add up, not held back by `Her.holdOut` (the condoms plugin: her trembling as the stuck sack gets close to popping out) | `her.pos` |
 | `Her.throatRing` | how deep in her her throat ring is, as `her.penisInMouthDist` (`Her.throatRing()`; the game has none: `Her.THROAT_RING`, 120); the x-ray view sets where it draws it while it shows; the condoms plugin's sack gets stuck behind it | |
 | `Her.passOutExtra` | how much closer to passing out she gets this tick on top of the game's own (0), with or without air, while she is awake | `her.passOutFactor` |
 | `Scene.backgroundBrightness` | how bright the background is (1; its colour multipliers), every tick while it has modifiers | `g.bg.colorTransform` |

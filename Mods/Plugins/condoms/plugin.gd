@@ -23,6 +23,7 @@ const PULL_DIST := 170.0   # it pulls it this far off his tip (penis units)
 const AHEAD := 3.0         # it takes it by its tip just this far past his glans (penis units)
 const DROP_LINKS := 2      # ... made of this many strand links
 const DROP_TICKS := 50     # the drop of cum left on his tip hangs there this long, then falls
+const WINCE := 0.85         # stuck sack about to pop out: her eyes squint this share of the way to her wince
 
 var Condom: GDScript
 var Tied: GDScript
@@ -81,7 +82,16 @@ func _enable() -> void:
 	modify(&"Her.drag", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, her):
 		if condom == null:
 			return v
-		return v + condom.drag_add + minf(0.0, her.speed) * condom.grip_out + maxf(0.0, her.speed) * condom.grip_in})
+		return v + condom.drag_add + maxf(0.0, her.speed) * condom.grip_in})
+	# and it holds her head back from leaving him, whatever moves her out (the player, her resistance, her pull-off)
+	modify(&"Her.holdOut", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, _her):
+		return maxf(v, condom.grip_out) if condom != null else v})
+	# held there she squints more and more as it gets close to popping out (towards her wince), and trembles on him
+	# lightly just before it does
+	modify(&"Her.tremble", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, _her):
+		return v + condom.TREMBLE * smoothstep(condom.TREMBLE_FROM, 1.0, condom.strain_k) if condom != null else v})
+	modify(&"Her.eyelidTarget", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, her):
+		return lerpf(v, her.eyePosWince, WINCE * smoothstep(0.0, 0.8, condom.strain_k)) if condom != null else v})
 	modify(&"Neck.bumps", {"op": "fn", "fn": func(v, _neck): return v + condom.bumps if condom != null else v})
 	# the x-ray view draws it in her mouth with him
 	modify(&"Him.tipExtra", {"op": "fn", "fn": func(v, _him):
