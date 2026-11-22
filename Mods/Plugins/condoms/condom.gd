@@ -140,6 +140,8 @@ var stretch := 0.0                     # stuck behind her ring as he pulls out: 
 var drag_add := 0.0                    # this tick's pull on her head (Her.drag: < 0 back to him, > 0 away)
 var grip_out := 0.0                    # this tick's share of her head's motion away from him it holds (Her.holdOut)
 var strain_k := 0.0                    # stuck at its limit: how far along to popping out (0..1; her wince, the tremble)
+var stuck_event := false               # this tick it got stuck at its limit (once each time it is stuck: dialogue)
+var _stuck_told := false
 var grip_in := 0.0                     # and towards him
 var bumps := []                        # its lump in her neck (Neck.bumps)
 var pops := 0                          # how often it went through her throat ring (out or in)
@@ -750,6 +752,7 @@ func step_sack(length: float, r: float, mass: float) -> void:
 func _throat(r: float, unit: float) -> void:
 	grip_out = 0.0
 	strain_k = 0.0
+	stuck_event = false
 	grip_in = 0.0
 	drag_add = 0.0
 	stretch = 0.0
@@ -770,6 +773,7 @@ func _throat(r: float, unit: float) -> void:
 	var part_in := mouth_state == 2 or (mouth_state == 1 and in_share > 0.0)   # (state 1: what is in her mouth so far)
 	if not part_in or her == null or r <= 0.0:
 		past = false
+		_stuck_told = false
 		_pass_t = -1.0
 		_strain = 0.0
 		_clear = true
@@ -817,10 +821,14 @@ func _throat(r: float, unit: float) -> void:
 		stretch = maxf(0.0, l - len_m * SLACK)   # (its slack)
 		var f := stretch / pop_at
 		_strain = _strain + 1.0 if f >= STRAIN_FROM else maxf(0.0, _strain - 1.0)
+		if _strain > 0.0 and not _stuck_told:
+			_stuck_told = true
+			stuck_event = true
 		if _strain >= 30.0 * lerpf(STUCK_TIME, STUCK_FULL, full) or d <= POP_LIPS:   # pulled long enough (30 ticks a
 			# second; or out to her lips): out
 			_let_go()
 			past = false   # (through at once, a pop: no frames with it half through)
+			_stuck_told = false
 			_strain = 0.0
 			_pass_t = -1.0
 			_spring_t = 0.0
@@ -836,6 +844,7 @@ func _throat(r: float, unit: float) -> void:
 			_hold = Vector3(drag_add, grip_out, grip_in)
 	elif not past:
 		_strain = 0.0
+		_stuck_told = false
 		if l <= 0.0:
 			past = true   # (his tip is past her ring: it is too)
 			_spring_t = -1.0

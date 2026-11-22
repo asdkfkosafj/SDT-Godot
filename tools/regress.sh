@@ -13,7 +13,7 @@
 #
 # Alongside the scenarios (all in parallel): the extension, DialogueActions and menu checks, the defaults checks (the
 # game as players get it: extensions at their defaults and the shipped plugins, game/debug/defaults_checks.gd), the
-# rule checks (tools/rules_checks.sh), FlashBitmapData's fast paths (game/debug/bitmap_test.gd) and the fix checks
+# condom checks (the condoms plugin, game/debug/condom_checks.gd), the rule checks (tools/rules_checks.sh), FlashBitmapData's fast paths (game/debug/bitmap_test.gd) and the fix checks
 # (game/debug/fix_checks.gd). --stress adds the costume and strand stress tests (minutes).
 #
 # Image goldens (tests/golden/images/): the same scenarios also run in a window, 1280 x 720, and pictures of the
@@ -112,6 +112,12 @@ cp -r Mods/Plugins/*/ "$WORK/mods_def/Plugins/"
 godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_def.log" -- --deterministic --seed=1 --save-dir="$WORK/save_def" \
 	--mods-dir="$WORK/mods_def" --driver=res://debug/defaults_checks.gd > "$WORK/defaults_checks.log" 2>&1 &
 def_pid=$!
+# The condoms plugin (game/debug/condom_checks.gd): on, filled, taken off and tied, pinned, stuck in her throat; its
+# dialogue line types, variables and triggers. The same shipped plugins, its own save.
+mkdir -p "$WORK/save_condom"
+godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_condom.log" -- --deterministic --seed=1 --save-dir="$WORK/save_condom" \
+	--mods-dir="$WORK/mods_def" --driver=res://debug/condom_checks.gd > "$WORK/condom_checks.log" 2>&1 &
+condom_pid=$!
 # Rule checks (tools/rules_checks.sh: ported rules pinned to the ActionScript) and FlashBitmapData's fast paths
 TMPDIR=$WORK bash tools/rules_checks.sh > "$WORK/rules_checks.log" 2>&1 &
 rules_pid=$!
@@ -126,6 +132,7 @@ wait "$ext_pid"; ext_status=$?
 wait "$da_pid"; da_status=$?
 wait "$menu_pid"; menu_status=$?
 wait "$def_pid"; def_status=$?
+wait "$condom_pid"; condom_status=$?
 wait "$rules_pid"; rules_status=$?
 wait "$bitmap_pid"
 wait "$fix_pid"; fix_status=$?
@@ -167,12 +174,14 @@ script_errors() {   # each error line with the "at:" line after it
 	awk '/SCRIPT ERROR|^ERROR/ { e = $0; getline n; print e " | " n }' "$1" \
 		| grep -v -E "at exit|gdscript://|mods_ext/Plugins|missing or duplicate id|a problem it reports itself|already used|contains ';'|has errors|uses class_name" | head -5
 }
-if [ -n "$(script_errors "$WORK/ext_checks.log")" ] || [ -n "$(script_errors "$WORK/da_checks.log")" ] 		|| [ -n "$(script_errors "$WORK/menu_checks.log")" ] || [ -n "$(script_errors "$WORK/defaults_checks.log")" ]; then
+if [ -n "$(script_errors "$WORK/ext_checks.log")" ] || [ -n "$(script_errors "$WORK/da_checks.log")" ] 		|| [ -n "$(script_errors "$WORK/menu_checks.log")" ] || [ -n "$(script_errors "$WORK/defaults_checks.log")" ] \
+		|| [ -n "$(script_errors "$WORK/condom_checks.log")" ]; then
 	echo "FAIL script errors in the checks:"
 	script_errors "$WORK/ext_checks.log"
 	script_errors "$WORK/da_checks.log"
 	script_errors "$WORK/menu_checks.log"
 	script_errors "$WORK/defaults_checks.log"
+	script_errors "$WORK/condom_checks.log"
 	fail=1
 fi
 if [ "$def_status" = 0 ] && grep -q "^DEFAULTS CHECKS: .* 0 failed" "$WORK/defaults_checks.log"; then
@@ -180,6 +189,13 @@ if [ "$def_status" = 0 ] && grep -q "^DEFAULTS CHECKS: .* 0 failed" "$WORK/defau
 else
 	echo "FAIL defaults checks, exit code $def_status$(timed_out $def_status) (see $WORK/defaults_checks.log):"
 	grep -E "^CHECK FAIL|SCRIPT ERROR" -A1 "$WORK/defaults_checks.log" | head -16
+	fail=1
+fi
+if [ "$condom_status" = 0 ] && grep -q "^CONDOM CHECKS: .* 0 failed" "$WORK/condom_checks.log"; then
+	echo "ok   condom checks ($(grep -c '^CHECK ok' "$WORK/condom_checks.log") passed)"
+else
+	echo "FAIL condom checks, exit code $condom_status$(timed_out $condom_status) (see $WORK/condom_checks.log):"
+	grep -E "^CHECK FAIL|SCRIPT ERROR" -A1 "$WORK/condom_checks.log" | head -16
 	fail=1
 fi
 if [ "$rules_status" = 0 ]; then

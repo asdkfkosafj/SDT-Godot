@@ -12,6 +12,8 @@ extends SDTExtension
 ## his fist and swinging with it. (His left arm must show and hang loose; else it only rolls off.)
 ## While he holds it, a short Q press starts pin mode (pins.gd: the mouse moves his hand, a click pins it on her,
 ## right click / Esc / Q stops); a long Q press drops it. He puts on a new one once it is pinned or dropped.
+## Dialogue: line types condom_on, condom_filled, condom_stuck, condom_pinned (LINES); variables condoms.worn,
+## condoms.full, condoms.pinned; triggers [CONDOM_ON], [CONDOM_OFF].
 
 const ROLL_TICKS := 15     # rolling it on or off takes half a second
 const CUT_R := 70.0        # round his tip the bulb draws the outline of the sleeve and the sack as one line
@@ -24,6 +26,14 @@ const AHEAD := 3.0         # it takes it by its tip just this far past his glans
 const DROP_LINKS := 2      # ... made of this many strand links
 const DROP_TICKS := 50     # the drop of cum left on his tip hangs there this long, then falls
 const WINCE := 0.85         # stuck sack about to pop out: her eyes squint this share of the way to her wince
+## Her dialogue line types for it: [life (build it holds), priority] as the game's own (Dialogue.gd): he put it on, a
+## spurt went into it (as her cum lines), its sack is stuck in her throat, he pinned one on her.
+const LINES := {
+	"condom_on": [Dialogue.MAX_BUILD, 1],
+	"condom_filled": [Dialogue.MAX_BUILD + 240, 3],
+	"condom_stuck": [Dialogue.MAX_BUILD + 80, 2],
+	"condom_pinned": [Dialogue.MAX_BUILD + 80, 1],
+}
 
 var Condom: GDScript
 var Tied: GDScript
@@ -104,10 +114,19 @@ func _enable() -> void:
 		func(c, _f): _set_colour(c), "rgbFill", false))
 	for k in ["density", "cover"]:
 		menu_control("him", "Condom", MenuSchema.setting_control(self, k, {"wide": true}))
+	on_dialogueactions(func(da):
+		da.register_trigger("CONDOM_ON", 0, func(_a): set_worn(true))
+		da.register_trigger("CONDOM_OFF", 0, func(_a): take_off())
+		da.vars.register_read("condoms.worn", func(): return 1 if worn else 0)
+		da.vars.register_read("condoms.full", func(): return roundi(100.0 * cum / FULL) if worn else 0)
+		da.vars.register_read("condoms.pinned", func(): return pins.pinned.size() if pins != null else 0))
 
 
 func _disable() -> void:
 	_off = 0
+	if g.dialogueControl != null:
+		for t in LINES:
+			g.dialogueControl.states.erase(t)
 	if pins != null:
 		pins.free_all()
 		pins = null
@@ -137,6 +156,7 @@ func _caught(mass: float) -> void:
 		var left: int = h.bmTimer if g.bukkakeMode else h.spurtTimer   # (counts down in a spurt: up again, a new one)
 		if left >= _spurt_left:
 			_spurt_id += 1
+			say("condom_filled")
 		_spurt_left = left
 		var thick := maxf(g.strandControl.cumMinThickness if g.strandControl != null else 1.0, pow(mass * 2.0, 1.5))
 		condom.spurt(h.randomSpurtSpeed, thick, _spurt_id)   # (as cum strands: Him's speed, Strand's thickness)
@@ -176,13 +196,24 @@ func toggle() -> void:
 	if tied != null and not worn:   # he holds one: a short press pins it, a long one drops it (pins.gd)
 		pins.q_pressed()
 		return
-	if worn and _dir == 0 and cum > 0.0 and condom != null and _hand_ok() and not g.him.inMouth:
+	if worn:
+		take_off()
+	else:
+		set_worn(true)
+
+
+## Takes it off (Q, [CONDOM_OFF]): one with cum in it his left hand takes off and ties; else (or his arm cannot) it
+## rolls off. Only while he is out of her mouth.
+func take_off() -> void:
+	if _off != 0 or not worn:
+		return
+	if _dir == 0 and cum > 0.0 and condom != null and _hand_ok() and not g.him.inMouth:
 		_off = 1   # a full one: his hand takes it off
 		_off_t = 0
 		_grip0 = _hand().localToGlobal(Tied.GRIP)
 		_rest_at = g.him.globalToLocal(_grip0)
 		return
-	set_worn(not worn)
+	set_worn(false)
 
 
 ## Puts the condom on (rolls on) or takes it off. Only while he is out of her mouth, and not on the strap-on.
@@ -222,6 +253,8 @@ func _tick() -> void:
 		roll = clampf(roll + float(_dir) / ROLL_TICKS, 0.0, 1.0)
 		_dirty = true
 		if (_dir > 0 and roll >= 1.0) or (_dir < 0 and roll <= 0.0):
+			if _dir > 0:
+				say("condom_on")
 			_dir = 0
 	if roll <= 0.0:
 		_remove()
@@ -244,6 +277,8 @@ func _tick() -> void:
 	if cum > 0.0:
 		condom.step_sack(sack_length(), bulb_radius(), cum / FULL)   # (drawn every frame while it moves: condom.gd)
 		condom.step_jets()
+		if condom.stuck_event:
+			say("condom_stuck")
 	# while there is a sack the sleeve leaves its outline round the tip to it (one line round both)
 	var cut := CUT_R if cum > 0.0 else 0.0
 	if cut != condom.cut_r:
@@ -264,6 +299,17 @@ func _tick() -> void:
 		_bulb_dirty = false
 		condom.set_bulb(bulb_radius(), get_setting("colour"), get_setting("density"),
 			Color.hex((g.cumRGB << 8) | 0xFF))
+
+
+## Builds her dialogue line type `t` (LINES) by a one-off event's build, as the game's events do; only when the loaded
+## dialogue has lines of it (else it could be chosen over her other lines and she would say nothing).
+func say(t: String) -> void:
+	var dc = g.dialogueControl
+	if dc == null or dc.library.getPhrases(t).is_empty():
+		return
+	if not dc.states.has(t):   # (a dialogue line type of its own, from the first time)
+		dc.states[t] = DialogueState.new(LINES[t][0], LINES[t][1])
+	dc.buildState(t, Dialogue.ONE_OFF_BUILD)
 
 
 ## Takes the drawing off his penis. The outline it scanned stays (_sig), so putting one on again needs no new scan.

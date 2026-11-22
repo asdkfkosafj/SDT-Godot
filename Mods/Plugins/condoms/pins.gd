@@ -179,6 +179,7 @@ func pin_here(at: Vector2) -> bool:
 	pinned.append(x.tied)
 	x.tied = null
 	aiming = false
+	x.say("condom_pinned")
 	while pinned.size() > MAX:
 		pinned.pop_front().release()
 	return true

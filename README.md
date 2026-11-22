@@ -99,7 +99,18 @@ The game comes with these plugins in `Mods/Plugins`. Each one can be switched of
 - Ports of Loader mods: `armoverhaul`, `autocloseeye`, `autoclosemouth`, `breastfirmness`, `darkenpassout`,
   `deepthroatactions`, `eyemakeup`, `ffbehavior`, `ignoreherclothingpenis`, `progressiveexhaustion`,
   `spankanywhere`.
-- New: `xray`, a cutaway view inside her.
+- New: `xray`, a cutaway view inside her; `condoms` (below).
+
+**Condoms.** He can wear a condom (**Him › Condom**, or the **Q** key); it rolls on while he is out of her mouth.
+His cum stays in it, and the full tip hangs and swings from him. Pushed deep, a full one goes past her throat ring
+and gets stuck there: pulled back, it holds her head until it has been pulled for 1 to 3 seconds (more for a
+fuller one), then pops out. With cum in it, **Q** has his hand take it off and tie it; then a short **Q** press
+lets the mouse move his hand and a click pins it on her (right click or **Esc** stops), and a long **Q** press drops
+it. Colour, opacity and length are in **Him › Condom**.
+
+For dialogues: the line types `condom_on`, `condom_filled`, `condom_stuck` and `condom_pinned`; the variables
+`condoms.worn` (1 or 0), `condoms.full` (0 to 100) and `condoms.pinned` (how many are pinned on her); the triggers
+`[CONDOM_ON]` and `[CONDOM_OFF]`.
 
 To write your own plugin or extension, see [docs/extensions.md](docs/extensions.md).
 
