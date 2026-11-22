@@ -14,6 +14,9 @@ var _mask_obj: FlashDisplayObject = null
 var _wrapped: FlashDisplayObject = null
 var _local_rect := Rect2()      # opaque rect in the mask object's local space
 var _holder := Node2D.new()
+var _size_from := Vector2.ZERO  # the clip's size at the tick before and at this one: it glides between them with its
+var _size_to := Vector2.ZERO    # position (_process); else a rect that grows or shrinks while it moves (his penis mask
+var _sized := false             # when the x-ray gives it back) is drawn at the old place with the new size for a tick
 
 
 func _init() -> void:
@@ -40,8 +43,24 @@ func refresh() -> void:
 	var m := base.affine_inverse() * _mask_obj.flash_global_transform()
 	var r := m * _local_rect
 	position = r.position
-	size = r.size
 	_holder.position = -r.position
+	_size_from = _size_to if _sized and smooth else r.size
+	_size_to = r.size
+	_sized = true
+	size = _size_to
+	set_process(_size_from != _size_to)
+
+
+func _process(_delta: float) -> void:
+	if is_physics_interpolated_and_enabled():
+		size = _size_from.lerp(_size_to, Engine.get_physics_interpolation_fraction())
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESET_PHYSICS_INTERPOLATION:   # placed anew, not gliding there: nor does its size
+		_size_from = _size_to
+		size = _size_to
+		set_process(false)
 
 
 ## Rect of an opaque, unrotated rectangle mask in its own space, or an empty Rect2 if the mask is anything else.
