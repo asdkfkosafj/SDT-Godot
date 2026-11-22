@@ -30,7 +30,10 @@ extends FlashDisplayObject
 ## the stomach would lead her body by up to a tick's motion (a flicker). So everything is one mesh per painter, built
 ## each tick in her space, skinned on two bones (_skel): bone 0 stays (her space: the pipe in her neck, in step with
 ## the throat part and her head), bone 1 follows her torso between ticks (the stomach; set every frame, _process, as
-## the game glides her torso). The pipe goes over from the one to the other along its bend in her chest (_pipe_b).
+## the game glides her torso). The pipe goes over from the one to the other where her torso (drawn over her neck)
+## starts to cover it (_pipe_b): where it lies on her torso, it glides with her torso.
+## The skeleton's base follows this part as the game glides it too, every frame (_set_bones): else bone 1 applies
+## round the wrong point between ticks.
 ##
 ## What comes out at the bottom of the pipe pours into the stomach as liquid: bits of it (_drops, one per tick while it
 ## comes, each with what came that tick), falling (screen down) from the pipe's speed, sliding down the inside of the
@@ -49,6 +52,8 @@ const PIPE_DOWN := 0.15    # how far the pipe keeps going down past the tail bef
 const PIPE_IN := 0.4       # and from how far above the stomach it comes straight down into it (same)
 const BEND_SMOOTH := 16    # smoothing passes over the pipe's bend (and the line into it, past the throat part)
 const PIPE_TOP := 6        # samples over which the pipe fades in at its top (below her mouth, without the throat part)
+const NECK_BLEND := 2.0    # samples each way of where her torso covers her neck over which the pipe goes over from
+                           # gliding with her neck to gliding with her torso (bone 1)
 const FADE := 0.25         # per tick, in and out
 ## The oval, in torso units at Size 100: its half width (across her body) and half height (along her spine).
 const RADII := Vector2(44, 68)
@@ -106,6 +111,8 @@ var _painter := Node2D.new()
 var _skel := RID()                     # bone 0: her space; bone 1: her torso, between ticks (see the top)
 var _xf := Transform2D()               # own space -> local, this tick, and the tick before
 var _xf_prev := Transform2D()
+var _at := Transform2D()               # the painter in the canvas at this tick, and the tick before (_set_bones)
+var _at_prev := Transform2D()
 var _mesh := ArrayMesh.new()           # what _painter / _flow draw, rebuilt every tick
 var _flow_mesh := ArrayMesh.new()
 var _surfs: Array = []                 # surfaces for the mesh being drawn
@@ -196,9 +203,19 @@ func _notification(what: int) -> void:
 func _process(_delta: float) -> void:
 	if shown <= 0.0 or not _skel.is_valid():
 		return
-	var m := Transform2D()
-	if is_physics_interpolated_and_enabled():
-		m = _xf_prev.interpolate_with(_xf, Engine.get_physics_interpolation_fraction()) * _xf.affine_inverse()
+	_set_bones(Engine.get_physics_interpolation_fraction() if is_physics_interpolated_and_enabled() else 1.0)
+
+
+## The bones at `f` of the way from the tick before to this one. The renderer applies a bone in the skeleton's base
+## space, converting with (the painter as drawn)^-1 * base; so the base is the painter as the game glides it this
+## frame (in its canvas): then that is the identity and bone 1 applies in this part's local space as given. (Set once
+## a tick, the base was where the painter is at the tick while it is drawn on the way there from the tick before:
+## bone 1 applied round the wrong point, the stomach slid against her body between ticks and jumped back at each tick,
+## seen as a flicker above 60 fps.)
+func _set_bones(f: float) -> void:
+	var base := _at_prev.interpolate_with(_at, f) if f < 1.0 else _at
+	RenderingServer.skeleton_set_base_transform_2d(_skel, base)
+	var m := _xf_prev.interpolate_with(_xf, f) * _xf.affine_inverse() if f < 1.0 else Transform2D()
 	RenderingServer.skeleton_bone_set_transform_2d(_skel, 1, m)
 
 
@@ -389,9 +406,11 @@ func _ripple_at(p: Vector2, hit: float) -> void:
 ## way along its centre line there; throat_shown: the throat part's fade (the pipe above the seam shows as much as it
 ## does not); flow_from: what flows shows from here along the line (his tip, or past the end of his penis where the
 ## throat part's upper painter draws it); pipe_from: the pipe shows only from this sample on (where her throat is
-## closed below her mouth; the line starts at her lips), fading in over PIPE_TOP samples.
+## closed below her mouth; the line starts at her lips), fading in over PIPE_TOP samples; neck_at: how far along the
+## line her torso starts to cover her neck (the pipe goes over from her neck's gliding to her torso's there; < 0: the
+## line's end).
 func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, bend: Vector2, seam: int,
-		seam_t: Vector2, throat_shown: float, flow_from: float, pipe_from := 0.0) -> void:
+		seam_t: Vector2, throat_shown: float, flow_from: float, pipe_from := 0.0, neck_at := -1.0) -> void:
 	_advance()
 	var was := shown
 	shown = clampf(shown + (FADE if want else -FADE), 0.0, 1.0)
@@ -423,7 +442,10 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 		* Transform2D(spine, Vector2(size, size), 0.0, navel + AT_NAVEL)
 	_xf_prev = _xf if was > 0.0 else xf   # it shows again: no gliding in from where it was
 	_xf = xf
-	RenderingServer.skeleton_set_base_transform_2d(_skel, _painter.get_global_transform())   # bones in local space
+	var at := _painter.get_global_transform()   # where the painter is at this tick, in its canvas (see _set_bones)
+	_at_prev = _at if was > 0.0 else at
+	_at = at
+	_set_bones(1.0)
 	_k = xf.x.length()
 	var n := _shape.size()
 	_inner.resize(n)
@@ -464,6 +486,13 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 	_pipe_n.resize(_pipe.size())
 	_pipe_w.resize(_pipe.size())
 	_pipe_b.resize(_pipe.size())
+	# her neck's gliding (her space) down to where her torso covers her neck, her torso's from there (it lies on her
+	# torso): over NECK_BLEND samples each way, but not above the seam (the throat part there is in her space)
+	var nb := neck_at / STEP if neck_at >= 0.0 else float(n_line - 1)
+	var b0 := nb - NECK_BLEND
+	if seam >= 0:
+		b0 = maxf(b0, float(seam))
+	var b1 := maxf(nb + NECK_BLEND, b0 + 2.0 * NECK_BLEND)
 	for i in _pipe.size():
 		var t := (_pipe[mini(i + 1, _pipe.size() - 1)] - _pipe[maxi(i - 1, 0)]).normalized()
 		if i == seam:   # (as the throat part's there: the same row)
@@ -471,7 +500,7 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 		_pipe_n[i] = Vector2(-t.y, t.x)
 		# above the seam it shows as much as the throat part does not (it fades in where the throat part fades out)
 		_pipe_w[i] = smoothstep(pipe_from, pipe_from + PIPE_TOP, i) * (1.0 if seam < 0 or i >= seam else 1.0 - throat_shown)
-		_pipe_b[i] = smoothstep(n_line - 1, _i_hand, i)   # her space along her throat, her torso from the straight
+		_pipe_b[i] = smoothstep(b0, b1, i)
 	_pipe_len = (_pipe.size() - 1) * STEP
 	_in_pipe()
 	bounds = Rect2(_pipe[0], Vector2.ZERO)

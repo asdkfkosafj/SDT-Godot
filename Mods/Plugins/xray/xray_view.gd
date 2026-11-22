@@ -127,6 +127,7 @@ const GATE_RING := 5.0     # and its wall is this much thicker there, out from i
 const GATE_OVER := 0.6     # a condom's neck in it (gripped): the ring shows over it, in from its edges, this share of
 const GATE_OVER_MAX := 0.4 #   GATE_RING, but not over more than this share of its half width (it is round: in front)
 const GATE_OVER_OUT := 2.0 # and out over the wall this far (it covers the rim of his art there)
+const HIT_KEEP := 15       # ticks _torso_from takes its hit tests' results again for points that did not move
 const GATE_PRE := 0.5      # as she gets ready to swallow it opens this much (of the way to her throat's own width);
                            # what she swallows opens it the rest of the way (the lump: _bulge)
 const DRAIN := 0.25        # while he holds the ring open, what is in her mouth runs down her throat round him this
@@ -215,6 +216,9 @@ var _thick := PackedFloat32Array()   # how much thicker the wall is at each samp
 var _grip := PackedFloat32Array()    # how far in the ring shows over what it grips (GATE_OVER)
 var _gripped := PackedByteArray()    # 1 where what sits on his tip is marked "grip" (a condom's neck: her ring grips it)
 var _grip_f := -1.0                  # the last of those samples (where the sack is held), -1: none
+var _torso_i := 0                    # the sample of the pipe's line where her torso covered it last tick (_torso_from)
+var _hits: Array[Vector3] = []       # _torso_from's hit tests last tick: (point in her torso's space, 1 if covered)
+var _hits_at := -1000                # the tick they were all tested anew
 var _b0 := PackedFloat32Array()      # _e0 / _e1 without the bulge round what she swallows (_bulge)
 var _b1 := PackedFloat32Array()
 
@@ -294,9 +298,120 @@ func update_stomach(stomach: FlashDisplayObject, want: bool, want_pipe: bool) ->
 	if shown > 0.0:
 		flow_from = maxf(_inside, minf(_split * STEP, _drawn)) if _splitting() else maxf(_inside, _drawn)
 	# (while this part fades, the pipe shows under it as much as it does not: not through her mouth)
-	stomach.update(want, want_pipe, her, line, bend, seam, seam_t, shown, flow_from, _gate_f if shown > 0.0 else 0.0)
+	stomach.update(want, want_pipe, her, line, bend, seam, seam_t, shown, flow_from, _gate_f if shown > 0.0 else 0.0,
+		_torso_from(her, stomach, line, maxi(seam, 0), _length_near(line, throat[-1])))
 	_fade_end(stomach.shown * stomach.pipe_shown)
 	_bulge(stomach)
+
+
+## How far along `line` (the stomach part's local space) her torso, drawn over her neck, starts to cover it: the
+## stomach's pipe glides with her neck above there and with her torso below (the game glides the two apart between
+## ticks). Looked for from sample `from` (the seam) down to `neck_end` (that far along, where her neck's outline ends
+## in her chest, under her torso), with hit tests on her torso (_torso_search: it covers the line on down from where
+## it starts).
+func _torso_from(her: Her, stomach: FlashDisplayObject, line: PackedVector2Array, from: int, neck_end: float) -> float:
+	var tor: FlashDisplayObject = her.torso
+	var lens := PackedFloat32Array([0.0])   # length along the line at each sample
+	for i in range(1, line.size()):
+		lens.append(lens[-1] + line[i].distance_to(line[i - 1]))
+	var hi := line.size() - 1
+	while hi > 0 and lens[hi] > neck_end:
+		hi -= 1
+	var lo := mini(from, hi)
+	if tor == null or not tor.is_visible_in_tree():
+		return neck_end
+	var masked := false   # hitTestVisible's checks that do not depend on the point, once
+	var o := tor
+	while o != null:
+		if o.alpha <= 0.01:
+			return neck_end
+		masked = masked or o._mask != null
+		o = o._flash_parent
+	# A hit test on her torso costs some 50-70 us (GDScript over its parts). The sample where it starts moves little
+	# against her torso from tick to tick (mostly under 0.5 px), and her torso's drawing seldom changes: a point within
+	# 0.5 px (in its space) of one tested last tick takes that result; all are tested anew every HIT_KEEP ticks.
+	if Flash.tick_count - _hits_at >= HIT_KEEP or Flash.tick_count < _hits_at:
+		_hits.clear()
+		_hits_at = Flash.tick_count
+	var to_t := tor.flash_global_transform().affine_inverse() * stomach.flash_global_transform()
+	var kept: Array[Vector3] = []   # this tick's points and results (z 1: covered), for the next tick
+	var old := _hits
+	var covers := func(i: int) -> bool:
+		var q := to_t * line[i]
+		for h in old:
+			if q.distance_squared_to(Vector2(h.x, h.y)) < 0.25:
+				kept.append(h)
+				return h.z > 0.5
+		var hit: bool
+		if masked:
+			var g := stomach.localToGlobal(line[i])
+			hit = tor.hitTestVisible(g.x, g.y)
+		else:
+			hit = tor._hit_visible(q)
+		kept.append(Vector3(q.x, q.y, 1.0 if hit else 0.0))
+		return hit
+	var at := _torso_search(covers, lens, lo, hi, neck_end)
+	_hits = kept
+	return at
+
+
+## _torso_from's search with `covers(i)` (does her torso cover sample i) over lo..hi of `lens` (the line's lengths):
+## from last tick's sample out in steps of 1, 2, 4... samples (it seldom moves more than one or two) until a test
+## brackets it, then halving that stretch.
+func _torso_search(covers: Callable, lens: PackedFloat32Array, lo: int, hi: int, neck_end: float) -> float:
+	if covers.call(lo):
+		_torso_i = lo
+		return lens[lo]
+	if lo >= hi:
+		return neck_end
+	var k := clampi(_torso_i, lo + 1, hi)
+	var step := 1
+	if covers.call(k):   # it is at k or above it: up from k (lo does not cover)
+		hi = k
+		while hi - step > lo:
+			if not covers.call(hi - step):
+				lo = hi - step
+				break
+			hi -= step
+			step *= 2
+	else:   # below k: down from it to hi (which may not cover either)
+		lo = k
+		while true:
+			var j := mini(lo + step, hi)
+			if covers.call(j):
+				hi = j
+				break
+			if j == hi:
+				_torso_i = hi
+				return neck_end
+			lo = j
+			step *= 2
+	while hi - lo > 1:   # lo does not cover, hi does
+		var mid := (lo + hi) >> 1
+		if covers.call(mid):
+			hi = mid
+		else:
+			lo = mid
+	_torso_i = hi
+	return lens[hi]
+
+
+## How far along `line` (from its start) its point nearest `p` is.
+static func _length_near(line: PackedVector2Array, p: Vector2) -> float:
+	var best := INF
+	var at := 0.0
+	var walked := 0.0
+	for i in line.size() - 1:
+		var a := line[i]
+		var ab := line[i + 1] - a
+		var len := ab.length()
+		var t := clampf((p - a).dot(ab) / maxf(len * len, 1e-6), 0.0, 1.0)
+		var d := (a + ab * t).distance_squared_to(p)
+		if d < best:
+			best = d
+			at = walked + len * t
+		walked += len
+	return at
 
 
 ## How much of this part shows at each sample (_w): all of it down to the seam; past it, as much as the stomach's pipe
