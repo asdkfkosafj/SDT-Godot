@@ -20,6 +20,7 @@ const RING_R := 2.4        # half thickness of the rolled rim once it is unrolle
 const RING_MAX := 6.5      # half thickness of the rim while it is still rolled up at the tip
 const BULB_R := 35.0       # radius of the cum bulb at the end of the sack when it is full (it grows no more)
 const BULB_MIN := 4.0      # ... with the first drop in it
+const LEVEL := 1.5        # the cum in it lies below a flat level this many bulb radii above its bulb's middle
 const BULB_HEFT := 25.0    # with this radius (half full) it weighs, holds her and stretches as much as it gets: its
                            #   heft (a bigger one only grows, heavier up to MASS_MAX, and stays stuck longer)
 const MASS_MAX := 1.5      # its weight, of a half full one's, at most (step_sack's mass; full: 2)
@@ -1530,9 +1531,9 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 	var tp := PackedVector2Array()    # with his penis (tipline)
 	var tc := PackedColorArray()
 	var tix := PackedInt32Array()
-	# the cum: what of it lies below a flat level a little above the bulb's middle
+	# the cum: what of it lies below a flat level (LEVEL) above the bulb's middle
 	var side := Vector2(-down.y, down.x) * 400.0
-	var lv := pe - down * r * 0.45
+	var lv := pe - down * r * LEVEL
 	var below := PackedVector2Array([lv - side, lv + side, lv + side + down * 400.0, lv - side + down * 400.0])
 	var rip := lerpf(_rip0, _rip1, _jet_f) * RIPPLE_A * r   # (rippling: how high its waves are now)
 	if rip > 0.05 and not pressed and not from_lip:

@@ -443,7 +443,7 @@ func draw(pe: Vector2, dn: Vector2, tl: Vector2, kn := GRIP) -> void:
 		return
 	# the cum, then the latex over it (seen through the latex, as on his penis: draw_bulb's order)
 	var side := Vector2(-dn.y, dn.x) * 4000.0
-	var lv := pe - dn * rr * 0.45
+	var lv: Vector2 = pe - dn * rr * c.LEVEL
 	var below := PackedVector2Array([lv - side, lv + side, lv + side + dn * 4000.0, lv - side + dn * 4000.0])
 	for q in Geometry2D.intersect_polygons(sack, below):
 		if q.size() >= 3:
