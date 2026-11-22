@@ -39,7 +39,7 @@ var _fall_p := Vector2()           # ... where it is and how fast (world, per ti
 var _fall_v := Vector2()
 var r := 0.0                      # the bulb's radius (penis units)
 var length := 0.0                 # the sack's rest length (penis units)
-var mass := 0.0                   # 0..1: empty .. full
+var mass := 0.0                   # its weight: 0 empty .. 1 half full .. 2 full (condom.step_sack's mass)
 var unit := 1.0                   # world units per penis unit (taken from his penis)
 var p := Vector2()                # the weight (world)
 var v := Vector2()                # its speed (world, per tick)
@@ -238,7 +238,7 @@ func step() -> void:
 	var a := _knot_w()
 	if tied:
 		tail = stub_point()
-	var m: float = c.SACK_MASS0 + (1.0 - c.SACK_MASS0) * clampf(mass, 0.0, 1.0)
+	var m: float = c.SACK_MASS0 + (1.0 - c.SACK_MASS0) * clampf(mass, 0.0, c.MASS_MAX)
 	var k: float = g / (c.SACK_L * unit)
 	var l0 := maxf(0.5, length) * unit
 	var c_link: float = 2.0 * c.SACK_ZETA * sqrt(k)

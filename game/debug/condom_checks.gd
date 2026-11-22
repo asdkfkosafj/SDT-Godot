@@ -44,7 +44,7 @@ func _init() -> void:
 	_at(200, func(): da.run_code("[CONDOM_ON]"))
 	_at(225, _on_again_checks)
 	# a full one, then into her mouth (grab her head, then in), deep past her throat ring, and pulled back out
-	_at(226, func(): x.add_cum(x.FULL * 0.75))
+	_at(226, func(): x.add_cum(x.FULL * 0.4))
 	for k in 7:
 		_at(230 + k, func(): _move(Vector2(300, 250)))
 		_at(238 + k, func(): _move(Vector2(-300, 250)))
@@ -156,13 +156,11 @@ func _watch() -> void:
 		if c.pops > _pops:
 			_pop_at = t
 		else:
-			var full := minf(1.0, pow(x.bulb_radius() / c.BULB_R, 2.0))
-			_held.append(c.stretch / (c.POP_BASE + c.POP_FULL * full))
+			_held.append(c.stretch / (c.POP_BASE + c.POP_FULL * c.heft(x.bulb_radius())))
 
 
 func _stuck_ticks() -> float:
-	var full := minf(1.0, pow(x.bulb_radius() / x.condom.BULB_R, 2.0))
-	return 30.0 * lerpf(x.condom.STUCK_TIME, x.condom.STUCK_FULL, full)
+	return x.condom.stuck_ticks(x.bulb_radius())
 
 
 func _stuck_checks() -> void:

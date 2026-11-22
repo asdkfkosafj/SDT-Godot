@@ -17,7 +17,8 @@ extends SDTExtension
 
 const ROLL_TICKS := 15     # rolling it on or off takes half a second
 const CUT_R := 70.0        # round his tip the bulb draws the outline of the sleeve and the sack as one line
-const FULL := 80.0         # cum (strand link masses, one load is about 15-25) that fills the bulb to its biggest
+const FULL := 160.0        # cum (strand link masses, one load is about 15-25) that fills the bulb to its biggest
+                           #   (half of it weighs, holds her and stretches as much as it gets: condom.BULB_HEFT)
 const REACH_TICKS := 12    # taking a full one off: his hand goes to his tip,
 const PULL_TICKS := 14     #   pulls it off,
 const TIE_TICKS := 16      #   and ties it
@@ -275,7 +276,7 @@ func _tick() -> void:
 	else:
 		condom.attach(g.him.penis, art)   # keeps it right above the art
 	if cum > 0.0:
-		condom.step_sack(sack_length(), bulb_radius(), cum / FULL)   # (drawn every frame while it moves: condom.gd)
+		condom.step_sack(sack_length(), bulb_radius(), 2.0 * cum / FULL)   # (drawn every frame while it moves: condom.gd)
 		condom.step_jets()
 		if condom.stuck_event:
 			say("condom_stuck")
@@ -442,7 +443,7 @@ func _take() -> void:
 	var a: Vector2 = g.him.penis.localToGlobal(neck[0])
 	var unit: float = g.him.penis.localToGlobal(neck[0] + Vector2(-1, 0)).distance_to(a)
 	var at: Vector2 = condom.sack_p if condom.sack_ok else a + Vector2(0, sack_length() * unit)
-	tied.take(at, condom.sack_v if condom.sack_ok else Vector2.ZERO, bulb_radius(), sack_length(), cum / FULL, unit)
+	tied.take(at, condom.sack_v if condom.sack_ok else Vector2.ZERO, bulb_radius(), sack_length(), 2.0 * cum / FULL, unit)
 	var e: Vector2 = condom.edges_at(condom.tip_x + 10.0)
 	tied.tail_w = absf(e.y - e.x) * 0.5
 	var k := 1.0 - pow(1.0 - roll, 2.0)
