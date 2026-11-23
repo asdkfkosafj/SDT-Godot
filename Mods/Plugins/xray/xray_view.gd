@@ -219,6 +219,7 @@ var _grip_f := -1.0                  # the last of those samples (where the sack
 var _torso_i := 0                    # the sample of the pipe's line where her torso covered it last tick (_torso_from)
 var _hits: Array[Vector3] = []       # _torso_from's hit tests last tick: (point in her torso's space, 1 if covered)
 var _hits_at := -1000                # the tick they were all tested anew
+var _arm_i := -1                     # the highest sample her near arm covered last tick (_split_above_arm; -1: none)
 var _b0 := PackedFloat32Array()      # _e0 / _e1 without the bulge round what she swallows (_bulge)
 var _b1 := PackedFloat32Array()
 
@@ -739,21 +740,51 @@ func _split_above_arm(her: Her, throat: PackedVector2Array, axis: Vector2) -> vo
 		if shows:
 			arms.append([a, a.flash_global_transform().affine_inverse(), masked])
 	var top: Vector2 = throat[int(SPLIT_MIN * (throat.size() - 1))]
-	var covered := -1
-	var i := _split - 1
-	while i > 0 and (_path[i] - top).dot(axis) >= 0.0:
+	var lo := _split - 1   # the highest sample looked at: not above `top`, nor sample 0
+	while lo > 1 and (_path[lo - 1] - top).dot(axis) >= 0.0:
+		lo -= 1
+	var covers := func(i: int) -> bool:   # her arm covers sample i (a hit test costs some 10 us: masked)
 		var p := localToGlobal(_path[i])
-		var hit := false
 		for a in arms:
 			if a[0].hitTestVisible(p.x, p.y) if a[2] else a[0]._hit_visible(a[1] * p):
-				hit = true
-				break
-		if not hit:
-			break
-		covered = i
-		i -= 1
-	if covered >= 0:
-		_split = maxi(1, covered - SPLIT_MARGIN)
+				return true
+		return false
+	var hi := _split - 1
+	if hi < 1 or (_path[hi] - top).dot(axis) < 0.0 or not covers.call(hi):
+		_arm_i = -1
+		return
+	# her arm covers the line in one stretch up from hi: its top end, found from last tick's (it moves a sample or
+	# two), in steps of 1, 2, 4... samples until a test brackets it, then halving that (a few tests, not one a sample)
+	var covered := lo
+	if lo < hi and not covers.call(lo):   # (lo does not cover, hi does: the end is between)
+		var k := clampi(_arm_i, lo + 1, hi)
+		var step := 1
+		if k < hi and covers.call(k):   # at k or above it: up from k
+			hi = k
+			while hi - step > lo:
+				if not covers.call(hi - step):
+					lo = hi - step
+					break
+				hi -= step
+				step *= 2
+		elif k < hi:   # below k: down from it
+			lo = k
+			while true:
+				var j := mini(lo + step, hi)
+				if j == hi or covers.call(j):
+					hi = j
+					break
+				lo = j
+				step *= 2
+		while hi - lo > 1:   # lo does not cover, hi does
+			var mid := (lo + hi) >> 1
+			if covers.call(mid):
+				hi = mid
+			else:
+				lo = mid
+		covered = hi
+	_arm_i = covered
+	_split = maxi(1, covered - SPLIT_MARGIN)
 
 
 ## Her throat, from her jaw down to her chest: a part of the way (DEPTH) from the front of her neck to its back.

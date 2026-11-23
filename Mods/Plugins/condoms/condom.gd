@@ -412,11 +412,18 @@ func edges_at(x: float) -> Vector2:
 		return Vector2()
 	if x <= _xs[0]:
 		return Vector2(_tops[0], _bots[0])
-	for i in range(1, _xs.size()):
-		if _xs[i] >= x:
-			var t := (x - _xs[i - 1]) / (_xs[i] - _xs[i - 1])
-			return Vector2(lerpf(_tops[i - 1], _tops[i], t), lerpf(_bots[i - 1], _bots[i], t))
-	return Vector2(_tops[-1], _bots[-1])
+	var hi := _xs.size() - 1
+	if not (x <= _xs[hi]):   # (past the last column, or NAN)
+		return Vector2(_tops[-1], _bots[-1])
+	var lo := 0   # the first column at or past x (the columns go up in x), by halving: _xs[lo] < x <= _xs[hi]
+	while hi - lo > 1:
+		var mid := (lo + hi) >> 1
+		if _xs[mid] >= x:
+			hi = mid
+		else:
+			lo = mid
+	var t := (x - _xs[hi - 1]) / (_xs[hi] - _xs[hi - 1])
+	return Vector2(lerpf(_tops[hi - 1], _tops[hi], t), lerpf(_bots[hi - 1], _bots[hi], t))
 
 
 static func _a(c: Color, a: float) -> Color:
@@ -567,18 +574,36 @@ func _strip(pts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32Arr
 	var o := pts.size()
 	var n := p.size()
 	var w := offs.size()
+	var of := PackedFloat64Array(offs)
+	var cc := PackedColorArray(cs)
+	var v := o   # (written in place: the arrays sized once)
+	var vc := cols.size()
+	pts.resize(o + n * w)
+	cols.resize(vc + n * w)
 	for i in n:   # (before / after: the line's points past its ends, for its ends' directions where it goes on)
 		var a := p[i - 1] if i > 0 else (before if not is_nan(before.x) else p[0])
 		var b := p[i + 1] if i < n - 1 else (after if not is_nan(after.x) else p[n - 1])
 		var t := (b - a).normalized()
 		var nv := Vector2(-t.y, t.x)
 		for k in w:
-			pts.append(p[i] + nv * offs[k])
-			cols.append(cs[k])
+			pts[v] = p[i] + nv * of[k]
+			cols[vc] = cc[k]
+			v += 1
+			vc += 1
+	if n < 2 or w < 2:
+		return
+	var j := idx.size()
+	idx.resize(j + (n - 1) * (w - 1) * 6)
 	for i in n - 1:
 		for k in w - 1:
 			var a := o + i * w + k
-			idx.append_array([a, a + w, a + 1, a + 1, a + w, a + w + 1])
+			idx[j] = a
+			idx[j + 1] = a + w
+			idx[j + 2] = a + 1
+			idx[j + 3] = a + 1
+			idx[j + 4] = a + w
+			idx[j + 5] = a + w + 1
+			j += 6
 
 
 ## The rolled rim at x: a tube round the penis seen from the side, half thickness rr: a straight band across it that
