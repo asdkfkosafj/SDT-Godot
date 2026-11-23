@@ -190,6 +190,7 @@ var _bulb_args := []                   # set_bulb's
 var _bulb_need := false
 var _drawn_us := 0
 var _refresh_us := -1
+var _unseen := false       # in her mouth with no x-ray: its drawing cleared (_frame)
 var jets := []             # the links of spurts in the sack, flying to the cum, oldest first: [along the path last tick,
 #   this tick, speed (shares of the path), half width (share of the neck's), spurt (one stream), ticks since it came]
 var _rip0 := 0.0           # the cum's level rippling (0..1), last tick and this tick
@@ -1418,6 +1419,14 @@ func free_drawer() -> void:
 func _frame() -> void:
 	if _bulb_args.is_empty() or bulb.parent == null:
 		return
+	if mouth_state == 2 and not _xray_shows():   # all of it in her mouth, under her head, and no x-ray shows it: not drawn
+		if not _unseen:
+			_unseen = true
+			bulb.graphics.clear()
+			tipline.graphics.clear()
+		_bulb_need = true   # (drawn at once when it shows again)
+		return
+	_unseen = false
 	var f := Engine.get_physics_interpolation_fraction() if FlashRectClip.smooth and not g.gamePaused else 1.0
 	var pe := _pe0.lerp(_pe1, f)
 	var dn := _g0.lerp(_g1, f).normalized()
@@ -1447,6 +1456,12 @@ func _frame() -> void:
 	_drawn_us = now
 	_bulb_need = false
 	draw_bulb(_bulb_args[0], _bulb_args[1], _bulb_args[2], _bulb_args[3], pe, dn, sq, hn, lt, mouth_state == 2, sh)
+
+
+## The x-ray plugin shows his penis in her mouth now (with the sack drawn on it).
+static func _xray_shows() -> bool:
+	var xr = Extensions.get_extension("xray")   # (untyped: its own method)
+	return xr != null and xr.enabled and xr.has_method(&"shows_penis") and xr.shows_penis()
 
 
 ## The shortest time between two drawings: one screen refresh (a little less, so none is missed).

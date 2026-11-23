@@ -162,6 +162,12 @@ func _drain_down(her: Her) -> void:
 		_stomach.add_stream(_view._inside if _view.shown > 0.0 else -1.0, q)
 
 
+## For other plugins: the cutaway shows his penis now, from his render, with what is drawn on it in her mouth (the
+## condoms plugin's sack there: hidden by her head, it need not be drawn while this is false).
+func shows_penis() -> bool:
+	return enabled and _view != null and _view.shown > 0.0 and _view._with_penis
+
+
 ## The cutaway shows with him in it (not her mouth alone, after he pulled out).
 func _showing() -> bool:
 	return _view != null and _view.shown > 0.0 and not _view.mouth_only
