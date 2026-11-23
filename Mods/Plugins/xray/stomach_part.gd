@@ -801,7 +801,8 @@ func _faded(w: PackedFloat32Array) -> PackedFloat32Array:
 func _mouth_parts(half_local: float) -> Array:
 	var p := pipe_shown
 	var bulge := _mouth_bulge() if p > 0.0 else PackedFloat32Array()
-	var key := [_k, wall_col, glow_col, lumen_col, snappedf(half_local, 0.001), p]
+	var key := [_mouth_k, wall_col, glow_col, lumen_col, snappedf(half_local, 0.001), p]   # (_k changes in its last bits as
+	# she moves: what was built for it, _build_mouth)
 	if bulge.is_empty() and key == _mouth_key:
 		return _mouth_cache
 	_half_px = half_local / _k
@@ -1148,13 +1149,6 @@ static func _below(poly: PackedVector2Array, gd: Vector2, level: float, surf: Pa
 			out.append(x)
 			surf.append(x)
 	return out
-
-
-static func _area(p: PackedVector2Array) -> float:
-	var a := 0.0
-	for i in p.size():
-		a += p[i].cross(p[(i + 1) % p.size()])
-	return a * 0.5
 
 
 static func _pm(col: Color) -> Color:

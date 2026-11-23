@@ -1265,17 +1265,44 @@ func _pool() -> void:
 	for p in cav:
 		top = minf(top, p.dot(gd))
 		bottom = maxf(bottom, p.dot(gd))
-	var want := _room(cav, pen, gd, top - 1.0, bottom + 1.0) * MOUTH_FULL \
-		* clampf(_mouth_amt / float(her.maxCumInMouth), 0.0, 1.0)
+	# the room below a level falls from all of it (at the top) to none (at the bottom): the level where it holds what is
+	# in her mouth, found by false position (Illinois): a few steps, each one walk round the pocket and him in it
+	var rooms := [cav]
+	rooms.append_array(Geometry2D.intersect_polygons(cav, pen) if not pen.is_empty() else [])   # (him in the pocket)
+	var depths := []   # their points' depths along gd (once)
+	for q: PackedVector2Array in rooms:
+		var dq := PackedFloat64Array()
+		dq.resize(q.size())
+		for i in q.size():
+			dq[i] = q[i].dot(gd)
+		depths.append(dq)
+	var all := _room(rooms, depths, top - 1.0)
+	var want := all * MOUTH_FULL * clampf(_mouth_amt / float(her.maxCumInMouth), 0.0, 1.0)
 	var a := top
+	var fa := all - want   # (> 0: too much room below a; < 0 below b)
 	var b := bottom
-	for _i in 14:
-		var m := (a + b) * 0.5
-		if _room(cav, pen, gd, m, bottom + 1.0) > want:
-			a = m
-		else:
-			b = m
+	var fb := -want
 	var level := (a + b) * 0.5
+	var kept := 0          # which end the last step kept (Illinois: kept twice, its value is halved)
+	for _i in 20:
+		if b - a < 0.002 or fa - fb <= 0.0:
+			break
+		level = a + (b - a) * fa / (fa - fb)
+		var f := _room(rooms, depths, level) - want
+		if absf(f) <= 0.01:   # (local units squared: the level a thousandth of a unit off at most)
+			break
+		if f > 0.0:
+			a = level
+			fa = f
+			if kept == 1:
+				fb *= 0.5
+			kept = 1
+		else:
+			b = level
+			fb = f
+			if kept == -1:
+				fa *= 0.5
+			kept = -1
 	_level = level
 	var fill := Color.hex((g.cumRGB << 8) | 0xFF)
 	var c0 := _pm(fill)
@@ -1321,15 +1348,51 @@ func _pool() -> void:
 		_pool_parts.append([polys, band[0], band[1], band[2], band[3], over, lower, lower_over])
 
 
-## The room in the pocket `cav` between depths d0 and d1 along gd, not taken by him (`pen`).
-static func _room(cav: PackedVector2Array, pen: PackedVector2Array, gd: Vector2, d0: float, d1: float) -> float:
-	var area := 0.0
-	for piece in Geometry2D.intersect_polygons(cav, _slab(gd, d0, d1, cav[0])):
-		area += absf(_area(piece))
-		if not pen.is_empty():
-			for q in Geometry2D.intersect_polygons(piece, pen):
-				area -= absf(_area(q))
+## The room in the pocket past depth d (deeper) not taken by him: rooms = [the pocket, the pieces of it he takes],
+## depths their points' depths.
+static func _room(rooms: Array, depths: Array, d: float) -> float:
+	var area := absf(_area_past(rooms[0], depths[0], d))
+	for k in range(1, rooms.size()):
+		area -= absf(_area_past(rooms[k], depths[k], d))
 	return maxf(area, 0.0)
+
+
+## The signed area of the part of the polygon p at or past depth d (dp: its points' depths): p cut by that line, its
+## points walked once (exact for any simple polygon, hollows included: where the cut joins two parts along the line,
+## the joins add no area). No polygon clipping, so the level search (_pool) costs little.
+static func _area_past(p: PackedVector2Array, dp: PackedFloat64Array, d: float) -> float:
+	var n := p.size()
+	if n < 3:
+		return 0.0
+	var s := 0.0
+	var first := Vector2.ZERO
+	var prev := Vector2.ZERO
+	var have := false
+	var a := p[n - 1]
+	var da := dp[n - 1] - d
+	for i in n:
+		var b := p[i]
+		var db := dp[i] - d
+		if (da >= 0.0) != (db >= 0.0):   # the line crosses this edge: a point there
+			var q := a.lerp(b, da / (da - db))
+			if have:
+				s += prev.cross(q)
+			else:
+				first = q
+				have = true
+			prev = q
+		if db >= 0.0:
+			if have:
+				s += prev.cross(b)
+			else:
+				first = b
+				have = true
+			prev = b
+		a = b
+		da = db
+	if have:
+		s += prev.cross(first)
+	return s * 0.5
 
 
 ## A long quad across gd, between depths d0 and d1 along it (`at`: any point near where it is needed).
@@ -1337,13 +1400,6 @@ static func _slab(gd: Vector2, d0: float, d1: float, at: Vector2) -> PackedVecto
 	var t := Vector2(-gd.y, gd.x) * 1000.0
 	var base := at - gd * at.dot(gd)
 	return PackedVector2Array([base + gd * d0 - t, base + gd * d0 + t, base + gd * d1 + t, base + gd * d1 - t])
-
-
-static func _area(p: PackedVector2Array) -> float:
-	var a := 0.0
-	for i in p.size():
-		a += p[i].cross(p[(i + 1) % p.size()])
-	return a * 0.5
 
 
 ## The pool's bands (`over`: their parts over him, at MOUTH_OVER; `lower`: only their parts past _split), each colour
