@@ -137,7 +137,7 @@ func _disable() -> void:
 		tied = null
 	_remove()
 	if condom != null:
-		condom.free_drawer()
+		condom.free_all()
 	condom = null
 	_sig = ""
 	worn = false
@@ -316,21 +316,9 @@ func say(t: String) -> void:
 ## Takes the drawing off his penis. The outline it scanned stays (_sig), so putting one on again needs no new scan.
 func _remove() -> void:
 	roll = 0.0
-	cum = 0.0   # (for now: taking it off and tying it comes later)
+	cum = 0.0   # (a full one his hand took off has its cum in tied.gd)
 	if condom != null:
-		condom.sack_ok = false
-		condom.past = false
-		condom.in_share = 0.0
-		condom._pass_t = -1.0
-		condom._strain = 0.0
-		condom._rel_t = 0.0
-		condom._lip_t = -1.0
-		condom.cum_from = 0.0
-		condom.drag_add = 0.0
-		condom.grip_out = 0.0
-		condom.grip_in = 0.0
-		condom.bumps = []
-		condom.prof.clear()
+		condom.reset_sack()
 	if condom != null and condom.sprite.parent != null:
 		condom.detach()
 		_dirty = true

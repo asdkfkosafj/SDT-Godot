@@ -205,10 +205,12 @@ func _put(h: FlashDisplayObject, i: int) -> void:
 		h.setChildIndex(sprite, i)
 
 
+## It is gone (fallen off the screen, the oldest pinned one, the plugin switched off): its sprite is freed.
 func release() -> void:
 	if sprite.parent != null:
 		sprite.parent.removeChild(sprite)
 	sprite.graphics.clear()
+	Flash.dispose_later(sprite)
 	if _drawer != null:
 		_drawer.queue_free()
 		_drawer = null

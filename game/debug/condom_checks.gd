@@ -175,7 +175,38 @@ func _stuck_checks() -> void:
 		hi = maxf(hi, f)
 	_check("held there: her head goes no further out than its limit (a little past it as she stops)", _held.size() > 10 and hi < 1.3,
 		"%d ticks, stretch up to %.2f of its limit" % [_held.size(), hi])
+	_gone_checks()
 	_finish()
+
+
+## It goes away while its sack holds her (e.g. his penis changed to the strap-on): her squint, tremble, hold and the
+## lump in her neck go with it.
+func _gone_checks() -> void:
+	var c = x.condom
+	if c == null:
+		_check("a condom there to take away", false)
+		return
+	var her: Her = g.her
+	x.condom = null   # (the values with no condom at all)
+	var none := _effects(her)
+	x.condom = c
+	c.strain_k = 0.8
+	c.drag_add = -0.02
+	c.grip_out = 0.5
+	c.grip_in = 0.3
+	c.bumps = [{"at": 0.5, "size": 10.0}]
+	var stuck := _effects(her)
+	x._remove()
+	var after := _effects(her)
+	_check("taken away while stuck: no squint, tremble, hold or lump left", stuck != none and after == none,
+		"none %s, stuck %s, after %s" % [none, stuck, after])
+
+
+## What the condom's sack does to her: [eyelid target, tremble, hold out, drag, neck bumps].
+func _effects(her: Her) -> Array:
+	return [Hooks.value(&"Her.eyelidTarget", her, 0.0), Hooks.value(&"Her.tremble", her, 0.0),
+		Hooks.value(&"Her.holdOut", her, 0.0), Hooks.value(&"Her.drag", her, 0.0),
+		Hooks.value(&"Neck.bumps", her.head.neck, [])]
 
 
 func _finish() -> void:

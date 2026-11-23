@@ -66,6 +66,7 @@ func free_all() -> void:
 	falling.clear()
 	if layer.parent != null:
 		layer.parent.removeChild(layer)
+	Flash.dispose_later(layer)
 
 
 ## Q pressed while he holds one (repeats while it is held down are not new presses).

@@ -110,8 +110,11 @@ func _enable() -> void:
 func _disable() -> void:
 	_clear_cut()
 	for o in [_view, _stomach]:
-		if o != null and o._flash_parent != null:
+		if o == null:
+			continue
+		if o._flash_parent != null:
 			o._flash_parent.removeChild(o)
+		Flash.dispose_later(o)   # (with its painters; the stomach's skeleton goes as it is freed)
 	_view = null
 	_stomach = null
 

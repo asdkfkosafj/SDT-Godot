@@ -259,6 +259,48 @@ func detach() -> void:
 		sp.graphics.clear()
 
 
+## No sack any more (taken off, or rolled off): all of its state goes, and with it its hold on her (her head, her
+## squint and tremble, the lump in her neck). The outline it scanned stays.
+func reset_sack() -> void:
+	sack_ok = false
+	mouth_state = 0
+	past = false
+	in_share = 0.0
+	lip_a = 0.0
+	_pass_t = -1.0
+	_spring_t = -1.0
+	_strain = 0.0
+	_stuck_told = false
+	_clear = true
+	_rel_t = 0.0
+	_rel = Vector3()
+	_hold = Vector3()
+	_lip_t = -1.0
+	cum_from = 0.0
+	stretch = 0.0
+	drag_add = 0.0
+	grip_out = 0.0
+	grip_in = 0.0
+	strain_k = 0.0
+	stuck_event = false
+	bumps = []
+	prof.clear()
+	_neck_n = 0
+	_cum_polys = []
+	_in_bag = PackedVector2Array()
+	jets.clear()
+	_rip0 = 0.0
+	_rip1 = 0.0
+
+
+## The plugin is switched off: its sprites leave his penis and are freed, and its per-frame drawing stops.
+func free_all() -> void:
+	detach()
+	for sp in [sprite, bulb, tipline]:
+		Flash.dispose_later(sp)
+	free_drawer()
+
+
 func _hit(p: Vector2) -> bool:
 	var gp: Vector2 = _penis.localToGlobal(p)
 	return _art.hitTestPoint(gp.x, gp.y, true)
