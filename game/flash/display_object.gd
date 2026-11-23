@@ -201,7 +201,9 @@ func effective_color_matrix() -> Array:
 	var has_cm := false
 	var o: FlashDisplayObject = self
 	while o != null:
-		for f in o._filters:
+		# an offscreen group that applies its object's colour matrix to the composite (FlashGroupProxy.applies_matrix)
+		var own := not (o._proxy is FlashGroupProxy and (o._proxy as FlashGroupProxy).applies_matrix)
+		for f in o._filters if own else []:
 			if f is FlashFilter and f.type == "ColorMatrix" and f.matrix.size() >= 20:
 				var m: Array = f.matrix
 				var b := Projection(Vector4(m[0], m[5], m[10], m[15]), Vector4(m[1], m[6], m[11], m[16]),
@@ -211,6 +213,19 @@ func effective_color_matrix() -> Array:
 				has_cm = true
 		o = o._flash_parent
 	return [cm, cm_off] if has_cm else []
+
+
+## The blend mode content drawn by this object is drawn with: the nearest non-normal one of it and its ancestors,
+## up to an offscreen group (a grouped object's blend applies when its group is composited). Like Flash.shape_material.
+func effective_blend() -> String:
+	var o: FlashDisplayObject = self
+	while o != null:
+		if o._proxy is FlashGroupProxy:
+			return "normal"
+		if o._blend_mode != "normal" and o._blend_mode != "layer":
+			return o._blend_mode
+		o = o._flash_parent
+	return "normal"
 
 
 ## Sum of additive offsets (0..255 units) that apply to content drawn by this node, accounting for the

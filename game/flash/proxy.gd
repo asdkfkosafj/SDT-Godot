@@ -327,6 +327,13 @@ static func update_for(obj: FlashDisplayObject) -> void:
 			need_group = true
 		elif f is FlashFilter and GROUP_FILTERS.has(f.type):
 			need_group = true
+	# A blended container with a colour matrix (her face's tan: an OVERLAY clip of overlapping black pieces, faded by
+	# the matrix's alpha). Flash draws a filtered object as one image, then blends it: drawn piece by piece, overlaps
+	# were blended (and faded) twice, showing the pieces' shapes and seams. The group applies the matrix
+	# (FlashGroupProxy.applies_matrix).
+	if not need_group and obj is FlashSprite and FlashGroupProxy.BLEND_IDS.has(obj._blend_mode) \
+			and FlashGroupProxy.has_color_matrix(obj):
+		need_group = true
 	if Flash.debug_no_groups:
 		need_group = false
 	var need_mask := obj._mask != null and not Flash.debug_no_masks

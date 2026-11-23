@@ -29,6 +29,9 @@ var _rect := Rect2()          # obj-local area captured
 var _px_scale := 1.0          # render-target pixels per obj-local unit
 var _margin := 0.0            # obj-local margin for filters
 var _mat := ShaderMaterial.new()
+## The object's ColorMatrix filters are applied to the composite (a blended object's: see FlashProxy.update_for), not
+## folded into its shapes (FlashDisplayObject.effective_color_matrix skips them).
+var applies_matrix := false
 
 ## Ticks a group must have been passthrough before it goes direct: moving the object between the viewport and this
 ## node takes its whole subtree out of the tree and back, so a piece that blinks does not do that every tick.
@@ -134,7 +137,36 @@ func configure(obj: FlashDisplayObject) -> void:
 				continue
 			_apply_filter(f)
 			_passthrough = false
+	_configure_matrix(obj, shader_filter == null and BLEND_IDS.get(obj._blend_mode, 0) != 0)
 	Flash.register_group(self)
+
+
+## True if `obj` has a ColorMatrix filter.
+static func has_color_matrix(obj: FlashDisplayObject) -> bool:
+	for f in obj._filters:
+		if f is FlashFilter and f.type == "ColorMatrix" and f.matrix.size() >= 20:
+			return true
+	return false
+
+
+## Applies the object's ColorMatrix filters (in order) to the composite when `on` and it has any.
+func _configure_matrix(obj: FlashDisplayObject, on: bool) -> void:
+	applies_matrix = on and has_color_matrix(obj)
+	_mat.set_shader_parameter("use_matrix", applies_matrix)
+	if not applies_matrix:
+		return
+	_passthrough = false
+	var cm := Projection.IDENTITY
+	var cm_off := Vector4.ZERO
+	for f in obj._filters:
+		if f is FlashFilter and f.type == "ColorMatrix" and f.matrix.size() >= 20:
+			var m: Array = f.matrix
+			var b := Projection(Vector4(m[0], m[5], m[10], m[15]), Vector4(m[1], m[6], m[11], m[16]),
+				Vector4(m[2], m[7], m[12], m[17]), Vector4(m[3], m[8], m[13], m[18]))
+			cm_off = b * cm_off + Vector4(m[4], m[9], m[14], m[19]) / 255.0
+			cm = b * cm
+	_mat.set_shader_parameter("cm", cm)
+	_mat.set_shader_parameter("cm_offset", cm_off)
 
 
 func _notification(what: int) -> void:

@@ -16,6 +16,10 @@ uniform bool hide_object = false;
 // 10 subtract.
 uniform int blend_mode = 0;
 uniform sampler2D backdrop : hint_screen_texture, filter_linear;
+// The grouped object's ColorMatrix filters (FlashGroupProxy.applies_matrix), applied after its multipliers.
+uniform bool use_matrix = false;
+uniform mat4 cm = mat4(1.0);
+uniform vec4 cm_offset = vec4(0.0);   // 0..1 units
 // Port: a cut (FlashGroupProxy.set_cut): what lies inside rect A and outside rect B is not drawn here (it stays in
 // the render target, which an extension may draw elsewhere). Each rect (x0, y0, x1, y1) is in its own space, reached
 // from the group's local space by the affine map (columns x, y, origin).
@@ -104,6 +108,10 @@ void fragment() {
 	}
 	// premultiplied output, scaled by the group's modulate (Flash alpha / multipliers of the composite)
 	vec4 o = vec4(r.rgb * modulate.rgb, r.a) * modulate.a;
+	if (use_matrix && o.a > 0.0) {
+		vec4 u = clamp(cm * vec4(o.rgb / o.a, o.a) + cm_offset, 0.0, 1.0);
+		o = vec4(u.rgb * u.a, u.a);
+	}
 	if (blend_mode != 0 && o.a > 0.0) {
 		vec3 b = texture(backdrop, SCREEN_UV).rgb;
 		o.rgb = blend_rgb(b, o.rgb / o.a) * o.a;

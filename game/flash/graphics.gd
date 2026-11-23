@@ -6,6 +6,9 @@ extends RefCounted
 ## gradient material, so solid / linear / radial / focal fills render exactly and can be redrawn every tick.
 
 const FILL_SHADER := preload("res://flash/shaders/graphics_fill.gdshader")
+## Fills under a blend mode that reads the backdrop (her neck's tan, an OVERLAY layer): the owner gets a
+## BackBufferCopy in front (FlashProxy.update_for), like shapes.
+const FILL_SCREEN_SHADER := preload("res://flash/shaders/graphics_fill_screen.gdshader")
 
 var _owner: FlashSprite
 var _fills: Array = []      # [{style: Dictionary, paths: Array[PackedVector2Array]}]
@@ -32,6 +35,7 @@ var _mesh_item := RID()
 var _mesh_mat: ShaderMaterial = null
 var _mesh_state: Dictionary = {}
 var _cm: Array = []   # effective_color_matrix() of the owner at the last _render
+var _screen_mode := -1   # Flash.SCREEN_BLEND_MODES id of the owner's effective_blend() at the last _render, or -1
 
 
 func _init(owner: FlashSprite) -> void:
@@ -328,6 +332,9 @@ func _render(canvas: CanvasItem) -> void:
 		return
 	var fills := _all_fills()
 	_cm = _owner.effective_color_matrix()   # the owner's and its ancestors' colour-matrix filters (her skin tint)
+	_screen_mode = Flash.SCREEN_BLEND_MODES.get(_owner.effective_blend(), -1)
+	if "--noscreenblend" in OS.get_cmdline_user_args():
+		_screen_mode = -1
 	var parent_rid := _owner.get_canvas_item()
 	while _items.size() < fills.size():
 		var rid := RenderingServer.canvas_item_create()
@@ -384,6 +391,12 @@ func _render_mesh(parent_rid: RID, after: int) -> void:
 
 
 func _configure_material(m: ShaderMaterial, style: Dictionary, state: Dictionary) -> void:
+	var shader: Shader = FILL_SHADER if _screen_mode < 0 else FILL_SCREEN_SHADER
+	if m.shader != shader:
+		m.shader = shader
+		state.clear()   # the parameters are set again on the new shader
+	if _screen_mode >= 0:
+		_set_param(m, state, "mode", _screen_mode)
 	var off := _owner.effective_color_offset() / 255.0
 	_set_param(m, state, "offset", Vector4(off.r, off.g, off.b, off.a))
 	_set_param(m, state, "use_matrix", not _cm.is_empty())
