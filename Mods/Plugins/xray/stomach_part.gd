@@ -743,7 +743,7 @@ func _paint() -> void:
 	if line.size() >= 2:
 		line[-1] += (line[-1] - line[-2]).normalized() * 1.5
 	if pipe:
-		_band(ci, line, _pipe_n.slice(i0, m), false, -PIPE, PIPE, lumen_col, _faded(_pipe_w.slice(i0, m)),
+		_band(line, _pipe_n.slice(i0, m), false, -PIPE, PIPE, lumen_col, _faded(_pipe_w.slice(i0, m)),
 			_pipe_g.slice(i0, m), _pipe_b.slice(i0, m))
 	# what is in the stomach (own space)
 	_half_px = half_local / _k
@@ -754,9 +754,9 @@ func _paint() -> void:
 		_level = maxf(_level, p.dot(_level_dir))
 	_surf.clear()
 	if fill > 0.001:
-		_contents(ci)
+		_contents()
 	if not _drops.is_empty():
-		_paint_drops(ci)
+		_paint_drops()
 	# the pipe's sides (local), to where the flare starts
 	_half_px = half_local
 	_space = Transform2D.IDENTITY
@@ -776,11 +776,11 @@ func _paint() -> void:
 	var bw := _pipe_b.slice(i0, j + 1)
 	if pipe:
 		for sd in sides:
-			_glow(ci, sd[1], sd[2], false, 0.0, 0.0, GLOW, w, PackedFloat32Array(), bw)
+			_glow(sd[1], sd[2], false, 0.0, 0.0, GLOW, w, PackedFloat32Array(), bw)
 	_add_own(mouth[1])
 	if pipe:
 		for sd in sides:
-			_band(ci, sd[0], sd[2], false, -WALL, 0.0, wall_col, w, PackedFloat32Array(), bw)
+			_band(sd[0], sd[2], false, -WALL, 0.0, wall_col, w, PackedFloat32Array(), bw)
 	_add_own(mouth[2])
 	_flush(ci, _mesh)
 
@@ -834,10 +834,10 @@ func _mouth_parts(half_local: float) -> Array:
 	parts.append(_surfs.slice(at))
 	if p <= 0.0:   # the oval's outline, closed
 		at = _surfs.size()
-		_glow(RID(), _shape, _shape_n, true, 0.0, 0.0, GLOW / _k)
+		_glow(_shape, _shape_n, true, 0.0, 0.0, GLOW / _k)
 		parts.append(_surfs.slice(at))
 		at = _surfs.size()
-		_band(RID(), _shape, _shape_n, true, -WALL / _k, 0.0, wall_col)
+		_band(_shape, _shape_n, true, -WALL / _k, 0.0, wall_col)
 		parts.append(_surfs.slice(at))
 	else:
 		# the outline, its ends exactly where the pipe's sides end (the flare's start, as the bulge there); the flare
@@ -866,14 +866,14 @@ func _mouth_parts(half_local: float) -> Array:
 			cap_w.resize(_cap.size())
 			cap_w.fill(1.0 - p)
 		at = _surfs.size()
-		_glow(RID(), glow, nrm, false, 0.0, 0.0, GLOW / _k, w)
+		_glow(glow, nrm, false, 0.0, 0.0, GLOW / _k, w)
 		if p < 1.0:
-			_glow(RID(), _cap, _cap_n, false, 0.0, 0.0, GLOW / _k, cap_w)
+			_glow(_cap, _cap_n, false, 0.0, 0.0, GLOW / _k, cap_w)
 		parts.append(_surfs.slice(at))
 		at = _surfs.size()
-		_band(RID(), line, nrm, false, -WALL / _k, 0.0, wall_col, w)
+		_band(line, nrm, false, -WALL / _k, 0.0, wall_col, w)
 		if p < 1.0:
-			_band(RID(), _cap, _cap_n, false, -WALL / _k, 0.0, wall_col, cap_w)
+			_band(_cap, _cap_n, false, -WALL / _k, 0.0, wall_col, cap_w)
 		parts.append(_surfs.slice(at))
 	_surfs.resize(start)   # kept apart: _add_own puts them in where they go
 	_mouth_key = key if bulge.is_empty() else []
@@ -892,7 +892,7 @@ func _add_own(surfaces: Array) -> void:
 ## What pours in (own space): each run of bits as one stream through them (smoothed), as wide as what they carry
 ## at their speed makes it (a stream thins as it falls faster), hanging from the pipe while it still comes, reaching
 ## down to the surface once its front got there, rounded at its free ends; a droplet as a dot.
-func _paint_drops(ci: RID) -> void:
+func _paint_drops() -> void:
 	var runs := {}
 	for d in _drops:
 		if not runs.has(d["run"]):
@@ -920,7 +920,7 @@ func _paint_drops(ci: RID) -> void:
 			hw.append(_drop_w(d))
 		var hangs: bool = r == _run and _pouring
 		if pts.size() == 1:
-			_dot(ci, pts[0], hw[0])
+			_dot(pts[0], hw[0])
 			continue
 		var line := PackedVector2Array()
 		var lw := PackedFloat32Array()
@@ -941,11 +941,11 @@ func _paint_drops(ci: RID) -> void:
 		for i in line.size():
 			var tng := (line[mini(i + 1, line.size() - 1)] - line[maxi(i - 1, 0)]).normalized()
 			nrm.append(Vector2(-tng.y, tng.x))
-		_band(ci, line, nrm, false, 0.0, 0.0, fill_col, PackedFloat32Array(), lw)
+		_band(line, nrm, false, 0.0, 0.0, fill_col, PackedFloat32Array(), lw)
 		if not down_to:   # its front: a round drop, gathering what comes behind it
-			_dot(ci, line[0], lw[0] * 1.3)
+			_dot(line[0], lw[0] * 1.3)
 		if not hangs:
-			_dot(ci, line[-1], lw[-1])
+			_dot(line[-1], lw[-1])
 
 
 ## How high the rippled surface is above its level at p (local units; own space p): as _contents draws it.
@@ -996,7 +996,7 @@ func _drop_w(d: Dictionary) -> float:
 
 
 ## A round blob (own space), its edge fading out across a pixel.
-func _dot(ci: RID, p: Vector2, r: float) -> void:
+func _dot(p: Vector2, r: float) -> void:
 	var h := _half_px
 	var c := _pm(fill_col)
 	var n := 16
@@ -1031,7 +1031,7 @@ func _paint_flow() -> void:
 		w[i] = clampf(_cum_w[i] * 2.0, 0.0, 1.0) * (1.0 if i * STEP >= _flow_from else by_him) \
 			* maxf(pipe_shown, throat)
 	var ci := _flow.get_canvas_item()
-	_band(ci, _pipe, _pipe_n, false, 0.0, 0.0, fill_col, w, _cum_w, _pipe_b)
+	_band(_pipe, _pipe_n, false, 0.0, 0.0, fill_col, w, _cum_w, _pipe_b)
 	_flush(ci, _flow_mesh)
 
 
@@ -1046,7 +1046,7 @@ static func _fan(n: int) -> PackedInt32Array:
 ## The contents: the part of the inside below a line square to _level_dir, as much of its area as `fill`, darker
 ## deeper down, with a darker line along their surface, rippled (_ripple_h). The level comes from the oval itself (in a circle the oval
 ## maps to, the share of a segment's area is known), not from the inside's outline: close enough, and found at once.
-func _contents(ci: RID) -> void:
+func _contents() -> void:
 	var gd := _level_dir
 	var top := INF
 	var bottom := -INF
@@ -1157,7 +1157,7 @@ static func _pm(col: Color) -> Color:
 
 ## A strip along a line from lo to hi off it, in one colour (times `w` at each sample, if given), its edges fading
 ## out across one screen pixel.
-func _band(_ci: RID, line: PackedVector2Array, norm: PackedVector2Array, closed: bool, lo: float, hi: float,
+func _band(line: PackedVector2Array, norm: PackedVector2Array, closed: bool, lo: float, hi: float,
 		col: Color, w := PackedFloat32Array(), grow := PackedFloat32Array(), bw := PackedFloat32Array()) -> void:
 	var n := line.size()
 	if n < 2:
@@ -1205,7 +1205,7 @@ func _band(_ci: RID, line: PackedVector2Array, norm: PackedVector2Array, closed:
 
 
 ## A strip from base + inner (glow colour) to base + outer (transparent), starting half a pixel under the wall.
-func _glow(_ci: RID, line: PackedVector2Array, norm: PackedVector2Array, closed: bool, base: float, inner: float,
+func _glow(line: PackedVector2Array, norm: PackedVector2Array, closed: bool, base: float, inner: float,
 		outer: float, w := PackedFloat32Array(), grow := PackedFloat32Array(), bw := PackedFloat32Array()) -> void:
 	var n := line.size()
 	if n < 2:

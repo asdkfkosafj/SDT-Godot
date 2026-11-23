@@ -433,7 +433,7 @@ func draw(cover_x: float, roll: float, col: Color, alpha: float) -> void:
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
-	var line := Color(col.r * 0.45, col.g * 0.45, col.b * 0.5, 0.85 * alpha)
+	var line := _line_col(col, alpha)
 	var fill := _a(col, 0.5 * alpha)
 	var edge := _a(col, 0.55 * alpha)
 	var shine := Color(1, 1, 1, 0.9 * alpha)
@@ -636,18 +636,15 @@ func step_sack(length: float, r: float, mass: float) -> void:
 	var neck := _neck(r)
 	var a: Vector2 = _penis.localToGlobal(neck[0])
 	var unit := _penis.localToGlobal(neck[0] + Vector2(-1, 0)).distance_to(a)   # stage pixels per penis unit
-	var g := GRAVITY_CM / CM_PER_UNIT * unit / 900.0   # stage pixels per tick per tick (30 ticks a second)
-	var m := SACK_MASS0 + (1.0 - SACK_MASS0) * clampf(mass, 0.0, MASS_MAX)
-	var k := g / (SACK_L * unit)                       # the latex: a half full one's weight (1) stretches it SACK_L units
-	var l0 := maxf(0.5, length) * unit
-	var c_link := 2.0 * SACK_ZETA * sqrt(k)            # damping along the link (lighter: more damped)
-	var c_air := SACK_AIR * sqrt(g / (l0 + SACK_L * unit)) * (0.3 + 0.7 * r / BULB_R)   # drag grows with its size
+	var lx := Latex.new(unit, length, r, mass)
+	var grav := lx.g
+	var l0 := lx.l0
 	var fresh := not sack_ok
 	if not sack_ok:
-		sack_p = a + Vector2(0, l0 + m * g / k)
+		sack_p = a + Vector2(0, l0 + lx.m * grav / lx.k)
 		sack_v = Vector2.ZERO
 		sack_a0 = a
-		sack_g = Vector2(0, g)
+		sack_g = Vector2(0, grav)
 		sack_ok = true
 		mouth_state = 2 if _him_in_mouth() else 0   # (his first cum in her mouth: the sack starts in it)
 	# in her mouth: while the sack is still out it hangs from her lower lip (the latex runs from his tip over it, the
@@ -663,9 +660,9 @@ func step_sack(length: float, r: float, mass: float) -> void:
 		sack_a0 = lip   # (the link now ends at her lip: no sweep from his tip)
 	elif not mouth and mouth_state != 0:
 		if mouth_state == 2:
-			if past and _her() != null:   # (still in her throat as he left her mouth between two ticks: it pops out)
+			if past and g.her != null:   # (still in her throat as he left her mouth between two ticks: it pops out)
 				_let_go()
-				_pop(_her(), heft(r), true)
+				_pop(g.her, heft(r), true)
 				past = false
 			var outw := (_penis.localToGlobal(neck[0] + Vector2(1, 0)) - a).normalized()   # along him, away from her
 			sack_p = lip + (outw * 0.5 + Vector2(0, 1)) * r * unit   # (just out, below her lower lip)
@@ -695,7 +692,7 @@ func step_sack(length: float, r: float, mass: float) -> void:
 				lip_a = 0.0
 				_lip_t = -1.0
 			else:
-				m *= 1.0 - in_share * 0.9   # (what is still out is lighter)
+				lx.m *= 1.0 - in_share * 0.9   # (what is still out is lighter)
 	var anc := lip if mouth_state == 1 else a
 	var va := anc - sack_a0   # how far the link's end moved this tick (moved in steps)
 	var v0 := sack_v
@@ -714,37 +711,20 @@ func step_sack(length: float, r: float, mass: float) -> void:
 	var fp := _face_at()
 	var vface := fp - _face_prev if not fresh else Vector2.ZERO
 	_face_prev = fp
-	var rub := HIT_MU * g * dt
+	var rub := HIT_MU * grav * dt
 	var cap := HIT_OUT_MAX * unit
 	var l_rest := maxf(0.0, l0 - used)
+	var lmax := maxf(0.0, l0 + SACK_L * unit * SACK_MAX_LEN - used)
+	if hoist > 0.0:   # (pulled up to her lip)
+		lmax = minf(lmax, lerpf(SACK_L * unit * SACK_MAX_LEN, r * unit * 0.8, hoist))
 	var steps := SACK_STEPS
 	if mouth_state == 2:   # in her mouth: in front of his tip, pressed into the room there (_throat)
 		steps = 0
 	for i in steps:
 		var an := sack_a0 + va * (float(i + 1) / SACK_STEPS)
-		var d := sack_p - an
-		var l := maxf(0.001, d.length())
-		var dir := d / l
-		var f := Vector2(0, m * g) - sack_v * c_air
-		var st := l - l_rest
-		if st > 0.0:   # (latex only pulls)
-			var fs := k * st
-			var over := st - SACK_L * unit * SACK_STRETCH
-			if over > 0.0:
-				fs += k * over * 3.0   # stretched very far it gets much stiffer
-			f -= dir * (fs + c_link * (sack_v - va).dot(dir))
-		sack_v += f / m * dt
-		sack_p += sack_v * dt
-		var dl := sack_p - an
-		var lmax := maxf(0.0, l0 + SACK_L * unit * SACK_MAX_LEN - used)
-		if hoist > 0.0:   # (pulled up to her lip)
-			lmax = minf(lmax, lerpf(SACK_L * unit * SACK_MAX_LEN, r * unit * 0.8, hoist))
-		if dl.length() > lmax:   # (a safety net: the latex never stretches further than this)
-			var dd := dl.normalized()
-			sack_p = an + dd * lmax
-			var vo := (sack_v - va).dot(dd)
-			if vo > 0.0:
-				sack_v -= dd * vo
+		var pv := lx.step(sack_p, sack_v, an, va, l_rest, lmax)
+		sack_p = pv[0]
+		sack_v = pv[1]
 		if mouth_state == 0:
 			_contact(r)
 		if held:
@@ -763,10 +743,9 @@ func step_sack(length: float, r: float, mass: float) -> void:
 	sack_a0 = anc
 	_her_contact(r * unit)
 	# the squash: how hard it pressed against her this tick, for its weight, eased
-	var press := clampf(push / maxf(0.001, g * SQUASH_PRESS), 0.0, 1.0) if hit_d > 0.0 and not held else 0.0
+	var press := clampf(push / maxf(0.001, grav * SQUASH_PRESS), 0.0, 1.0) if hit_d > 0.0 and not held else 0.0
 	squash = lerpf(squash, press, 0.35)
-	# what the cum inside feels: gravity less the sack's own acceleration (it sloshes when it swings), eased a little
-	sack_g = sack_g.lerp(Vector2(0, g) - (sack_v - v0), 0.5)
+	sack_g = lx.felt(sack_g, sack_v, v0)
 	# on his penis, for drawing between this tick and the last
 	_throat(r, unit)
 	fresh = fresh or mouth_state != st0   # (in or out of her mouth: drawn at once where it is now, no gliding over her)
@@ -1504,11 +1483,6 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 	var zc := maxf(r, ax.length())
 	ax = ax.normalized() if ax.length() > 0.001 else down
 	var pp := Vector2(-ax.y, ax.x)
-	var n := 20
-	var wid := PackedFloat32Array()
-	for i in n + 1:
-		var u := pow(float(i) / n, TEAR_K)
-		wid.append(lerpf(rn, r, (1.0 - cos(PI * u)) * 0.5))   # parallel at the neck and at the widest line
 	var left := PackedVector2Array()
 	var right := PackedVector2Array()
 	if from_lip:   # first from his tip to her lip, as thin as the neck; the sides meet on the mean of both normals
@@ -1525,16 +1499,7 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 			var k := rn / maxf(0.4, pm.dot(pp))
 			left.append(lip + pm * k)
 			right.append(lip - pm * k)
-	for i in range(0 if left.is_empty() else 1, n + 1):
-		left.append(start + ax * zc * float(i) / n + pp * wid[i])
-		right.append(start + ax * zc * float(i) / n - pp * wid[i])
-	var sack := left
-	var cn := maxi(16, int(r * 1.6))
-	for j in range(1, cn):
-		var th := PI * float(j) / cn   # round the bottom from one side to the other
-		sack.append(pe + (pp * cos(th) + ax * sin(th)) * r)
-	right.reverse()
-	sack.append_array(right)
+	var sack := _teardrop(left, right, start, ax, zc, rn, r, pe, maxi(16, int(r * 1.6)))
 	var pressed := inside and prof.size() >= 2   # in her mouth: pressed into the room there (_throat), full of cum
 	if pressed:
 		sack = _inside_shape()
@@ -1557,12 +1522,7 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 			sack[i] = pe + into * dd + tq * (1.0 + SQUASH_MAX * sq * 0.4)
 	if _signed_area(sack) * _signed_area(_outline) < 0.0:
 		sack.reverse()   # the same way round as the outline (outwards normals on the same side)
-	for _k in 2:   # rounds the corners where the sides meet the bulb
-		var sm := sack.duplicate()
-		var m := sack.size()
-		for i in m:
-			sm[i] = (sack[(i + m - 1) % m] + sack[i] * 2.0 + sack[(i + 1) % m]) * 0.25
-		sack = sm
+	sack = _round_corners(sack)
 	# the latex inside it, outside the penis
 	var cut := Geometry2D.clip_polygons(sack, _tip_poly)
 	var fill := _biggest(cut)
@@ -1693,7 +1653,7 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 		_poly(pts, cols, idx, q, latex)
 	for q in fills[0]:
 		_poly(tp, tc, tix, q, latex)
-	var line := Color(col.r * 0.45, col.g * 0.45, col.b * 0.5, 0.85 * alpha)
+	var line := _line_col(col, alpha)
 	var edge := _a(col, 0.55 * alpha)
 	if outer.size() >= 2:
 		# the parts along the sleeve round his tip go with his penis (tipline), the sack's own with the sack (but in
@@ -1716,26 +1676,11 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 			var af := outer[j1] if j1 < outer.size() else Vector2(NAN, NAN)
 			if run.size() >= 2:
 				if on_sack[i0] == 1:
-					_strip(pts, cols, idx, run, [-EDGE_W, 0.0], [_a(edge, 0.0), edge], bf, af)
-					_strip(pts, cols, idx, run, [0.0, 0.25, LINE, LINE + FADE], [_a(line, 0.0), line, line,
-						_a(line, 0.0)], bf, af)
+					_edged(pts, cols, idx, run, edge, line, 1.0, bf, af)
 				else:
-					_strip(tp, tc, tix, run, [-EDGE_W, 0.0], [_a(edge, 0.0), edge], bf, af)
-					_strip(tp, tc, tix, run, [0.0, 0.25, LINE, LINE + FADE], [_a(line, 0.0), line, line,
-						_a(line, 0.0)], bf, af)
+					_edged(tp, tc, tix, run, edge, line, 1.0, bf, af)
 			i0 = i1 + 1
-	# a shine on the bulb, on its side away from gravity
-	var sc := pe - down * r * 0.45 + Vector2(-down.y, down.x) * r * 0.35
-	var o := pts.size()
-	pts.append(sc)
-	cols.append(Color(1, 1, 1, 0.7 * alpha))
-	var m2 := 14
-	for i in m2:
-		var f := TAU * float(i) / m2
-		pts.append(sc + Vector2(cos(f) * r * 0.14, sin(f) * r * 0.3).rotated(atan2(down.y, down.x) - PI * 0.5 + 0.4))
-		cols.append(Color(1, 1, 1, 0.0))
-	for i in m2:
-		idx.append_array([o, o + 1 + i, o + 1 + (i + 1) % m2])
+	_shine(pts, cols, idx, pe, down, r, alpha)
 	if inside:   # all with his penis: the sack under the line round his tip
 		var o2 := pts.size()
 		pts.append_array(tp)
@@ -1747,6 +1692,71 @@ func draw_bulb(r: float, col: Color, alpha: float, cum: Color, pe: Vector2, down
 	if tp.size() > 0:
 		tipline.graphics.setMesh(tp, tc, tix)
 	gr.setMesh(pts, cols, idx)
+
+
+## The teardrop (like a hanging glass drop; also tied.gd's): `left` / `right` (its sides so far, may be empty) go on
+## from `start` along the unit axis `ax` for zc, from the neck's half width rn widening in an S-curve to r (parallel at
+## the neck and at the widest line), then round the bottom (cn steps) round `pe`. Returns the closed outline: left
+## side down, round the bottom, right side up (`right` is reversed in the process).
+static func _teardrop(left: PackedVector2Array, right: PackedVector2Array, start: Vector2, ax: Vector2, zc: float,
+		rn: float, r: float, pe: Vector2, cn: int) -> PackedVector2Array:
+	var pp := Vector2(-ax.y, ax.x)
+	var n := 20
+	var wid := PackedFloat32Array()
+	for i in n + 1:
+		var u := pow(float(i) / n, TEAR_K)
+		wid.append(lerpf(rn, r, (1.0 - cos(PI * u)) * 0.5))
+	for i in range(0 if left.is_empty() else 1, n + 1):   # (after a neck drawn already: on from its end)
+		left.append(start + ax * zc * float(i) / n + pp * wid[i])
+		right.append(start + ax * zc * float(i) / n - pp * wid[i])
+	var sack := left
+	for j in range(1, cn):
+		var th := PI * float(j) / cn   # round the bottom from one side to the other
+		sack.append(pe + (pp * cos(th) + ax * sin(th)) * r)
+	right.reverse()
+	sack.append_array(right)
+	return sack
+
+
+## The closed outline with its corners rounded (where the teardrop's sides meet the bulb): two smoothing passes.
+static func _round_corners(sack: PackedVector2Array) -> PackedVector2Array:
+	for _k in 2:
+		var sm := sack.duplicate()
+		var m := sack.size()
+		for i in m:
+			sm[i] = (sack[(i + m - 1) % m] + sack[i] * 2.0 + sack[(i + 1) % m]) * 0.25
+		sack = sm
+	return sack
+
+
+## The shine on a bulb of radius r round pe (its side away from gravity `down`), into a mesh.
+static func _shine(pts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32Array, pe: Vector2, down: Vector2,
+		r: float, alpha: float) -> void:
+	var sc := pe - down * r * 0.45 + Vector2(-down.y, down.x) * r * 0.35
+	var o := pts.size()
+	pts.append(sc)
+	cols.append(Color(1, 1, 1, 0.7 * alpha))
+	var m2 := 14
+	for i in m2:
+		var f := TAU * float(i) / m2
+		pts.append(sc + Vector2(cos(f) * r * 0.14, sin(f) * r * 0.3).rotated(atan2(down.y, down.x) - PI * 0.5 + 0.4))
+		cols.append(Color(1, 1, 1, 0.0))
+	for i in m2:
+		idx.append_array([o, o + 1 + i, o + 1 + (i + 1) % m2])
+
+
+## The latex's dark outline colour (col, alpha: as in draw()).
+static func _line_col(col: Color, alpha: float) -> Color:
+	return Color(col.r * 0.45, col.g * 0.45, col.b * 0.5, 0.85 * alpha)
+
+
+## Along the line `run`: the latex denser at its edge (fading inwards over EDGE_W x edge_k), then its dark outline;
+## s: drawing units per penis unit; before / after as _strip's.
+func _edged(pts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32Array, run: PackedVector2Array, edge: Color,
+		line: Color, s := 1.0, before := Vector2(NAN, NAN), after := Vector2(NAN, NAN), edge_k := 1.0) -> void:
+	_strip(pts, cols, idx, run, [-EDGE_W * s * edge_k, 0.0], [_a(edge, 0.0), edge], before, after)
+	_strip(pts, cols, idx, run, [0.0, 0.25 * s, LINE * s, (LINE + FADE) * s], [_a(line, 0.0), line, line, _a(line, 0.0)],
+		before, after)
 
 
 ## The polygon q split by the region `cut` (none: all outside): [the pieces in it, the pieces outside it].
@@ -2006,6 +2016,57 @@ static func _signed_area(p: PackedVector2Array) -> float:
 	return s
 
 
-## Her (step_sack's `g` is its gravity, not the game).
-func _her():
-	return g.her
+
+## The sack's weight on its stretchy latex from where it hangs (his tip, her lip, his fist): this tick's numbers and
+## one of its SACK_STEPS physics steps. Shared by step_sack and tied.gd. unit: lengths' units (stage px, or tied.gd's
+## world units) per penis unit; length: the rest length, r: the bulb's radius (penis units); mass: 0..2 (empty ..
+## full, as step_sack's).
+class Latex:
+	var unit: float
+	var g: float        # gravity, units per tick per tick (30 ticks a second)
+	var m: float        # its weight (the latex and the cum in it)
+	var k: float        # the latex: a half full one's weight (1) stretches it SACK_L penis units
+	var l0: float       # its rest length
+	var c_link: float   # damping along the link (lighter: more damped)
+	var c_air: float    # air drag on its swing, growing with its size
+	var dt: float
+
+	func _init(unit_: float, length: float, r: float, mass: float) -> void:
+		unit = unit_
+		g = GRAVITY_CM / CM_PER_UNIT * unit / 900.0
+		m = SACK_MASS0 + (1.0 - SACK_MASS0) * clampf(mass, 0.0, MASS_MAX)
+		k = g / (SACK_L * unit)
+		l0 = maxf(0.5, length) * unit
+		c_link = 2.0 * SACK_ZETA * sqrt(k)
+		c_air = SACK_AIR * sqrt(g / (l0 + SACK_L * unit)) * (0.3 + 0.7 * r / BULB_R)
+		dt = 1.0 / SACK_STEPS
+
+	## One step: the weight at p moving at v, its link's end at `an` (moved `va` this tick). The latex pulls only past
+	## `l_rest`, much stiffer stretched very far, and never stretches past `lmax`. Returns [p, v].
+	func step(p: Vector2, v: Vector2, an: Vector2, va: Vector2, l_rest: float, lmax: float) -> PackedVector2Array:
+		var d := p - an
+		var l := maxf(0.001, d.length())
+		var dir := d / l
+		var f := Vector2(0, m * g) - v * c_air
+		var st := l - l_rest
+		if st > 0.0:   # (latex only pulls)
+			var fs := k * st
+			var over := st - SACK_L * unit * SACK_STRETCH
+			if over > 0.0:
+				fs += k * over * 3.0   # stretched very far it gets much stiffer
+			f -= dir * (fs + c_link * (v - va).dot(dir))
+		v += f / m * dt
+		p += v * dt
+		var dl := p - an
+		if dl.length() > lmax:   # (a safety net: the latex never stretches further than this)
+			var dd := dl.normalized()
+			p = an + dd * lmax
+			var vo := (v - va).dot(dd)
+			if vo > 0.0:
+				v -= dd * vo
+		return PackedVector2Array([p, v])
+
+	## What the cum inside feels (it sloshes when it swings): gravity less the sack's own acceleration this tick (v0 to
+	## v), eased a little from `prev`.
+	func felt(prev: Vector2, v: Vector2, v0: Vector2) -> Vector2:
+		return prev.lerp(Vector2(0, g) - (v - v0), 0.5)

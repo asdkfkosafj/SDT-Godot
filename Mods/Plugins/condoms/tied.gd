@@ -230,9 +230,10 @@ func step() -> void:
 		return
 	if anchor != null and not falling and (not is_instance_valid(anchor) or not anchor.is_inside_tree()) 			and not _next_anchor():
 		drop(host)   # (all it was on is gone)
-	var g: float = c.GRAVITY_CM / c.CM_PER_UNIT * unit / 900.0
+	var lx = c.Latex.new(unit, length, r, mass)
+	var grav: float = lx.g
 	if falling:
-		_fall_v.y += g
+		_fall_v.y += grav
 		_fall_v *= 0.99
 		_fall_p += _fall_v
 	if _fly_t < FLY_TICKS:
@@ -240,45 +241,23 @@ func step() -> void:
 	var a := _knot_w()
 	if tied:
 		tail = stub_point()
-	var m: float = c.SACK_MASS0 + (1.0 - c.SACK_MASS0) * clampf(mass, 0.0, c.MASS_MAX)
-	var k: float = g / (c.SACK_L * unit)
-	var l0 := maxf(0.5, length) * unit
-	var c_link: float = 2.0 * c.SACK_ZETA * sqrt(k)
-	var c_air: float = c.SACK_AIR * sqrt(g / (l0 + c.SACK_L * unit)) * (0.3 + 0.7 * r / c.BULB_R)
+	var l0: float = lx.l0
 	var fresh := not _ok or _rehost
 	_rehost = false
 	if not _ok:
 		_a0 = a
-		gfelt = Vector2(0, g)
+		gfelt = Vector2(0, grav)
 		_ok = true
 	var va := a - _a0
 	var v0 := v
-	var dt: float = 1.0 / c.SACK_STEPS
 	var lmax: float = l0 + c.SACK_L * unit * c.SACK_MAX_LEN
-	for i in c.SACK_STEPS:
+	for i in c.SACK_STEPS:   # (as on his penis: condom.Latex)
 		var an: Vector2 = _a0 + va * (float(i + 1) / c.SACK_STEPS)
-		var d: Vector2 = p - an
-		var l := maxf(0.001, d.length())
-		var dir: Vector2 = d / l
-		var f := Vector2(0, m * g) - v * c_air
-		var st := l - l0
-		if st > 0.0:
-			var fs := k * st
-			var over: float = st - c.SACK_L * unit * c.SACK_STRETCH
-			if over > 0.0:
-				fs += k * over * 3.0
-			f -= dir * (fs + c_link * (v - va).dot(dir))
-		v += f / m * dt
-		p += v * dt
-		var dl: Vector2 = p - an
-		if dl.length() > lmax:
-			var dd: Vector2 = dl.normalized()
-			p = an + dd * lmax
-			var vo := (v - va).dot(dd)
-			if vo > 0.0:
-				v -= dd * vo
+		var pv: PackedVector2Array = lx.step(p, v, an, va, l0, lmax)
+		p = pv[0]
+		v = pv[1]
 	_a0 = a
-	gfelt = gfelt.lerp(Vector2(0, g) - (v - v0), 0.5)
+	gfelt = lx.felt(gfelt, v, v0)
 	# in its host, for drawing between this tick and the last
 	var pe1 := host.globalToLocal(_s(p))
 	_hs = host.globalToLocal(_s(p + Vector2(1, 0))).distance_to(pe1)
@@ -343,38 +322,18 @@ func draw(pe: Vector2, dn: Vector2, tl: Vector2, kn := GRIP) -> void:
 	var ax := pe - kn
 	var zc := maxf(rr, ax.length())
 	ax = ax.normalized() if ax.length() > 0.001 else dn
-	var pp := Vector2(-ax.y, ax.x)
 	var tied_up := closed and bow > 0.0 and not is_nan(tl.x) and tl.distance_to(kn) > 1.0
 	var k0 := kn   # where the sack starts: tied, up inside the knot (the part in it not drawn)
 	if tied_up:
 		k0 = kn - ax * SACK_UP * s * bow
 		pe -= ax * SACK_UP * s * bow
-	var n := 20
-	var left := PackedVector2Array()
-	var right := PackedVector2Array()
-	for i in n + 1:
-		var u := pow(float(i) / n, c.TEAR_K)
-		var w := lerpf(rn, rr, (1.0 - cos(PI * u)) * 0.5)
-		left.append(k0 + ax * zc * float(i) / n + pp * w)
-		right.append(k0 + ax * zc * float(i) / n - pp * w)
-	var sack := left
-	var cn := maxi(16, int(r * 1.6))
-	for j in range(1, cn):
-		var th := PI * float(j) / cn
-		sack.append(pe + (pp * cos(th) + ax * sin(th)) * rr)
-	right.reverse()
-	sack.append_array(right)
-	for _k in 2:
-		var sm := sack.duplicate()
-		var m := sack.size()
-		for i in m:
-			sm[i] = (sack[(i + m - 1) % m] + sack[i] * 2.0 + sack[(i + 1) % m]) * 0.25
-		sack = sm
+	var sack: PackedVector2Array = c._round_corners(c._teardrop(PackedVector2Array(), PackedVector2Array(), k0, ax, zc,
+		rn, rr, pe, maxi(16, int(r * 1.6))))   # (as on his penis)
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
 	var latex: Color = c._a(col, 0.5 * alpha)
-	var line := Color(col.r * 0.45, col.g * 0.45, col.b * 0.5, 0.85 * alpha)
+	var line: Color = c._line_col(col, alpha)
 	var edge: Color = c._a(col, 0.55 * alpha)
 	var knot := PackedVector2Array()   # (the tied end's outline, the sack cut by it)
 	# the sleeve's other end: a tube from the knot (stretched to his glans; tied: the open end, flaring out to its rim)
@@ -412,9 +371,7 @@ func draw(pe: Vector2, dn: Vector2, tl: Vector2, kn := GRIP) -> void:
 			for sl: PackedVector2Array in [sa, sb]:   # its two sides: the latex's edge and line
 				if (sl[sl.size() - 1] - sl[0]).cross(top - sl[0]) > 0.0:   # (the inside on its right, as the strips want)
 					sl.reverse()
-				c._strip(pts, cols, idx, sl, [-c.EDGE_W * s * 0.6, 0.0], [c._a(edge, 0.0), edge])
-				c._strip(pts, cols, idx, sl, [0.0, 0.25 * s, c.LINE * s, (c.LINE + c.FADE) * s], [c._a(line, 0.0),
-					line, line, c._a(line, 0.0)])
+				c._edged(pts, cols, idx, sl, edge, line, s, Vector2(NAN, NAN), Vector2(NAN, NAN), 0.6)
 			_rim_arm(pts, cols, idx, b, a, c.RING_R * 0.7 * s, bulge)
 		var tube := PackedVector2Array()   # (latex over latex: the triangle above stops at its edge)
 		var back := PackedVector2Array()
@@ -465,20 +422,8 @@ func draw(pe: Vector2, dn: Vector2, tl: Vector2, kn := GRIP) -> void:
 			loop2.reverse()
 		for q in Geometry2D.clip_polyline_with_polygon(loop2, knot):
 			if q.size() >= 2:
-				c._strip(pts, cols, idx, q, [-c.EDGE_W * s, 0.0], [c._a(edge, 0.0), edge])
-				c._strip(pts, cols, idx, q, [0.0, 0.25 * s, c.LINE * s, (c.LINE + c.FADE) * s], [c._a(line, 0.0),
-					line, line, c._a(line, 0.0)])
-	var sc := pe - dn * rr * 0.45 + Vector2(-dn.y, dn.x) * rr * 0.35
-	var o := pts.size()
-	pts.append(sc)
-	cols.append(Color(1, 1, 1, 0.7 * alpha))
-	var m2 := 14
-	for i in m2:
-		var fa := TAU * float(i) / m2
-		pts.append(sc + Vector2(cos(fa) * rr * 0.14, sin(fa) * rr * 0.3).rotated(atan2(dn.y, dn.x) - PI * 0.5 + 0.4))
-		cols.append(Color(1, 1, 1, 0.0))
-	for i in m2:
-		idx.append_array([o, o + 1 + i, o + 1 + (i + 1) % m2])
+				c._edged(pts, cols, idx, q, edge, line, s)
+	c._shine(pts, cols, idx, pe, dn, rr, alpha)
 	gr.setMesh(pts, cols, idx)
 
 
@@ -567,6 +512,4 @@ func _outline(pts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32A
 		s: float, line: Color, edge: Color) -> void:
 	if c._signed_area(loop) > 0.0:
 		loop.reverse()
-	c._strip(pts, cols, idx, loop, [-c.EDGE_W * s, 0.0], [c._a(edge, 0.0), edge])
-	c._strip(pts, cols, idx, loop, [0.0, 0.25 * s, c.LINE * s, (c.LINE + c.FADE) * s], [c._a(line, 0.0), line, line,
-		c._a(line, 0.0)])
+	c._edged(pts, cols, idx, loop, edge, line, s)
