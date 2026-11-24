@@ -28,12 +28,13 @@ extends FlashDisplayObject
 ## The game glides her body parts between ticks (physics interpolation): her head with her (her space), her torso
 ## swaying against her (up to some 20 px a tick at her belly while he thrusts). Drawn where her torso is at the tick,
 ## the stomach would lead her body by up to a tick's motion (a flicker). So everything is one mesh per painter, built
-## each tick in her space, skinned on two bones (_skel): bone 0 stays (her space: the pipe in her neck, in step with
-## the throat part and her head), bone 1 follows her torso between ticks (the stomach; set every frame, _process, as
-## the game glides her torso). The pipe goes over from the one to the other where her torso (drawn over her neck)
+## each tick in her space, each point with a weight on her torso's glide (in its UV): 0 stays (her space: the pipe in
+## her neck, in step with the throat part and her head), 1 follows her torso between ticks (the stomach). The glide is
+## set every frame (_process, as the game glides her torso) on the painters' shader (GLIDE_SHADER), which moves each
+## point by it times its weight. The pipe goes over from the one to the other where her torso (drawn over her neck)
 ## starts to cover it (_pipe_b): where it lies on her torso, it glides with her torso.
-## The skeleton's base follows this part as the game glides it too, every frame (_set_bones): else bone 1 applies
-## round the wrong point between ticks.
+## (A 2D skeleton with two bones did this before: on OpenGL, Godot's per-frame bone update made the renderer wait for
+## the graphics card, which cost more than the rest of the x-ray together on a slow card.)
 ##
 ## What comes out at the bottom of the pipe pours into the stomach as liquid: bits of it (_drops, one per tick while it
 ## comes, each with what came that tick), falling (screen down) from the pipe's speed, sliding down the inside of the
@@ -44,6 +45,20 @@ extends FlashDisplayObject
 ## Painters, bottom to top: _painter (pipe and stomach: their insides, the contents, what pours in, the glow and the
 ## wall), the throat part's lower painter, _flow (what is in the pipe), the throat part's top painter (attach_lower).
 
+## The painters' shader: premultiplied alpha, and each point moved by her torso's glide this frame (glide_*: where
+## her torso is now against where it is at this tick, in the painters' space; the identity at a tick) times its weight
+## on it (UV.x).
+const GLIDE_SHADER := """shader_type canvas_item;
+render_mode blend_premul_alpha;
+uniform vec2 glide_x = vec2(1.0, 0.0);
+uniform vec2 glide_y = vec2(0.0, 1.0);
+uniform vec2 glide_o = vec2(0.0, 0.0);
+void vertex() {
+	VERTEX = mix(VERTEX, glide_x * VERTEX.x + glide_y * VERTEX.y + glide_o, UV.x);
+}
+"""
+static var _glide_shader: Shader = null
+
 const STEP := 3.0          # spacing of the outline and pipe samples (local units)
 const WALL := 6.0          # thickness of the walls (as her throat's)
 const GLOW := 10.0         # the soft red glow around them
@@ -53,7 +68,7 @@ const PIPE_IN := 0.4       # and from how far above the stomach it comes straigh
 const BEND_SMOOTH := 16    # smoothing passes over the pipe's bend (and the line into it, past the throat part)
 const PIPE_TOP := 6        # samples over which the pipe fades in at its top (below her mouth, without the throat part)
 const NECK_BLEND := 2.0    # samples each way of where her torso covers her neck over which the pipe goes over from
-                           # gliding with her neck to gliding with her torso (bone 1)
+                           # gliding with her neck to gliding with her torso
 const FADE := 0.25         # per tick, in and out
 ## The oval, in torso units at Size 100: its half width (across her body) and half height (along her spine).
 const RADII := Vector2(44, 68)
@@ -108,18 +123,16 @@ var wall_col := Color(0.8, 0.45, 0.45)
 var lumen_col := Color(0.42, 0.1, 0.14)
 var glow_col := Color(0.85, 0.15, 0.2, 0.55)
 var _painter := Node2D.new()
-var _skel := RID()                     # bone 0: her space; bone 1: her torso, between ticks (see the top)
+var _glide_mat := ShaderMaterial.new() # the painters' (GLIDE_SHADER)
+var _glide := Transform2D()            # the glide last set on it
 var _xf := Transform2D()               # own space -> local, this tick, and the tick before
 var _xf_prev := Transform2D()
-var _at := Transform2D()               # the painter in the canvas at this tick, and the tick before (_set_bones)
-var _at_prev := Transform2D()
 var _mesh := ArrayMesh.new()           # what _painter / _flow draw, rebuilt every tick
 var _flow_mesh := ArrayMesh.new()
 var _surfs: Array = []                 # surfaces for the mesh being drawn
 var _space := Transform2D()            # what the points given to _tri are in (-> local): identity, or _xf (own)
-var _bw := 0.0                         # and their bone weight (on bone 1), when none is given per point
-var _bones4 := PackedInt32Array()      # 0, 1, 0, 0 for each vertex, as many as needed
-var _pipe_b := PackedFloat32Array()    # each pipe sample's weight on bone 1
+var _bw := 0.0                         # and their weight on her torso's glide, when none is given per point
+var _pipe_b := PackedFloat32Array()    # each pipe sample's weight on her torso's glide
 var _mouth_cache := []                 # _mouth_parts, kept while _mouth_key holds
 var _mouth_key := []
 var _idx_cache := {}                   # _strip_idx
@@ -176,47 +189,37 @@ var _seam := -1
 func _init() -> void:
 	super()
 	mouseEnabled = false
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
-	_painter.material = mat
+	if _glide_shader == null:
+		_glide_shader = Shader.new()
+		_glide_shader.code = GLIDE_SHADER
+	_glide_mat.shader = _glide_shader
+	_painter.material = _glide_mat
 	_painter.draw.connect(_paint)
 	add_child(_painter)
-	_flow.material = mat
+	_flow.material = _glide_mat
 	_flow.draw.connect(_paint_flow)
 	add_child(_flow)
-	_skel = RenderingServer.skeleton_create()
-	RenderingServer.skeleton_allocate_data(_skel, 2, true)
-	RenderingServer.skeleton_bone_set_transform_2d(_skel, 0, Transform2D())
-	RenderingServer.skeleton_bone_set_transform_2d(_skel, 1, Transform2D())
-	RenderingServer.canvas_item_attach_skeleton(_painter.get_canvas_item(), _skel)
-	RenderingServer.canvas_item_attach_skeleton(_flow.get_canvas_item(), _skel)
 	_build()
 
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_PREDELETE and _skel.is_valid():
-		RenderingServer.free_rid(_skel)
-
-
-## Every frame: bone 1 where her torso is between ticks against where it was at this tick (the game glides it from
-## the tick before to this one).
+## Every frame: the glide where her torso is between ticks against where it is at this tick (the game glides it
+## from the tick before to this one).
 func _process(_delta: float) -> void:
-	if shown <= 0.0 or not _skel.is_valid():
+	if shown <= 0.0:
 		return
-	_set_bones(Engine.get_physics_interpolation_fraction() if is_physics_interpolated_and_enabled() else 1.0)
+	_set_glide(Engine.get_physics_interpolation_fraction() if is_physics_interpolated_and_enabled() else 1.0)
 
 
-## The bones at `f` of the way from the tick before to this one. The renderer applies a bone in the skeleton's base
-## space, converting with (the painter as drawn)^-1 * base; so the base is the painter as the game glides it this
-## frame (in its canvas): then that is the identity and bone 1 applies in this part's local space as given. (Set once
-## a tick, the base was where the painter is at the tick while it is drawn on the way there from the tick before:
-## bone 1 applied round the wrong point, the stomach slid against her body between ticks and jumped back at each tick,
-## seen as a flicker above 60 fps.)
-func _set_bones(f: float) -> void:
-	var base := _at_prev.interpolate_with(_at, f) if f < 1.0 else _at
-	RenderingServer.skeleton_set_base_transform_2d(_skel, base)
+## The glide at `f` of the way from the tick before to this one, in this part's local space (the painters'): her
+## torso there against at this tick.
+func _set_glide(f: float) -> void:
 	var m := _xf_prev.interpolate_with(_xf, f) * _xf.affine_inverse() if f < 1.0 else Transform2D()
-	RenderingServer.skeleton_bone_set_transform_2d(_skel, 1, m)
+	if m == _glide:
+		return
+	_glide = m
+	_glide_mat.set_shader_parameter(&"glide_x", m.x)
+	_glide_mat.set_shader_parameter(&"glide_y", m.y)
+	_glide_mat.set_shader_parameter(&"glide_o", m.origin)
 
 
 func _ready() -> void:
@@ -442,10 +445,7 @@ func update(want: bool, want_pipe: bool, her: Her, line: PackedVector2Array, ben
 		* Transform2D(spine, Vector2(size, size), 0.0, navel + AT_NAVEL)
 	_xf_prev = _xf if was > 0.0 else xf   # it shows again: no gliding in from where it was
 	_xf = xf
-	var at := _painter.get_global_transform()   # where the painter is at this tick, in its canvas (see _set_bones)
-	_at_prev = _at if was > 0.0 else at
-	_at = at
-	_set_bones(1.0)
+	_set_glide(1.0)
 	_k = xf.x.length()
 	var n := _shape.size()
 	_inner.resize(n)
@@ -1016,7 +1016,7 @@ func _dot(p: Vector2, r: float) -> void:
 
 ## What is in the pipe: on top of everything (her throat closes past his tip: it shows there too), where the pipe
 ## shows or past his tip (a lump beside him: LUMP_OVER), and where the throat part draws her throat while the pipe
-## does not show (her mouth alone); on the pipe's bones.
+## does not show (her mouth alone); with the pipe's weights on her torso's glide.
 func _paint_flow() -> void:
 	if shown <= 0.0 or (pipe_shown <= 0.0 and _throat_shown <= 0.0) or _cum_w.size() != _pipe.size() \
 			or _flows.is_empty():
@@ -1167,9 +1167,9 @@ func _band(line: PackedVector2Array, norm: PackedVector2Array, closed: bool, lo:
 	pts.resize(n * 4)
 	cols.resize(n * 4)
 	cols.fill(Color(0, 0, 0, 0))   # transparent where not set
-	var wts := PackedFloat32Array()
+	var uvs := PackedVector2Array()   # the weights on her torso's glide (x)
 	if not bw.is_empty():
-		wts.resize(n * 16)
+		uvs.resize(n * 4)
 	var h := _half_px
 	var c := _pm(col)
 	var has_g := not grow.is_empty()
@@ -1189,19 +1189,13 @@ func _band(line: PackedVector2Array, norm: PackedVector2Array, closed: bool, lo:
 		var cw := c * w[i] if has_w else c
 		cols[v + 1] = cw
 		cols[v + 2] = cw
-		if not wts.is_empty():
-			var b1 := bw[i]
-			var b0 := 1.0 - b1
-			var o := i * 16
-			wts[o] = b0
-			wts[o + 1] = b1
-			wts[o + 4] = b0
-			wts[o + 5] = b1
-			wts[o + 8] = b0
-			wts[o + 9] = b1
-			wts[o + 12] = b0
-			wts[o + 13] = b1
-	_tri(_strip_idx(n, 4, closed), pts, cols, wts)
+		if not uvs.is_empty():
+			var u := Vector2(bw[i], 0.0)
+			uvs[v] = u
+			uvs[v + 1] = u
+			uvs[v + 2] = u
+			uvs[v + 3] = u
+	_tri(_strip_idx(n, 4, closed), pts, cols, uvs)
 
 
 ## A strip from base + inner (glow colour) to base + outer (transparent), starting half a pixel under the wall.
@@ -1215,9 +1209,9 @@ func _glow(line: PackedVector2Array, norm: PackedVector2Array, closed: bool, bas
 	pts.resize(n * 2)
 	cols.resize(n * 2)
 	cols.fill(Color(0, 0, 0, 0))
-	var wts := PackedFloat32Array()
+	var uvs := PackedVector2Array()   # the weights on her torso's glide (x)
 	if not bw.is_empty():
-		wts.resize(n * 8)
+		uvs.resize(n * 2)
 	var under := -signf(outer - inner) * _half_px
 	var gc := _pm(glow_col)
 	var has_g := not grow.is_empty()
@@ -1228,14 +1222,11 @@ func _glow(line: PackedVector2Array, norm: PackedVector2Array, closed: bool, bas
 		pts[v] = line[i] + norm[i] * (b0 + inner + under)
 		pts[v + 1] = line[i] + norm[i] * (b0 + outer)
 		cols[v] = gc * w[i] if has_w else gc
-		if not wts.is_empty():
-			var b1 := bw[i]
-			var o := i * 8
-			wts[o] = 1.0 - b1
-			wts[o + 1] = b1
-			wts[o + 4] = 1.0 - b1
-			wts[o + 5] = b1
-	_tri(_strip_idx(n, 2, closed), pts, cols, wts)
+		if not uvs.is_empty():
+			var u := Vector2(bw[i], 0.0)
+			uvs[v] = u
+			uvs[v + 1] = u
+	_tri(_strip_idx(n, 2, closed), pts, cols, uvs)
 
 
 ## The triangles of a strip of n samples, `per` points across each (kept: the same for the same sizes).
@@ -1255,26 +1246,23 @@ func _strip_idx(n: int, per: int, closed: bool) -> PackedInt32Array:
 	return idx
 
 
-## Adds triangles to the mesh being drawn: points in _space (-> local), bone weights per vertex (4 each: on bones 0,
-## 1) or else all _bw on bone 1.
+## Adds triangles to the mesh being drawn: points in _space (-> local), each point's weight on her torso's glide (uvs:
+## x) or else all _bw.
 func _tri(idx: PackedInt32Array, pts: PackedVector2Array, cols: PackedColorArray,
-		wts := PackedFloat32Array()) -> void:
+		uvs := PackedVector2Array()) -> void:
 	var n := pts.size()
 	if n == 0 or idx.is_empty():
 		return
-	if wts.size() != n * 4:
-		wts = PackedFloat32Array([1.0 - _bw, _bw, 0.0, 0.0])
-		while wts.size() < n * 4:
-			wts.append_array(wts.slice(0, mini(wts.size(), n * 4 - wts.size())))
-	while _bones4.size() < n * 4:
-		_bones4.append_array(_bones4 if not _bones4.is_empty() else PackedInt32Array([0, 1, 0, 0]))
+	if uvs.size() != n:
+		uvs = PackedVector2Array()
+		uvs.resize(n)
+		uvs.fill(Vector2(_bw, 0.0))
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
 	arr[Mesh.ARRAY_VERTEX] = _space * pts if _space != Transform2D.IDENTITY else pts
 	arr[Mesh.ARRAY_COLOR] = cols
+	arr[Mesh.ARRAY_TEX_UV] = uvs
 	arr[Mesh.ARRAY_INDEX] = idx
-	arr[Mesh.ARRAY_BONES] = _bones4.slice(0, n * 4)
-	arr[Mesh.ARRAY_WEIGHTS] = wts
 	_surfs.append(arr)
 
 
