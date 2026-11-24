@@ -39,5 +39,6 @@ __pycache__/
 /run_debug.local.bat
 /run_debug.local.sh
 /native/build/
-# release builds (tools/make_release.sh)
+# release builds (tools/make_release.sh), and the build info it writes for the export
 /release/
+/game/build_info.json

@@ -454,7 +454,7 @@ func _physics_process(_delta: float) -> void:
 			_perf_listeners[scr] = _perf_listeners.get(scr, 0) + dt
 			if prof or dt > _slowest_listener_us:
 				var obj = e[0]
-				var key := "%s.%s" % [obj.get_script().get_global_name() if obj.get_script() else obj.get_class(), cb.get_method()] 					if is_instance_valid(obj) else "(freed)." + str(cb.get_method())
+				var key := "%s.%s" % [obj.get_script().get_global_name() if obj.get_script() else obj.get_class(), callback_name(cb)] 					if is_instance_valid(obj) else "(freed)." + str(cb.get_method())
 				account_listener(key, dt)
 	if stale:
 		# listeners of freed objects
@@ -463,7 +463,7 @@ func _physics_process(_delta: float) -> void:
 	for cb in tick_after:
 		var ts := Time.get_ticks_usec()
 		cb.call()
-		_perf_add("after:" + cb.get_method(), Time.get_ticks_usec() - ts)
+		_perf_add("after:" + callback_name(cb), Time.get_ticks_usec() - ts)
 	var t2 := Time.get_ticks_usec()
 	update_paints()
 	# 3. Masks follow the (possibly moved) objects.
@@ -574,11 +574,37 @@ func _setup_frame_monitor() -> void:
 func _log_system() -> void:
 	var v := Engine.get_version_info()
 	var vsync: String = ["off", "on", "adaptive", "mailbox"][clampi(DisplayServer.window_get_vsync_mode(), 0, 3)]
-	print("SYSTEM Godot %s (%s build) | %s | %s %s | CPU %s, %d threads | native %s | window %s on a %s screen, vsync %s, max fps %d" % [
-		v["string"], "debug" if OS.is_debug_build() else "release", RenderingServer.get_current_rendering_method(),
+	print("SYSTEM SDT-Godot %s | Godot %s (%s build) | %s | %s %s | CPU %s, %d threads | native %s | window %s on a %s screen, vsync %s, max fps %d" % [
+		build_id(), v["string"], "debug" if OS.is_debug_build() else "release", RenderingServer.get_current_rendering_method(),
 		RenderingServer.get_video_adapter_vendor(), RenderingServer.get_video_adapter_name(), OS.get_processor_name(),
 		OS.get_processor_count(), "on" if ClassDB.class_exists(&"SDTNative") and not "--nonative" in OS.get_cmdline_user_args() else "OFF",
 		DisplayServer.window_get_size(), DisplayServer.screen_get_size(), vsync, Engine.max_fps])
+
+
+## The game's build, for the SYSTEM line: from res://build_info.json (tools/make_release.sh writes it for a release:
+## the date, the commit, and "+ changes" when uncommitted changes were in it), or in a run from the repository
+## "dev" and the commit checked out (read from .git), else "build unknown".
+static func build_id() -> String:
+	const INFO := "res://build_info.json"
+	if FileAccess.file_exists(INFO):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(INFO))
+		if d is Dictionary:
+			return "%s %s%s" % [d.get("date", "?"), d.get("commit", "?"), " + changes" if d.get("dirty", false) else ""]
+	if not OS.has_feature("template"):   # not an exported game: the repository's checkout
+		var git := ProjectSettings.globalize_path("res://").path_join("../.git").simplify_path()
+		var head := FileAccess.get_file_as_string(git.path_join("HEAD")).strip_edges() \
+			if FileAccess.file_exists(git.path_join("HEAD")) else ""
+		if head.begins_with("ref: "):
+			var ref := head.substr(5)
+			head = FileAccess.get_file_as_string(git.path_join(ref)).strip_edges() \
+				if FileAccess.file_exists(git.path_join(ref)) else ""
+			if head == "" and FileAccess.file_exists(git.path_join("packed-refs")):
+				for line in FileAccess.get_file_as_string(git.path_join("packed-refs")).split("\n"):
+					if line.ends_with(" " + ref):
+						head = line.get_slice(" ", 0)
+		if head.length() >= 8:
+			return "dev " + head.substr(0, 8)
+	return "build unknown"
 
 
 # Every PERF_SECONDS of play, one "PERF" line: frame rate, slow frames, tick and render time, worst frame, so a
@@ -586,6 +612,19 @@ func _log_system() -> void:
 var PERF_SECONDS := 30.0   # --perf-seconds=N to change the interval
 var _perf := {"frames": 0, "us": 0, "slow": 0, "tick_us": 0, "ticks": 0, "draw_us": 0, "worst": 0, "start": 0}
 var _perf_listeners: Dictionary = {}   # script (or "ext:<id>.tick") -> usec in the current PERF window
+
+
+## A callback's name for PERF / HITCH lines: its method, or for a lambda the file of the script it is in (Godot names
+## every lambda "<anonymous lambda>").
+static func callback_name(cb: Callable) -> String:
+	var m := String(cb.get_method())
+	if m != "<anonymous lambda>":
+		return m
+	var obj := cb.get_object()
+	var sc: Script = null
+	if is_instance_valid(obj):
+		sc = obj if obj is Script else obj.get_script()
+	return "lambda in %s" % (sc.resource_path.get_file() if sc != null and sc.resource_path != "" else "?")
 
 
 func _perf_add(key: String, dt: int) -> void:

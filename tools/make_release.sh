@@ -17,10 +17,14 @@ case $PLATFORM in
 	*) echo "unknown platform $PLATFORM (windows or linux)" >&2; exit 2 ;;
 esac
 
+DIRTY=false
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 	echo "warning: uncommitted changes are in this build" >&2
+	DIRTY=true
 fi
-NAME="SDT-Godot-$(date -u +%Y-%m-%d)-$(git rev-parse --short HEAD)-$PLATFORM"
+DATE=$(date -u +%Y-%m-%d)
+COMMIT=$(git rev-parse --short HEAD)
+NAME="SDT-Godot-$DATE-$COMMIT-$PLATFORM"
 OUT="release/$NAME"
 if [ -e "$OUT" ] || [ -e "$OUT.zip" ]; then
 	echo "$OUT already exists" >&2
@@ -28,7 +32,12 @@ if [ -e "$OUT" ] || [ -e "$OUT.zip" ]; then
 fi
 mkdir -p "$OUT"
 
+# the build the game names in its log's SYSTEM line (FlashRuntime.build_id; exported with the *.json files)
+INFO=game/build_info.json
+trap 'rm -f "$INFO"' EXIT
+printf '{"date": "%s", "commit": "%s", "dirty": %s}\n' "$DATE" "$COMMIT" "$DIRTY" > "$INFO"
 "$GODOT" --headless --path game --export-release "$PRESET" "$PWD/$OUT/$BIN"
+rm -f "$INFO"
 [ -f "$OUT/SDT.pck" ] || { echo "export failed" >&2; exit 1; }
 
 # the Mods folder: the game's folders, with the plugins the repository ships (tracked files only)

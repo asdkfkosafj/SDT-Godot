@@ -446,8 +446,18 @@ static func _install_tick() -> void:
 	if _installed:
 		return
 	_installed = true
-	Flash.tick_before.append(func(): _run_ticks(_ticks, "tick"))
-	Flash.tick_after.append(func(): _run_ticks(_late_ticks, "late_tick"))
+	# named, not lambdas: the runtime's PERF line lists tick_after callbacks by name ("after:_ext_late_ticks", the
+	# total of the ext:<id>.late_tick entries it also lists)
+	Flash.tick_before.append(Callable(Extensions, &"_ext_ticks"))
+	Flash.tick_after.append(Callable(Extensions, &"_ext_late_ticks"))
+
+
+static func _ext_ticks() -> void:
+	_run_ticks(_ticks, "tick")
+
+
+static func _ext_late_ticks() -> void:
+	_run_ticks(_late_ticks, "late_tick")
 
 
 static func _run_ticks(list: Array, phase: String) -> void:
