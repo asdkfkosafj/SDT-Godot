@@ -308,7 +308,7 @@ func update_layout() -> void:
 		queue_redraw()
 		return
 	# Filters are specified in screen pixels; convert the margin into obj-local units.
-	var screen := get_viewport().get_final_transform() * get_global_transform_with_canvas()
+	var screen := RenderScale.final_transform(self) * get_global_transform_with_canvas()
 	# screen pixels per unit along each axis (a uniform max of the two made stretched groups far too big)
 	var sc := Vector2(maxf(screen.x.length(), 0.01), maxf(screen.y.length(), 0.01))
 	b = b.grow_individual(_margin / sc.x, _margin / sc.y, _margin / sc.x, _margin / sc.y)
@@ -344,7 +344,7 @@ func update_layout() -> void:
 		_vp.oversampling_override = os
 	_px_scale = maxf(sc.x, sc.y)
 	# Shadow / blur parameters are in render-target pixels (= screen pixels).
-	var stretch := Flash.screen_scale()
+	var stretch := Flash.screen_scale() * RenderScale.factor_for(self)
 	if _mat.shader == LIQUID_HIGHLIGHT_SHADER:
 		# render-target pixels per local unit, scene zoom included
 		_mat.set_shader_parameter("px_scale", _px_scale)

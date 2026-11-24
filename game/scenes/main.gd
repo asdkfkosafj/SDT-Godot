@@ -8,6 +8,7 @@ extends Node2D
 ## --mods-dir=<folder> reads mods from that folder instead of Mods/ (an empty folder runs without mods).
 ## --mod-cache=<folder> keeps converted mods there instead of user://modcache (tests of converter changes).
 ## --vanilla keeps every port extension and plugin off (Vanilla mode, see src/ext/extensions.gd).
+## --render-scale=<percent> draws the game at that render scale for the run, not saved (Settings > Graphics, RenderScale).
 ## Regression tests: tools/regress.sh (driver res://debug/regress.gd, reference dumps in tests/golden/).
 
 var _shot := ""
@@ -74,7 +75,11 @@ func _ready() -> void:
 		add_child(_counter)
 	PortSettings.apply_window()   # port: Settings > Window (size, fullscreen)
 	presentation = Presentation.new()   # port: widescreen, the stage centred in the window
-	add_child(presentation)
+	var rs := RenderScale.new()   # port: Settings > Graphics > Render scale (the stage's own CanvasLayer)
+	add_child(rs.layer)
+	rs.layer.add_child(presentation)
+	add_child(rs)
+	rs.apply(PortSettings.render_scale_factor())
 	Flash.attach_stage(presentation.host)
 	Flash.stage.addChild(DT.new())
 	add_child(preload("res://scenes/fps_counter.gd").new())

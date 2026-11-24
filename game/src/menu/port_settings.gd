@@ -87,10 +87,37 @@ static func apply_msaa() -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null:
 		tree.root.msaa_2d = m
+	if RenderScale.instance != null:
+		RenderScale.instance.set_msaa(m)
 	# the render targets switch at once
 	for p in Flash._mask_proxies.keys() + Flash._groups.keys():
 		if is_instance_valid(p) and p.has_method("refresh_msaa"):
 			p.refresh_msaa()
+
+
+## Render scale (Settings > Graphics): the game drawn at this share of the window's resolution and stretched to it
+## (RenderScale), for weak graphics cards; the menu and panels stay sharp. --render-scale=<percent> sets the scale a
+## run starts with (tests), without saving.
+const RENDER_SCALES := ["100 %", "85 %", "75 %", "60 %", "50 %"]
+
+
+static func render_scale() -> String:
+	var v := str(get_value("graphics", "render_scale", RENDER_SCALES[0]))
+	return v if v in RENDER_SCALES else RENDER_SCALES[0]
+
+
+static func set_render_scale(v: String) -> void:
+	set_value("graphics", "render_scale", v)
+	if RenderScale.instance != null:
+		RenderScale.instance.apply(float(render_scale().get_slice(" ", 0)) / 100.0)
+
+
+## The scale to start with: the setting, or --render-scale=<percent> (the menu still changes it during the run).
+static func render_scale_factor() -> float:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--render-scale="):
+			return clampf(float(a.substr(15)) / 100.0, 0.25, 1.0)
+	return float(render_scale().get_slice(" ", 0)) / 100.0
 
 
 ## Window (Settings > Window): the windowed size, a preset (shrunk to fit a smaller screen, keeping its shape),

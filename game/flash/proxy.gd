@@ -111,8 +111,7 @@ static var view_clip := true
 ## grown by VIEW_SLACK plus margin_px. Zoomed in, a group or mask can be many times the window; rendering only
 ## what can show keeps each target at most about the window's size. Empty when b is entirely off-screen.
 static func clip_to_view(ci: CanvasItem, screen: Transform2D, b: Rect2, margin_px: float) -> Rect2:
-	var vp := ci.get_viewport()
-	var size := Vector2(vp.size) if vp != null else Vector2.ZERO
+	var size := RenderScale.view_size(ci)   # (the stage's smaller target below 100 % render scale)
 	if not view_clip or size.x <= 0.0 or size.y <= 0.0 or absf(screen.determinant()) < 1e-9:
 		return b
 	var view := Rect2(Vector2.ZERO, size).grow_individual(size.x * VIEW_SLACK + margin_px,
@@ -185,7 +184,7 @@ func refresh() -> void:
 		_rect = Rect2()
 		queue_redraw()
 		return
-	var screen := get_viewport().get_final_transform() * get_global_transform_with_canvas()
+	var screen := RenderScale.final_transform(self) * get_global_transform_with_canvas()
 	# screen pixels per unit along each axis (a uniform max of the two made stretched masks far too big)
 	var sc := Vector2(maxf(screen.x.length(), 0.01), maxf(screen.y.length(), 0.01))
 	b = b.grow_individual(1.0 / sc.x, 1.0 / sc.y, 1.0 / sc.x, 1.0 / sc.y)

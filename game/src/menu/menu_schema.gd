@@ -537,6 +537,8 @@ static func _settings() -> Dictionary:
 			choice("MSAA", "Edge smoothing of strands, drawn shapes and the edges of turned body parts. Off is fastest on weak graphics cards.",
 				PortSettings.MSAA_LEVELS.keys(), func(): return PortSettings.msaa(), func(v: String): PortSettings.set_msaa(v),
 				{"visible": PortSettings.msaa_supported}),
+			choice("Render scale", "Draws the game at a lower resolution and stretches it to the window: faster on weak graphics cards, a little softer. The menu stays sharp. 100 %: full resolution.",
+				PortSettings.RENDER_SCALES, func(): return PortSettings.render_scale(), func(v: String): PortSettings.set_render_scale(v)),
 			check("Strand shading", "", func(): return om.call().cbStrandShaders, _m().cbStrandShadersClicked),
 			check("Show the mouse pointer", "", func(): return om.call().cbShowMouse, _m().cbShowMouseClicked),
 			check("Double-size screenshots", "Screenshots (/) at twice the size.", func(): return om.call().cbDoubleSizeScreenshot,

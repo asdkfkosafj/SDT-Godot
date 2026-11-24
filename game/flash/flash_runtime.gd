@@ -27,7 +27,7 @@ var debug_flags: PackedStringArray = OS.get_cmdline_user_args()
 
 ## Debug: render layer-blend / filtered objects directly instead of through offscreen groups.
 var debug_no_groups := "--nogroups" in OS.get_cmdline_user_args()
-## Debug: ignore masks.
+## Debug: ignore masks (script masks and timeline clip masks: what they mask is drawn whole, with no render targets).
 var debug_no_masks := "--nomasks" in OS.get_cmdline_user_args()
 
 ## Root of the Flash display list (700x600 stage space).
@@ -574,11 +574,11 @@ func _setup_frame_monitor() -> void:
 func _log_system() -> void:
 	var v := Engine.get_version_info()
 	var vsync: String = ["off", "on", "adaptive", "mailbox"][clampi(DisplayServer.window_get_vsync_mode(), 0, 3)]
-	print("SYSTEM SDT-Godot %s | Godot %s (%s build) | %s | %s %s | CPU %s, %d threads | native %s | window %s on a %s screen, vsync %s, max fps %d" % [
+	print("SYSTEM SDT-Godot %s | Godot %s (%s build) | %s | %s %s | CPU %s, %d threads | native %s | window %s on a %s screen, vsync %s, max fps %d, render scale %d %%" % [
 		build_id(), v["string"], "debug" if OS.is_debug_build() else "release", RenderingServer.get_current_rendering_method(),
 		RenderingServer.get_video_adapter_vendor(), RenderingServer.get_video_adapter_name(), OS.get_processor_name(),
 		OS.get_processor_count(), "on" if ClassDB.class_exists(&"SDTNative") and not "--nonative" in OS.get_cmdline_user_args() else "OFF",
-		DisplayServer.window_get_size(), DisplayServer.screen_get_size(), vsync, Engine.max_fps])
+		DisplayServer.window_get_size(), DisplayServer.screen_get_size(), vsync, Engine.max_fps, _render_scale_pct()])
 
 
 ## The game's build, for the SYSTEM line: from res://build_info.json (tools/make_release.sh writes it for a release:
@@ -605,6 +605,12 @@ static func build_id() -> String:
 		if head.length() >= 8:
 			return "dev " + head.substr(0, 8)
 	return "build unknown"
+
+
+## The render scale in use, in percent (Settings > Graphics: RenderScale; 100 when off). In SYSTEM, and in PERF while
+## below 100 (a change in between is logged as a RENDER SCALE line).
+static func _render_scale_pct() -> int:
+	return roundi(RenderScale.instance.factor * 100.0) if RenderScale.instance != null else 100
 
 
 # Every PERF_SECONDS of play, one "PERF" line: frame rate, slow frames, tick and render time, worst frame, so a
@@ -666,6 +672,7 @@ func _perf_frame(total: int, ph: Dictionary, now: int) -> void:
 		print("PERF last %.0f s: %.1f fps (%.1f ms per frame), %d of %d frames over 33 ms, tick %.1f ms (%d ticks), render + vsync wait %.1f ms per frame, worst frame %.0f ms" % [
 			(now - pf["start"]) / 1000000.0, n / ((now - pf["start"]) / 1000000.0), pf["us"] / 1000.0 / n, pf["slow"], n,
 			pf["tick_us"] / 1000.0 / maxi(1, pf["ticks"]), pf["ticks"], pf["draw_us"] / 1000.0 / n, pf["worst"] / 1000.0]
+			+ ("; render scale %d %%" % _render_scale_pct() if _render_scale_pct() != 100 else "")
 			+ "; per tick: " + _perf_top(pf["ticks"]))
 		_perf = {"frames": 0, "us": 0, "slow": 0, "tick_us": 0, "ticks": 0, "draw_us": 0, "worst": 0, "start": now}
 		_perf_listeners = {}

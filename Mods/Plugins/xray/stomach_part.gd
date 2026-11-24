@@ -711,7 +711,7 @@ static func _even(raw: PackedVector2Array, step := STEP) -> PackedVector2Array:
 ## Half a screen pixel in a painter's units: MSAA does not reach into a canvas group, so edges fade out over one
 ## screen pixel instead (as the throat's).
 func _half_px_of(p: Node2D) -> float:
-	var screen := p.get_viewport().get_final_transform() * p.get_global_transform_with_canvas()
+	var screen := RenderScale.final_transform(p) * p.get_global_transform_with_canvas()
 	return 0.5 / maxf(maxf(screen.x.length(), screen.y.length()), 0.01)
 
 

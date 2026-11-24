@@ -350,7 +350,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [FlashMovieClip#2053] f=1/1 pos=(-0.0,-50.0) sc=(1.00,1.17) rot=0.0
          [FlashShape#2052] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [FlashSprite#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-       [FlashSprite#-1] pos=(200.0,50.0) sc=(0.85,0.85) rot=0.0 mask=(FlashRectClip) filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@382
+       [FlashSprite#-1] pos=(200.0,50.0) sc=(0.85,0.85) rot=0.0 mask=(FlashRectClip) filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@382
          [FlashSprite#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [FlashMovieClip#2053] f=1/1 pos=(-0.0,-50.0) sc=(1.00,1.17) rot=0.0
          [FlashShape#2052] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
@@ -535,7 +535,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
               bottoms [FlashMovieClip#777] f=2/11 'None' pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
             breastCostume [FlashMovieClip#869] f=1/1 pos=(36.9,183.7) sc=(1.05,1.00) rot=-0.1
               bra [FlashMovieClip#822] f=2/8 'None' pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-              top [FlashMovieClip#868] f=2/8 'None' pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@386/content/@Node2D@383/@Node2D@411/torsoBackCostume/breastCostume/top
+              top [FlashMovieClip#868] f=2/8 'None' pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@386/content/@Node2D@383/@Node2D@411/torsoBackCostume/breastCostume/top
           tongueContainer [FlashMovieClip#976] f=32/81 pos=(-29.1,-71.3) sc=(1.00,1.00) rot=-0.0
             tongue [Tongue#975] f=2/206 'InDone' pos=(127.6,49.5) sc=(1.00,1.00) rot=-7.8
               piercingBack [FlashMovieClip#880] f=2/4 'None' pos=(3.7,10.9) sc=(1.00,1.00) rot=161.2
@@ -896,7 +896,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
             rightThighBottomsOver [FlashMovieClip#1807] f=2/11 'None' pos=(-317.3,458.1) sc=(1.00,1.00) rot=23.9
             backCostume [FlashMovieClip#1824] f=1/1 pos=(-134.0,219.1) sc=(1.00,1.00) rot=0.0
               bottoms [FlashMovieClip#1823] f=2/11 'None' pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-            topContainer [FlashMovieClip#1865] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@386/content/@Node2D@383/@Node2D@411/torso/topContainer
+            topContainer [FlashMovieClip#1865] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@386/content/@Node2D@383/@Node2D@411/torso/topContainer
               chestTop [FlashMovieClip#1840] f=3/9 'None' pos=(-128.6,260.6) sc=(1.00,1.00) rot=27.6
                [FlashShape#1841] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
               breastTop [FlashMovieClip#1842] f=3/10 'None' pos=(30.0,185.5) sc=(1.05,1.00) rot=-0.1
@@ -926,11 +926,11 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#1958] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [FlashMovieClip#2053] f=1/1 pos=(-0.0,-50.0) sc=(1.00,1.17) rot=0.0
          [FlashShape#2052] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-       [FlashSprite#-1] pos=(200.0,50.0) sc=(0.85,0.85) rot=0.0 mask=(FlashRectClip) filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@423
+       [FlashSprite#-1] pos=(200.0,50.0) sc=(0.85,0.85) rot=0.0 mask=(FlashRectClip) filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@423
          [FlashSprite#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [FlashMovieClip#2053] f=1/1 pos=(-0.0,-50.0) sc=(1.00,1.17) rot=0.0
          [FlashShape#2052] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-       [FlashSprite#-1] pos=(200.0,50.0) sc=(0.85,0.85) rot=0.0 mask=(FlashRectClip) filters=2 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@429
+       [FlashSprite#-1] pos=(200.0,50.0) sc=(0.85,0.85) rot=0.0 mask=(FlashRectClip) filters=2 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Control@429
          [FlashSprite#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [FlashMovieClip#2053] f=1/1 pos=(-0.0,-50.0) sc=(1.00,1.17) rot=0.0
          [FlashShape#2052] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
@@ -1001,16 +1001,16 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
          [FlashMovieClip#128] f=1/1 HIDDEN a=0.00 pos=(0.0,-50.0) sc=(1.00,1.17) rot=0.0
            [FlashShape#127] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
          [FlashMovieClip#2470] f=60/60 HIDDEN pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-          buttonOptions [MenuOptions#2458] f=1/1 pos=(350.0,497.1) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/group_buttonOptions
+          buttonOptions [MenuOptions#2458] f=1/1 pos=(350.0,497.1) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/group_buttonOptions
              [FlashShape#2456] pos=(-108.3,-32.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2457] pos=(-110.3,0.0) sc=(1.72,4.25) rot=0.0
-          buttonPlay [MenuPlay#2460] f=1/1 pos=(350.0,427.1) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/group_buttonPlay
+          buttonPlay [MenuPlay#2460] f=1/1 pos=(350.0,427.1) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/group_buttonPlay
              [FlashShape#2459] pos=(-108.3,-32.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2457] pos=(-62.1,0.0) sc=(0.97,4.25) rot=0.0
-           [FlashMovieClip#2469] f=1/1 a=0.67 pos=(541.5,292.4) sc=(1.00,1.00) rot=0.0 blend=overlay filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/@Node2D@2705
+           [FlashMovieClip#2469] f=1/1 a=0.67 pos=(541.5,292.4) sc=(1.00,1.00) rot=0.0 blend=overlay filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/@Node2D@2705
              [FlashShape#2468] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2461] pos=(550.7,583.0) sc=(1.00,1.00) rot=0.0
-           [FlashMovieClip#2466] f=30/30 pos=(350.0,212.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/group_
+           [FlashMovieClip#2466] f=30/30 pos=(350.0,212.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@470/@Node2D@485/group_
              [FlashShape#2462] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2463] pos=(-86.9,-128.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2465] pos=(122.0,119.0) sc=(1.00,1.00) rot=0.0
@@ -1021,7 +1021,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#100] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [Dialogue#47] f=1/4 'speaking' a=0.00 pos=(0.0,600.0) sc=(1.00,1.00) rot=0.0
          [FlashShape#38] a=1.43 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-        tfContainer [FlashMovieClip#42] f=1/1 pos=(349.1,-49.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@491/group_tfContainer
+        tfContainer [FlashMovieClip#42] f=1/1 pos=(349.1,-49.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@491/group_tfContainer
           dialogueField [FlashTextField#40] pos=(-247.0,-24.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#41] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [InGameMenu#2836] f=1/1 pos=(0.0,830.0) sc=(1.00,1.00) rot=0.0
@@ -1043,7 +1043,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2481] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
         tab5 [MenuTab#2482] f=3/3 'Off' pos=(467.0,-198.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2481] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-        tabLabels [FlashMovieClip#2493] f=1/1 pos=(262.0,-211.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/group_tabLabels
+        tabLabels [FlashMovieClip#2493] f=1/1 pos=(262.0,-211.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/group_tabLabels
            [FlashShape#2488] pos=(-276.0,-10.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2489] pos=(-159.0,-10.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2490] pos=(-42.0,-10.0) sc=(1.00,1.00) rot=0.0
@@ -2231,7 +2231,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2775] pos=(225.0,83.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2776] pos=(205.0,83.0) sc=(1.00,1.00) rot=0.0
         characterMenu [CharacterMenu#2785] f=1/1 HIDDEN pos=(21.0,-157.0) sc=(1.00,1.00) rot=0.0
-           [FlashMovieClip#2779] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/characterMenu/group_
+           [FlashMovieClip#2779] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/characterMenu/group_
              [FlashShape#2778] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
           scrollArea [FlashMovieClip#2781] f=1/1 pos=(0.0,122.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2780] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
@@ -2623,7 +2623,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2508] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2471] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
         charStoring [CharacterStoring#2792] f=1/1 HIDDEN pos=(21.4,-157.0) sc=(1.00,1.00) rot=0.0
-           [FlashMovieClip#2787] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/charStoring/group_
+           [FlashMovieClip#2787] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/charStoring/group_
              [FlashShape#2786] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
           closeButton [FlashMovieClip#157] f=1/1 pos=(641.0,-12.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#156] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
@@ -2701,7 +2701,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                  [FlashShape#50] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                  [FlashShape#51] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
         rgbPicker [FlashMovieClip#2824] f=1/1 HIDDEN pos=(167.0,-157.0) sc=(1.00,1.00) rot=0.0
-           [FlashMovieClip#2794] f=1/1 pos=(64.0,64.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/rgbPicker/group_
+           [FlashMovieClip#2794] f=1/1 pos=(64.0,64.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/rgbPicker/group_
              [FlashShape#2793] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
           rLabel [FlashTextField#2795] pos=(156.0,38.0) sc=(1.00,1.00) rot=0.0
           gLabel [FlashTextField#2796] pos=(156.0,58.0) sc=(1.00,1.00) rot=0.0
@@ -2809,7 +2809,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2821] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashShape#2471] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
         hslPicker [FlashMovieClip#2835] f=1/1 HIDDEN pos=(50.0,-165.0) sc=(1.00,1.00) rot=0.0
-           [FlashMovieClip#2826] f=1/1 pos=(64.0,64.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/hslPicker/group_
+           [FlashMovieClip#2826] f=1/1 pos=(64.0,64.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@1816/hslPicker/group_
              [FlashShape#2825] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
           hLabel [FlashTextField#2827] pos=(156.0,18.0) sc=(1.00,1.00) rot=0.0
           sLabel [FlashTextField#2828] pos=(156.0,38.0) sc=(1.00,1.00) rot=0.0
@@ -2862,7 +2862,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
        [DialogueEditor#2928] f=1/1 HIDDEN pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
         previewFrame [FlashMovieClip#2891] f=1/1 pos=(350.0,300.0) sc=(1.00,1.00) rot=0.0
            [FlashShape#2890] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
-         [FlashMovieClip#2893] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/group_
+         [FlashMovieClip#2893] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/group_
            [FlashShape#2892] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
         lineLayer [FlashMovieClip#226] f=1/1 pos=(25.0,195.0) sc=(1.00,1.00) rot=0.0
         actionDropdown [DropdownButton#2902] f=1/1 pos=(35.0,170.0) sc=(1.00,1.00) rot=0.0
@@ -2873,7 +2873,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
           dropdownLabel [FlashTextField#2901] pos=(4.0,3.0) sc=(1.00,1.00) rot=0.0
            [FlashSprite#-1] pos=(-10.0,20.0) sc=(1.00,0.01) rot=0.0
            [FlashSprite#-1] a=0.00 pos=(0.0,20.0) sc=(1.00,1.00) rot=0.0 mask=(FlashProxy)
-            dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,11.11) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/actionDropdown/mask_/content/@Node2D@1831/group_dropdownWindow
+            dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,11.11) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/actionDropdown/mask_/content/@Node2D@1831/group_dropdownWindow
                [FlashShape#123] pos=(-0.1,9.0) sc=(0.67,0.90) rot=0.0
              [ScrollingArea#2863] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
               bgSpan [FlashMovieClip#2853] f=1/1 pos=(20.0,0.0) sc=(0.89,1.11) rot=0.0
@@ -3014,7 +3014,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
           dropdownLabel [FlashTextField#2901] pos=(4.0,3.0) sc=(1.00,1.00) rot=0.0
            [FlashSprite#-1] pos=(-10.0,20.0) sc=(1.00,0.01) rot=0.0
            [FlashSprite#-1] a=0.00 pos=(0.0,20.0) sc=(1.00,1.00) rot=0.0 mask=(FlashProxy)
-            dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,5.56) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/wildcardDropdown/mask_/content/@Node2D@1842/group_dropdownWindow
+            dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,5.56) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/wildcardDropdown/mask_/content/@Node2D@1842/group_dropdownWindow
                [FlashShape#123] pos=(-0.1,9.0) sc=(0.67,0.90) rot=0.0
              [ScrollingArea#2863] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
               bgSpan [FlashMovieClip#2853] f=1/1 pos=(20.0,0.0) sc=(0.89,0.56) rot=0.0
@@ -3101,7 +3101,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                [FlashShape#2897] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashSprite#-1] pos=(-10.0,20.0) sc=(1.00,0.01) rot=0.0
              [FlashSprite#-1] a=0.00 pos=(0.0,20.0) sc=(1.00,1.00) rot=0.0 mask=(FlashProxy)
-              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,11.11) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/nextLineDropdown/mask_/content/@Node2D@1890/group_dropdownWindow
+              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,11.11) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/nextLineDropdown/mask_/content/@Node2D@1890/group_dropdownWindow
                  [FlashShape#123] pos=(-0.1,9.0) sc=(0.67,0.90) rot=0.0
                [ScrollingArea#2863] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                 bgSpan [FlashMovieClip#2853] f=1/1 pos=(20.0,0.0) sc=(0.89,1.11) rot=0.0
@@ -3210,7 +3210,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                [FlashShape#2897] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashSprite#-1] pos=(-10.0,20.0) sc=(1.00,0.01) rot=0.0
              [FlashSprite#-1] a=0.00 pos=(0.0,20.0) sc=(1.00,1.00) rot=0.0 mask=(FlashProxy)
-              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,5.56) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/moodDropdown/mask_/content/@Node2D@1902/group_dropdownWindow
+              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,5.56) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/moodDropdown/mask_/content/@Node2D@1902/group_dropdownWindow
                  [FlashShape#123] pos=(-0.1,9.0) sc=(0.67,0.90) rot=0.0
                [ScrollingArea#2863] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                 bgSpan [FlashMovieClip#2853] f=1/1 pos=(20.0,0.0) sc=(0.89,0.56) rot=0.0
@@ -3256,7 +3256,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                [FlashShape#2897] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashSprite#-1] pos=(-10.0,20.0) sc=(1.00,0.01) rot=0.0
              [FlashSprite#-1] a=0.00 pos=(0.0,20.0) sc=(1.00,1.00) rot=0.0 mask=(FlashProxy)
-              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,3.33) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/heldDropdown/mask_/content/@Node2D@1914/group_dropdownWindow
+              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,3.33) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/heldDropdown/mask_/content/@Node2D@1914/group_dropdownWindow
                  [FlashShape#123] pos=(-0.1,9.0) sc=(0.67,0.90) rot=0.0
                [ScrollingArea#2863] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                 bgSpan [FlashMovieClip#2853] f=1/1 pos=(20.0,0.0) sc=(0.89,0.33) rot=0.0
@@ -3296,7 +3296,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                [FlashShape#2897] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashSprite#-1] pos=(-10.0,20.0) sc=(1.00,0.01) rot=0.0
              [FlashSprite#-1] a=0.00 pos=(0.0,20.0) sc=(1.00,1.00) rot=0.0 mask=(FlashProxy)
-              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,11.11) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/triggerDropdown/mask_/content/@Node2D@1926/group_dropdownWindow
+              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,11.11) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/triggerDropdown/mask_/content/@Node2D@1926/group_dropdownWindow
                  [FlashShape#123] pos=(-0.1,9.0) sc=(0.67,0.90) rot=0.0
                [ScrollingArea#2863] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                 bgSpan [FlashMovieClip#2853] f=1/1 pos=(20.0,0.0) sc=(0.89,1.11) rot=0.0
@@ -3403,7 +3403,7 @@ root1 [FlashStage#-1] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                [FlashShape#2897] pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
              [FlashSprite#-1] pos=(-10.0,20.0) sc=(1.00,0.01) rot=0.0
              [FlashSprite#-1] a=0.00 pos=(0.0,20.0) sc=(1.00,1.00) rot=0.0 mask=(FlashProxy)
-              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,3.33) rot=0.0 filters=1 node=/root/Main/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/styleDropdown/mask_/content/@Node2D@1939/group_dropdownWindow
+              dropdownWindow [FlashMovieClip#2894] f=1/1 pos=(0.0,0.0) sc=(1.00,3.33) rot=0.0 filters=1 node=/root/Main/StageLayer/Presentation/GameFrame/Stage/@Node2D@15/@Node2D@18/@Node2D@2493/toolbar/styleDropdown/mask_/content/@Node2D@1939/group_dropdownWindow
                  [FlashShape#123] pos=(-0.1,9.0) sc=(0.67,0.90) rot=0.0
                [ScrollingArea#2863] f=1/1 pos=(0.0,0.0) sc=(1.00,1.00) rot=0.0
                 bgSpan [FlashMovieClip#2853] f=1/1 pos=(20.0,0.0) sc=(0.89,0.33) rot=0.0

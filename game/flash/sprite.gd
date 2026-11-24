@@ -205,6 +205,9 @@ func _sync_tree() -> void:
 		if clip_owner != null and (c._depth < 0 or c._depth > clip_owner._clip_depth):
 			_clip_proxies[clip_owner]._set_content(clip_seq)
 			clip_owner = null
+		if c._clip_depth > 0 and Flash.debug_no_masks:   # (the masked siblings go on unclipped)
+			masks.append(c._tree_node())
+			continue
 		if c._clip_depth > 0:
 			var p: Node2D = _clip_proxies.get(c)
 			if p == null:

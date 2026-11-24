@@ -1488,7 +1488,7 @@ func _paint() -> void:
 	if shown <= 0.0 or _path.size() < 2:
 		return
 	# MSAA does not reach into a canvas group: the strips' edges fade out over one screen pixel instead
-	var screen := _painter.get_viewport().get_final_transform() * _painter.get_global_transform_with_canvas()
+	var screen := RenderScale.final_transform(_painter) * _painter.get_global_transform_with_canvas()
 	_half_px = 0.5 / maxf(maxf(screen.x.length(), screen.y.length()), 0.01)
 	_fade_mat.set_shader_parameter(&"edge_at", _edge_at)
 	_fade_mat.set_shader_parameter(&"edge_in", _edge_in)
