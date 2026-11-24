@@ -60,6 +60,7 @@ const BUILTIN: Array[String] = [
 	"res://src/ext/dynamichair/dynamichair.gd",
 	"res://src/ext/extramod/extramod.gd",
 	"res://src/ext/extramodhim/extramodhim.gd",
+	"res://src/ext/positions/positions.gd",
 ]
 
 const CONFIG_FILE := "extensions.cfg"

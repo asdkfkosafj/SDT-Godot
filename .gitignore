@@ -32,6 +32,10 @@ __pycache__/
 /Mods/*
 # plugins made for the port ship with it (Mods/Plugins); the player's other mods stay local
 !/Mods/Plugins/
+# the positions the game comes with (animtools' community set) ship too; the player's own positions stay local
+!/Mods/Positions/
+/Mods/Positions/*
+!/Mods/Positions/animtools/
 
 # Local, machine-specific files and private working notes
 /notes/

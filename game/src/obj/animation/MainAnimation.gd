@@ -18,6 +18,10 @@ var hisRightFootTarget: Vector2
 var posScaling: Callable
 var tipPosEstimate: float = 0.15
 var penisLength: float = -1.0
+## Port addition (body positions, see AnimationControl.applyTorsoIK): her torso IK's leg angle offset and end
+## rotation while this animation runs; NAN (the game's two) leaves the IK's own.
+var torsoS2OffsetAng: float = NAN
+var torsoEndRotation: float = NAN
 
 
 func _init() -> void:

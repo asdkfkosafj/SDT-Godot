@@ -181,6 +181,17 @@ field and dialogue triggers use the names. `Her.armPositionsFor(left)`, `Her.arm
 `Her.stepArmPosition(from, dir, left)` list and step through the positions one arm can take. The armoverhaul plugin
 (`Mods/Plugins/armoverhaul`) adds 18.
 
+## Body positions
+
+The built-in `positions` extension (a reimplementation of animtools) reads body positions from animtools .txt files
+in `Mods/Positions/` (subfolders are categories; the set the game comes with is in `Mods/Positions/animtools`) and
+brings old files to the current format (animtools V40). A position runs as an animation of its own next to the
+game's two: `AnimationControl.addAnimation(name, anim)` / `removeAnimation(name)` (removing the current one goes back
+to the default; an added animation counts as style 1 for the menu, dialogue and save). A `MainAnimation` may also set
+her torso IK's leg angle offset and end rotation (`torsoS2OffsetAng`, `torsoEndRotation`; NAN in the game's two).
+Work in progress: so far her and his paths, his feet, her knee and torso numbers apply; the developer panel
+(Tools > Positions) loads one.
+
 ## Hooks
 
 GDScript cannot replace a method at runtime (the Loader's `lProxy` did this for Loader mods), so each game method

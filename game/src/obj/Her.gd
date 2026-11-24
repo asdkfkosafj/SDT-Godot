@@ -2260,6 +2260,7 @@ func updateTorso() -> void:
 	torsoJointAng = minf(ac.torsoMinAng, ac.torsoStartAng + pos * ac.torsoAngMultiplier - Maths.degToRad(rotation_degrees) * 0.9)
 	torsoJointDist = minf(ac.torsoMinDist, ac.torsoStartDist + pos * ac.torsoDistMultiplier)
 	var joint: Vector2 = g.getVector(torsoJointDist, torsoJointAng)
+	ac.applyTorsoIK(torsoIK)   # port: a body position's leg angles (none in the game's two animations)
 	torsoIK.update(joint)
 	var s1: Transform2D = torsoIK.section1Matrix
 	var s2: Transform2D = torsoIK.section2Matrix

@@ -40,11 +40,11 @@ printf '{"date": "%s", "commit": "%s", "dirty": %s}\n' "$DATE" "$COMMIT" "$DIRTY
 rm -f "$INFO"
 [ -f "$OUT/SDT.pck" ] || { echo "export failed" >&2; exit 1; }
 
-# the Mods folder: the game's folders, with the plugins the repository ships (tracked files only)
-for d in Clothing Hair Backgrounds Characters Dialogue Plugins; do
+# the Mods folder: the game's folders, with the plugins and positions the repository ships (tracked files only)
+for d in Clothing Hair Backgrounds Characters Dialogue Plugins Positions; do
 	mkdir -p "$OUT/Mods/$d"
 done
-git ls-files -z Mods/Plugins | while IFS= read -r -d '' f; do
+git ls-files -z Mods/Plugins Mods/Positions | while IFS= read -r -d '' f; do
 	mkdir -p "$OUT/$(dirname "$f")"
 	cp "$f" "$OUT/$f"
 done

@@ -22,6 +22,7 @@ Put mods in the Mods folder next to the program (SDT.exe or SDT.x86_64):
   Mods\Characters    character files
   Mods\Dialogue      dialogue files
   Mods\Plugins       plugins for the port (the ones the game comes with are here)
+  Mods\Positions     body positions (animtools .txt files; the ones the game comes with are in animtools)
 New mods show up in the game's menus by themselves. The Mods folder must be a real folder, not a link to another
 folder (Windows directory junctions are not followed).
 

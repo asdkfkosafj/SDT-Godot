@@ -96,7 +96,41 @@ var currentAnimationID: int:
 
 var currentAnimationName: String:
 	get:
-		return currentAnimation
+		# port: an added animation (a body position) saves as the game's default style
+		return currentAnimation if currentAnimation == FACE_FUCK else DEFAULT
+
+
+## Port addition (the positions extension, animtools' body positions): animations besides the game's two. An added
+## animation counts as style 1 for the game's menu, dialogue and save. Removing the current one goes back to default.
+func addAnimation(n: String, anim: MainAnimation) -> void:
+	animations[n] = anim
+
+
+func removeAnimation(n: String) -> void:
+	if n == DEFAULT or n == FACE_FUCK or not animations.has(n):
+		return
+	if currentAnimation == n:
+		setAnimation(DEFAULT)
+	animations.erase(n)
+
+
+## Port addition: a body position may set her torso IK's leg angle offset and end rotation (MainAnimation
+## torsoS2OffsetAng / torsoEndRotation; the game's two leave them NAN). Called by Her.updateTorso before the IK
+## update; going back to an animation without them restores the IK's own values.
+var _torsoIKBase = null
+
+
+func applyTorsoIK(ik: IKController) -> void:
+	var a: MainAnimation = animations[currentAnimation]
+	if not is_nan(a.torsoS2OffsetAng):
+		if _torsoIKBase == null:
+			_torsoIKBase = [ik.s2OffsetAng, ik.endRotationAngle]
+		ik.s2OffsetAng = a.torsoS2OffsetAng
+		ik.endRotationAngle = a.torsoEndRotation
+	elif _torsoIKBase != null:
+		ik.s2OffsetAng = _torsoIKBase[0]
+		ik.endRotationAngle = _torsoIKBase[1]
+		_torsoIKBase = null
 
 
 func debugSetLeftFoot(p: Vector2) -> void:
