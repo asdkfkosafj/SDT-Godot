@@ -144,7 +144,10 @@ func kill() -> void:
 
 
 func move() -> void:
-	var ga := (180.0 + gOffset) * PI / 180.0
+	var go := gOffset
+	if Hooks.has_value(&"Rope.gravityOffset"):   # HOOK value point: the angle (degrees) a hanging strand of hair falls at, off straight down in scene space (its gOffset)
+		go = Hooks.value(&"Rope.gravityOffset", self, gOffset)
+	var ga := (180.0 + go) * PI / 180.0
 	gravityDirection = Vector2(sin(ga), -cos(ga))
 	lastAnchor = ropeCurrentAnchor
 	ropeCurrentAnchor = g.sceneLayer.globalToLocal(ropeAnchorContainer.localToGlobal(ropeAnchorPoint))

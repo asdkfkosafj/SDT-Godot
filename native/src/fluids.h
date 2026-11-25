@@ -86,6 +86,7 @@ private:
 	float gravity = 0.0f, friction = 1.0f, max_mass = 1.0f, mass_generate_speed = 0.0f, mass_flow = 0.0f;
 	int max_strand_length = 1000;
 	float kill_y = 1e9f, floor_y = 1220.0f;
+	Vector2 gravity_dir = Vector2(0, 1); // which way strands fall in scene space (a turned scene turns it); kill_y is along it
 	bool him_ejaculating = false;
 	Color cum_rgb = Color(1, 1, 1);
 	float cum_min_thickness = 1.0f; // a cum link is drawn at least this thick (the game: 1, like spit)

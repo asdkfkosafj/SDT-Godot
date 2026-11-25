@@ -295,13 +295,26 @@ func _layer_checks() -> void:
 	_check("scene rotation from the file, on the scene and its outside layers (BedBJ 88)",
 		is_equal_approx(sl.rotation_degrees, 88.0) and is_equal_approx(g.backLayer.rotation_degrees, 88.0)
 		and is_equal_approx(x.props.holder.rotation_degrees, 88.0), str(sl.rotation_degrees))
+	var down: Vector2 = g.strandControl.gravityDir()
+	_check("strands fall to the screen's bottom (BedBJ: along the scene's x)",
+		down.is_equal_approx(Vector2(sin(deg_to_rad(88.0)), cos(deg_to_rad(88.0))))
+		and sl.transform.basis_xform(down).normalized().is_equal_approx(Vector2(0, 1)), str(down))
+	_check("hair turns with the scene (offset -88), its own offset kept; hair outside 25 degrees stays",
+		is_equal_approx(Hooks.value(&"Rope.gravityOffset", null, 0.0), -88.0)
+		and is_equal_approx(Hooks.value(&"Rope.gravityOffset", null, 10.0), -78.0)
+		and Hooks.value(&"Rope.gravityOffset", null, 40.0) == 40.0)
 	sl.toggleMirrored()
 	_check("mirrored: the rotation the other way", is_equal_approx(sl.rotation_degrees, -88.0), str(sl.rotation_degrees))
+	var mdown: Vector2 = g.strandControl.gravityDir()
+	_check("mirrored: strands still fall to the screen's bottom",
+		sl.transform.basis_xform(mdown).normalized().is_equal_approx(Vector2(0, 1)), str(mdown))
 	sl.toggleMirrored()
 	var bg_shadow: bool = x.layers._shadow().visible
 	x.load_position("animtools/Oral/ATV_laydownarmsback")
 	_check("her shadow off (hidehershadow)", bg_shadow and not x.layers._shadow().visible)
 	x.load_position("animtools/Titfuck/ATV_titfuck")
+	_check("a position without gravity changes: straight down again", g.strandControl.gravityDir() == Vector2(0, 1)
+		and not Hooks.has_value(&"Rope.gravityOffset"))
 	_check("her left leg and breast behind him: out of her, at the bottom of the scene",
 		her.leftLegContainer.parent != her and her.torsoBack.leftBreast.parent != her.torsoBack
 		and sl.getChildIndex(her.leftLegContainer.parent) < sl.getChildIndex(g.him)

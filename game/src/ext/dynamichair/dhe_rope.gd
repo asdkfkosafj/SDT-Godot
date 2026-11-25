@@ -286,7 +286,10 @@ func _links_to_anchors(with_shared: bool) -> void:
 
 
 func _gravity() -> void:
-	var a := (180.0 + gOffset) * PI / 180.0
+	var go := gOffset
+	if Hooks.has_value(&"Rope.gravityOffset"):   # HOOK value point: as in Rope.move
+		go = Hooks.value(&"Rope.gravityOffset", self, gOffset)
+	var a := (180.0 + go) * PI / 180.0
 	gravityDirection = Vector2(sin(a), -cos(a))
 	for i in ropeLength + 1:
 		_move(links[i], gravityDirection, _link_inf[i] * links[i].mass, maximumY)

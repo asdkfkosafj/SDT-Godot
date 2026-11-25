@@ -163,10 +163,11 @@ func updateStrand() -> void:
 	age += 1
 	maxDist = maxf(30.0, maxDist - 0.2)
 	var highest := 1.79e308
+	var down: Vector2 = g.strandControl.gravityDir()   # port: which way strands fall (turned with a turned scene)
 	var i := 0
 	while true:
 		if i >= strandLength:
-			if highest > g.screenSize.y * (1.0 / g.sceneZoom) + 10.0:
+			if highest > g.strandControl.killDepth(down):
 				killMe()
 				break
 			for l in links:
@@ -223,7 +224,8 @@ func updateStrand() -> void:
 		var toNext := Vector2.ZERO
 		if i < strandLength - 1:
 			toNext = Vector2(links[i + 1].x - link.x, links[i + 1].y - link.y)
-		link.accelerate((toPrev.x + toNext.x) / moveSmoothing, (toPrev.y + toNext.y) / moveSmoothing + myGravity * link.mass)
+		link.accelerate((toPrev.x + toNext.x) / moveSmoothing + myGravity * link.mass * down.x,
+			(toPrev.y + toNext.y) / moveSmoothing + myGravity * link.mass * down.y)
 		link.move(g.friction)
 		if distSq > maxDist and i > 0:
 			if distSplitDelay == 0:
@@ -235,8 +237,9 @@ func updateStrand() -> void:
 					break
 				splitStrand(i)
 		if i < strandLength:
-			if link.y < highest:
-				highest = link.y
+			var depth: float = link.x * down.x + link.y * down.y
+			if depth < highest:
+				highest = depth
 			if link.mass >= g.maxMass:
 				expandStrand(i)
 		i += 1

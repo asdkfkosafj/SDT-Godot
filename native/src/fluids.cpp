@@ -142,6 +142,7 @@ void SDTFluids::set_params(const Dictionary &d) {
 	max_strand_length = d.get("max_strand_length", max_strand_length);
 	kill_y = d.get("kill_y", kill_y);
 	floor_y = d.get("floor_y", floor_y);
+	gravity_dir = d.get("gravity_dir", gravity_dir);
 	him_ejaculating = d.get("him_ejaculating", him_ejaculating);
 	cum_rgb = d.get("cum_rgb", cum_rgb);
 	cum_min_thickness = d.get("cum_min_thickness", cum_min_thickness);
@@ -319,8 +320,9 @@ void SDTFluids::link_tick(Strand &s, int li) {
 	if (l.anchored) {
 		l.anchor_age += 1;
 		if (l.sliding) {
-			l.speed.x *= 0.6f;
-			l.speed.y = l.speed.y * 0.5f + s.gravity * l.mass * l.density * (1.0f - (float)l.slide_counter / l.slide_max) * 0.5f;
+			float slide = s.gravity * l.mass * l.density * (1.0f - (float)l.slide_counter / l.slide_max) * 0.5f;
+			l.speed.x = l.speed.x * 0.6f + slide * gravity_dir.x;
+			l.speed.y = l.speed.y * 0.5f + slide * gravity_dir.y;
 			l.slide_counter += 1;
 			if (l.slide_counter >= l.slide_max) {
 				l.sliding = false;
@@ -645,8 +647,8 @@ void SDTFluids::update(int id) {
 		}
 		// StrandLink.accelerate / move
 		if (!link.anchored) {
-			float ax = (to_prev.x + to_next.x) / s.move_smoothing;
-			float ay = (to_prev.y + to_next.y) / s.move_smoothing + s.gravity * link.mass;
+			float ax = (to_prev.x + to_next.x) / s.move_smoothing + s.gravity * link.mass * gravity_dir.x;
+			float ay = (to_prev.y + to_next.y) / s.move_smoothing + s.gravity * link.mass * gravity_dir.y;
 			if (link.sliding) {
 				float f = 0.5f - 0.5f * (float)link.slide_counter / link.slide_max;
 				ax *= f;
@@ -672,7 +674,7 @@ void SDTFluids::update(int id) {
 		}
 		n = (int)s.links.size();
 		if (i < n) {
-			highest = std::min(highest, s.links[i].p.y);
+			highest = std::min(highest, s.links[i].p.x * gravity_dir.x + s.links[i].p.y * gravity_dir.y);
 			if (s.links[i].mass >= max_mass) {
 				expand(id, i);
 			}

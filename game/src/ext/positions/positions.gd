@@ -25,7 +25,8 @@ const Arms := preload("res://src/ext/positions/position_arms.gd")
 const ANIM := "position"   # the AnimationControl key of the applied position
 ## The value points an applied position modifies (taken off when it ends; the arms' own stay while the extension is on).
 const POSITION_POINTS: Array[StringName] = [&"SceneLayer.rotation", &"SceneLayer.cameraAim", &"SaveData.sceneZoom",
-	&"IKController.endLimit", &"HimMaleBody.armPoint", &"HimMaleBody.shoulderPoint", &"HimMaleBody.handRotation"]
+	&"IKController.endLimit", &"HimMaleBody.armPoint", &"HimMaleBody.shoulderPoint", &"HimMaleBody.handRotation",
+	&"StrandControl.gravityDirection", &"Rope.gravityOffset"]
 
 var library = Library.new()
 var current = null         # the applied Position (null: the game's default)
@@ -278,11 +279,32 @@ func _apply_camera(p) -> void:
 		modify(&"SceneLayer.rotation", {"op": "fn", "fn": _scene_rotation})
 	if _setting_global("allowcameraxychanges") == 1:
 		modify(&"SceneLayer.cameraAim", {"op": "fn", "fn": _camera_aim})
+	unmodify(&"StrandControl.gravityDirection")
+	unmodify(&"Rope.gravityOffset")
+	if p.values["changegravityforstrands"] == 1:
+		modify(&"StrandControl.gravityDirection", {"op": "fn", "fn": func(_d, _sc): return screen_down()})
+	if p.values["changegravityforhairstrands"] == 1:
+		modify(&"Rope.gravityOffset", {"op": "fn", "fn": _hair_offset})
 	if _setting_global("allowcamerazoomchanges") == 1:
 		g.sceneLayer.zoomTo(p.values["zoom"] - 0.4, true)
 		g.inGameMenu.updateZoomSlider()
 	else:
 		g.sceneLayer.updateCamera()
+
+
+## Straight down on the screen, in scene space (the scene may be turned and mirrored).
+func screen_down() -> Vector2:
+	return g.sceneLayer.transform.basis_xform_inv(Vector2(0, 1)).normalized()
+
+
+## A hanging strand of hair falls towards the screen's bottom (animtools: its own offset kept, and only for hair
+## that hangs within 25 degrees of straight down).
+func _hair_offset(go: float, _rope) -> float:
+	if go <= _setting_global("minhairrangetochange") or go >= _setting_global("maxhairrangetochange"):
+		return go
+	var d := screen_down()
+	var turn := rad_to_deg(atan2(-d.x, d.y))
+	return turn + (go if _setting_global("hairgravityapplyoffset") == 1 else 0.0)
 
 
 func _setting_global(key: String) -> float:

@@ -190,7 +190,8 @@ game's two: `AnimationControl.addAnimation(name, anim)` / `removeAnimation(name)
 to the default; an added animation counts as style 1 for the menu, dialogue and save). A `MainAnimation` may also set
 her torso IK's leg angle offset and end rotation (`torsoS2OffsetAng`, `torsoEndRotation`; NAN in the game's two).
 A position also sets the camera (value points `SceneLayer.cameraAim` / `SceneLayer.rotation`), props (animtools'
-furniture, a layer above the background given to the scene layer like the game's outside layers), his right arm's
+furniture, a layer above the background given to the scene layer like the game's outside layers), gravity (strands and
+hair fall to the screen's bottom: `StrandControl.gravityDirection`, `Rope.gravityOffset`), his right arm's
 path (`HimMaleBody.armPoint` / `shoulderPoint` / `handRotation`), her left leg and breast behind him (moved into
 layers at the bottom of the scene; the hook point `g.changeLayer` keeps the game from moving the leg back) and her
 arms. While it is on, the extension adds animtools' 7 arm positions (Cupping Breast ... On Her Ass) and Custom to her
@@ -364,6 +365,8 @@ The value points in the game, with the field that keeps the result for code that
 | `Neck.bumps` | swallow lumps held in her throat, asked once per render: `[]`, or `{at, size}` each (`at`: where along the front of her neck, as `Neck.depth`; `size`: as `neck.swallowSize`, 10 for a swallow): the swallow's own lump (`Neck.lump`, pushed by `Neck.swallowScale`), before `Neck.band`; the condoms plugin's cum in her throat | `neck.renderedPoints` |
 | `SceneLayer.cameraAim` | where the camera puts the scene's origin on the screen (`Vector2`; the game: from the zoom, mirrored), whenever the camera updates (zoom, mirror); body positions aim at their own camera and zoom point | `sceneLayer.camera` |
 | `SceneLayer.rotation` | the scene's rotation in degrees (0), set on the scene layer and its outside layers (back, front, strands, cum, props) whenever the camera updates | `sceneLayer.rotation_degrees` |
+| `StrandControl.gravityDirection` | the way spit, drool and cum strands fall (`Vector2`, scene space; the game: `(0, 1)`), each strand tick; the strands die past the screen's bottom edge that way; body positions with turned gravity make it the screen's bottom | |
+| `Rope.gravityOffset` | the angle a hanging hair strand falls at, off straight down in scene space (degrees; the game: the hair's own `gOffset`), each rope tick; the rope is the object (also the dynamic hair extension's ropes); body positions with turned hair gravity turn it with the scene | `rope.gravityDirection` |
 | `SaveData.sceneZoom` | the zoom the options save keeps (`g.sceneZoom`); a temporary zoom (a body position's) keeps the player's | |
 | `IKController.endLimit` | how far an IK's end joint (her foot, her hands, his hands) may turn either way (1.22 rad; `INF`: no limit), every IK update; the IK is the object (body positions lift it for her leg and hands by file version) | `ik.s3Ang` |
 | `HimMaleBody.armPoint` | where his right hand goes this tick (his male body, in his arm container's coordinates; the game's: by her head), before his arm's IK | `arm.x` / `arm.y` |

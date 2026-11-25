@@ -194,10 +194,12 @@ const VALUES := {
 	&"Neck.depth": true,
 	&"Neck.swallowScale": true,
 	&"Neck.throatBulge": true,
+	&"Rope.gravityOffset": true,
 	&"SaveData.sceneZoom": true,
 	&"Scene.backgroundBrightness": true,
 	&"SceneLayer.cameraAim": true,
 	&"SceneLayer.rotation": true,
 	&"SoundControl.herSoundVolume": true,
+	&"StrandControl.gravityDirection": true,
 	&"Tears.lowerMascaraTop": true,
 }

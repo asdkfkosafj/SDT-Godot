@@ -298,10 +298,30 @@ func _targets(inv: Transform2D) -> Array:
 	return out
 
 
+## Port: which way the strands fall in scene space (the game: down, (0, 1)); a turned scene turns it (body positions).
+func gravityDir() -> Vector2:
+	if Hooks.has_value(&"StrandControl.gravityDirection"):   # HOOK value point: which way strands fall, in scene space ((0, 1): down)
+		var d: Vector2 = Hooks.value(&"StrandControl.gravityDirection", self, Vector2(0, 1))
+		return d.normalized() if d != Vector2.ZERO else Vector2(0, 1)
+	return Vector2(0, 1)
+
+
+## Port: a strand whose lowest link (along the gravity direction) is past this has fallen off the screen (the game:
+## the screen's height in scene units, + 10; along a turned gravity, the screen's farthest corner).
+func killDepth(dir: Vector2) -> float:
+	if dir == Vector2(0, 1):
+		return g.screenSize.y * (1.0 / g.sceneZoom) + 10.0
+	var far := -INF
+	for c in [Vector2.ZERO, Vector2(g.screenSize.x, 0), Vector2(0, g.screenSize.y), g.screenSize]:
+		far = maxf(far, g.sceneLayer.globalToLocal(c).dot(dir))
+	return far + 10.0
+
+
 func _set_params() -> void:
+	var dir := gravityDir()
 	fluids.set_params({"gravity": g.gravity, "friction": g.friction, "max_mass": g.maxMass,
 		"mass_generate_speed": g.massGenerateSpeed, "mass_flow": g.massFlow, "max_strand_length": g.maxStrandLength,
-		"kill_y": g.screenSize.y * (1.0 / g.sceneZoom) + 10.0, "floor_y": 1220.0,
+		"kill_y": killDepth(dir), "gravity_dir": dir, "floor_y": 1220.0,
 		"him_ejaculating": g.him.isEjaculating() if g.him != null else false,
 		"cum_rgb": Color.hex((g.cumRGB << 8) | 0xFF), "tick": Flash.tick_count,
 		"cum_min_thickness": cumMinThickness})
