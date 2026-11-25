@@ -10,6 +10,7 @@ extends RefCounted
 
 var root := ""
 var names: PackedStringArray = PackedStringArray()   # sorted
+var version := 0     # bumped by every scan (the browser rebuilds)
 var _path_of: Dictionary = {}     # lower-case name -> file path
 var _by_file: Dictionary = {}     # lower-case file name -> [names]
 var _by_word: Dictionary = {}     # name, non-word characters removed, lower case -> [names]
@@ -25,6 +26,7 @@ func scan(dir: String) -> void:
 	_by_file_word.clear()
 	_scan(dir, "")
 	names.sort()
+	version += 1
 
 
 func _scan(dir: String, rel: String) -> void:
@@ -107,6 +109,44 @@ func _unique(d: Dictionary, k: String) -> String:
 			push_warning("Positions: \"%s\" matches %d files, using %s" % [k, l.size(), shipped[0]])
 			return shipped[0]
 	return ""
+
+
+## The browser's folder of a position: its folders without the source folder ("animtools", "Imported") and without
+## a dominance folder (HimD / HerD); "Partial" for animtools' _partial folder, "Other" for files at the root.
+static func category(n: String) -> String:
+	var parts := n.split("/")
+	parts.remove_at(parts.size() - 1)
+	if not parts.is_empty() and parts[0].to_lower() in ["animtools", "imported"]:
+		parts.remove_at(0)
+	var keep: PackedStringArray = []
+	for p in parts:
+		if p.to_lower() == "_partial":
+			return "Partial"
+		if not p.to_lower() in ["himd", "herd"]:
+			keep.append(p)
+	return "Other" if keep.is_empty() else "/".join(keep)
+
+
+## Who leads in a position, from its folders (animtools' HimD / HerD): "Him", "Her" or "Neutral".
+static func dominance(n: String) -> String:
+	for p in n.to_lower().split("/"):
+		if p == "himd":
+			return "Him"
+		if p == "herd":
+			return "Her"
+	return "Neutral"
+
+
+static func is_partial(n: String) -> bool:
+	return category(n) == "Partial" or "_partial" in n.get_file().to_lower()
+
+
+## A shorter name for the browser: the file name without animtools' "ATV_", "_" as spaces.
+static func short_name(n: String) -> String:
+	var f := n.get_file()
+	if f.to_lower().begins_with("atv_"):
+		f = f.substr(4)
+	return f.replace("_", " ").strip_edges()
 
 
 func thumbnail_path(n: String) -> String:

@@ -121,8 +121,8 @@ In **Mods**:
 - **Load backup…** reads characters from a backup file, or straight from a Flash save (`ChoIrrumatio.sol`, in
   Flash Player's `#SharedObjects` folder under `%APPDATA%\Macromedia\Flash Player`).
 - **Import from the Loader…**: pick your Loader folder. Its stored characters come in together with the clothing
-  and hair mods they wear. The files are copied into `Mods` (never over your own files); the Loader folder is only
-  read, and the game does not need it afterwards.
+  and hair mods they wear, and its animtools body positions (into `Mods/Positions/Imported`). The files are copied
+  into `Mods` (never over your own files); the Loader folder is only read, and the game does not need it afterwards.
 - **Replace the list when loading**: off adds the characters to your list, on replaces it.
 
 ## Saves and settings

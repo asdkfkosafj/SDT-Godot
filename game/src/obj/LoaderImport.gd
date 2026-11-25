@@ -9,6 +9,11 @@ extends RefCounted
 ## mods folder. The files are copied into Mods/Clothing, Mods/Hair or Mods/Backgrounds (never over a file there) and
 ## their names added to that folder's names.txt (ModCatalog), also image hairs and backgrounds a code names by path.
 ## The Loader's files are only read here: afterwards the port needs nothing from the Loader.
+##
+## animtools' body positions come along too: Settings/animtools_positions (its folders kept) and the position files of
+## character folders (animtoolscharposition.txt in a folder under Mods, named after that folder) go into
+## Mods/Positions/Imported (Characters/ for those), with their thumbnails; a file the same as one already in
+## Mods/Positions (the shipped set) is not copied again.
 
 ## Character code key -> costume slot (its CharacterControl helper is "<slot>Control")
 const SLOT_KEYS := {"collar": "collar", "cuffs": "cuffs", "ankleCuffs": "ankleCuffs", "gag": "gag", "panties": "panties",
@@ -35,6 +40,8 @@ var named_count := 0          # names added to names.txt
 var missing: Array = []       # names / paths found nowhere
 var chars: Array = []         # the characters (Load Backup entries)
 var added := 0                # characters added to the list (the others were in it already)
+var positions := 0            # position files copied
+var _position_sums: Dictionary = {}   # md5 of every position file already in Mods/Positions
 var error := ""
 
 
@@ -61,6 +68,7 @@ static func choose() -> void:
 static func run(dir: String) -> LoaderImport:
 	var li := LoaderImport.new()
 	li.loader = dir.replace("\\", "/").trim_suffix("/")
+	li._import_positions()
 	var sol := li._find_save()
 	if sol == "":
 		li.error = "No Flash save found for the Loader in %s. Use Load backup with its ChoIrrumatio.sol instead." % li.loader
@@ -86,6 +94,8 @@ static func _report(li: LoaderImport) -> void:
 	var already := " (%d were in the list already)" % (n - li.added) if n > li.added else ""
 	var text := li.error if li.error != "" else "%d characters imported%s.\n%d mod files copied, %d names added to names.txt." \
 		% [li.added, already, li.copied.size(), li.named_count]
+	if li.positions > 0:
+		text += "\n%d body positions copied into Mods/Positions/Imported." % li.positions
 	if not li.missing.is_empty():
 		text += "\n\nNot found in the Loader: " + ", ".join(PackedStringArray(li.missing))
 	var d := AcceptDialog.new()
@@ -145,6 +155,72 @@ func _read_settings() -> void:
 			if not _mc.has(key):
 				_mc[key] = []
 			_mc[key].append(e)
+
+
+# ---------------------------------------------------------------- body positions (animtools)
+
+const CHAR_POSITION := "animtoolscharposition.txt"
+
+
+func _import_positions() -> void:
+	var root := Flash.mods_dir("Positions")
+	_sum_dir(root)
+	var dest := root.path_join("Imported")
+	_copy_positions(loader.path_join("Settings/animtools_positions"), dest)
+	_char_positions(loader.path_join("Mods"), dest.path_join("Characters"), 0)
+	if positions > 0:
+		var ext = Extensions.get_extension("positions")
+		if ext != null and ext.enabled:
+			ext.rescan()
+
+
+func _sum_dir(dir: String) -> void:
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	for f in d.get_files():
+		if f.get_extension().to_lower() == "txt":
+			_position_sums[FileAccess.get_md5(dir.path_join(f))] = true
+	for sub in d.get_directories():
+		_sum_dir(dir.path_join(sub))
+
+
+## Every .txt under `src` (with its .png) into the same folders under `dest`.
+func _copy_positions(src: String, dest: String) -> void:
+	var d := DirAccess.open(src)
+	if d == null:
+		return
+	for f in d.get_files():
+		if f.get_extension().to_lower() == "txt":
+			_copy_position(src.path_join(f), dest.path_join(f))
+	for sub in d.get_directories():
+		_copy_positions(src.path_join(sub), dest.path_join(sub))
+
+
+## Character folders' positions (searched a few folders deep under the Loader's Mods), named after their folder.
+func _char_positions(dir: String, dest: String, depth: int) -> void:
+	var d := DirAccess.open(dir)
+	if d == null or depth > 4:
+		return
+	for f in d.get_files():
+		if f.to_lower() == CHAR_POSITION:
+			_copy_position(dir.path_join(f), dest.path_join(dir.get_file() + ".txt"))
+	for sub in d.get_directories():
+		_char_positions(dir.path_join(sub), dest, depth + 1)
+
+
+func _copy_position(src: String, dest: String) -> void:
+	var sum := FileAccess.get_md5(src)
+	if sum == "" or _position_sums.has(sum) or FileAccess.file_exists(dest):
+		return   # the same as one there already (the shipped set, an earlier import), or a file of the player's
+	DirAccess.make_dir_recursive_absolute(dest.get_base_dir())
+	if DirAccess.copy_absolute(src, dest) != OK:
+		return
+	_position_sums[sum] = true
+	positions += 1
+	var png := src.get_basename() + ".png"
+	if FileAccess.file_exists(png) and not FileAccess.file_exists(dest.get_basename() + ".png"):
+		DirAccess.copy_absolute(png, dest.get_basename() + ".png")
 
 
 ## Copies what one character code needs.

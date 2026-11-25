@@ -55,13 +55,20 @@ func _init() -> void:
 		_at(108 + k, func(): _contact_stroke(k))
 	_at(270, _contact_checks)
 	_at(271, _dialogue_checks)
-	_at(272, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
-	_at(274, func():
+	_at(272, _browse_start)
+	_at(282, _fade_mid)
+	_at(283, func(): _dark_before = x._shade.modulate.a; x.request("animtools/Anal/ATV_doggy_hard"))
+	_at(284, _fade_again)
+	_at(320, _fade_end)
+	_at(321, _browse_checks)
+	_at(322, _import_checks)
+	_at(330, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
+	_at(332, func():
 		Extensions.set_enabled("positions", false)
 		_check("switched off: the game's default animation and her leg angles back", _is_vanilla(), _state())
 		_check("switched off: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state())
 		_check("switched off: him unmirrored, in the scene, his body shown, her mouth open to him", _him_vanilla(), _him_state()))
-	_at(276, _finish)
+	_at(334, _finish)
 
 
 func step(_frame: int) -> void:
@@ -497,6 +504,7 @@ func _contact_checks() -> void:
 
 ## Stage 5: dialogue triggers, variables and line types, auto mode, character code.
 func _dialogue_checks() -> void:
+	x.set_setting("transition", "Instant")   # (the fade: _browse_start)
 	var da = Extensions.get_extension("dialogueactions")
 	_check("DialogueActions on", da != null and da.enabled)
 	var val := func(n: String) -> String: return da.vars.value_text(n)
@@ -535,6 +543,138 @@ func _dialogue_checks() -> void:
 		and not "_partial" in x.current.name.to_lower())
 	dc.loadCustomDialogue("", false)
 	x.clear()
+
+
+## S6: the transition (dark fade), the browser's folders and filter, the hotkeys' functions, the Loader import.
+const L := preload("res://src/ext/positions/position_library.gd")
+var _dark_before := 0.0
+var _faded_first = null
+
+
+func _browse_start() -> void:
+	_check("folders: source and dominance folders left out, partial and root files",
+		L.category("animtools/Oral/HimD/x") == "Oral" and L.category("Imported/Vaginal/HerD/y") == "Vaginal"
+		and L.category("animtools/_partial/z_partial") == "Partial" and L.category("Mine/Sub/w") == "Mine/Sub"
+		and L.category("v") == "Other", "%s %s %s" % [L.category("animtools/Oral/HimD/x"), L.category("Mine/Sub/w"), L.category("v")])
+	_check("dominance from HimD / HerD folders; short names", L.dominance("animtools/Anal/HimD/a") == "Him"
+		and L.dominance("a/HerD/b") == "Her" and L.dominance("animtools/Oral/c") == "Neutral"
+		and L.short_name("animtools/Oral/ATV_face_fuck") == "face fuck")
+	x.set_setting("transition", "Dark fade")
+	x.set_setting("fade_ticks", 18)
+	x.clear()
+	x.request("animtools/Oral/ATV_facefuck")
+	_check("dark fade: the position waits for the dark, the shade is over the game and under the menu",
+		x.current == null and x._fade != null and x._fade.layer < 50 and x._fade.layer > 0 and x._shade.modulate.a < 0.2)
+
+
+func _fade_mid() -> void:
+	_faded_first = x.current
+	_check("dark fade: applied at its darkest point", x.current != null and x.current.name.ends_with("ATV_facefuck")
+		and x._shade.modulate.a > 0.6, "%s %.2f" % [x.current, x._shade.modulate.a if x._shade else -1.0])
+
+
+func _fade_again() -> void:
+	_check("a pick while it fades in: back to dark from where it was (no jump)", x._fade != null
+		and x._shade.modulate.a >= _dark_before - 0.01, "%.2f -> %.2f" % [_dark_before, x._shade.modulate.a if x._shade else -1.0])
+
+
+func _fade_end() -> void:
+	_check("dark fade: the second pick applied, the shade gone", x.current != null
+		and x.current.name.ends_with("ATV_doggy_hard") and x._fade == null and x._fade_left == 0)
+
+
+func _browse_checks() -> void:
+	var cur = x.current
+	x.request("animtools/_partial/himhidden_on_partial")
+	_check("a partial position applies at once, even with the fade", x.current != cur and x._fade == null)
+	x.set_setting("transition", "Instant")
+	x.load_position("animtools/Anal/ATV_doggy_hard")
+	var names: Array = []
+	for i in 8:
+		x.random()
+		names.append(x.current.name)
+	_check("random: full positions only, never the same twice in a row", names.all(func(n): return not L.is_partial(n))
+		and range(1, names.size()).all(func(i): return names[i] != names[i - 1]), str(names))
+	x.load_position("animtools/Anal/ATV_doggy_hard")
+	x.step(1)
+	var nxt: String = x.current.name
+	x.step(-1)
+	_check("next / previous stay in the position's folder", L.category(nxt) == "Anal"
+		and nxt != "animtools/Anal/ATV_doggy_hard" and x.current.name == "animtools/Anal/ATV_doggy_hard", nxt)
+	x.browser.filter = "Him"
+	x.step(1)
+	_check("next with the browser's filter: only positions he leads", x.library.dominance(x.current.name) == "Him"
+		and L.category(x.current.name) == "Anal", x.current.name)
+	x.browser.filter = "All"
+	var box: Control = x.browser._grid()
+	var cells := 0
+	var heads := 0
+	var built_folded := 0
+	for ch in box.get_children():
+		if ch is GridContainer:
+			built_folded += ch.get_child_count()
+		elif ch is Button:
+			heads += 1
+			if not ch.text.begins_with("▾"):
+				ch.pressed.emit()   # open it: its cells come in the next frames
+	var jobs: int = x.browser._jobs.size()
+	for i in 200:
+		if x.browser._jobs.is_empty():
+			break
+		x.browser._run_jobs()
+	for ch in box.get_children():
+		if ch is GridContainer:
+			cells += ch.get_child_count()
+	_check("browser: a folder's cells only once it is opened, made over several frames", built_folded == 0
+		and jobs > 0 and cells == jobs, "%d before, %d queued, %d made" % [built_folded, jobs, cells])
+	_check("browser: every position in a folder of its own", cells == x.library.names.size() and heads >= 5,
+		"%d cells %d folders, %d positions" % [cells, heads, x.library.names.size()])
+	x.browser.filter = "Her"
+	box.get_meta("refresh").call()
+	var shown := 0
+	for ch in box.get_children():
+		if ch is GridContainer:
+			for c in ch.get_children():
+				shown += 1 if c.visible else 0
+	_check("browser filter: only the positions she leads", shown > 0 and shown < cells, "%d of %d" % [shown, cells])
+	x.browser.filter = "All"
+	box.free()
+	x.request_default()
+	_check("back to the game's default", x.current == null)
+	var page := MenuSchema._positions()
+	_check("the menu's Positions page: shown while positions is on, the game runs on it", page["owner"] == "positions"
+		and page["live"] and SDTMenu._shown(page))
+
+
+func _import_checks() -> void:
+	if not Array(OS.get_cmdline_user_args()).any(func(a): return a.begins_with("--mods-dir=")):
+		_check("Loader import (needs --mods-dir: it writes into Mods/Positions)", false)
+		return
+	var fake := FlashSharedObject.save_dir.path_join("fake_loader")
+	var ap := fake.path_join("Settings/animtools_positions")
+	var shipped: String = x.library.path_of("animtools/Oral/ATV_facefuck")
+	DirAccess.make_dir_recursive_absolute(ap.path_join("Oral"))
+	DirAccess.make_dir_recursive_absolute(ap.path_join("Mine"))
+	DirAccess.make_dir_recursive_absolute(fake.path_join("Mods/SomeGirl"))
+	DirAccess.copy_absolute(shipped, ap.path_join("Oral/ATV_facefuck.txt"))
+	var f := FileAccess.open(ap.path_join("Mine/mine.txt"), FileAccess.WRITE)
+	f.store_string(FileAccess.get_file_as_string(shipped) + "\nscenerotation=5\n")
+	f.close()
+	DirAccess.copy_absolute(shipped.get_basename() + ".png", ap.path_join("Mine/mine.png"))
+	f = FileAccess.open(fake.path_join("Mods/SomeGirl/animtoolscharposition.txt"), FileAccess.WRITE)
+	f.store_string(FileAccess.get_file_as_string(shipped) + "\nscenerotation=7\n")
+	f.close()
+	var li := LoaderImport.run(fake)
+	var imp := Flash.mods_dir("Positions").path_join("Imported")
+	_check("Loader import: new positions copied (thumbnail too), the shipped one not again, a character folder's by its name",
+		li.positions == 2 and x.library.has("Imported/Mine/mine") and x.library.has("Imported/Characters/SomeGirl")
+		and FileAccess.file_exists(imp.path_join("Mine/mine.png")) and not x.library.has("Imported/Oral/ATV_facefuck"),
+		"%d %s" % [li.positions, Array(x.library.names).filter(func(n): return n.begins_with("Imported"))])
+	_check("Loader import again: nothing copied twice", LoaderImport.run(fake).positions == 0)
+	for p in [imp.path_join("Mine/mine.txt"), imp.path_join("Mine/mine.png"), imp.path_join("Characters/SomeGirl.txt"),
+			imp.path_join("Mine"), imp.path_join("Characters"), imp]:
+		DirAccess.remove_absolute(p)
+	x.rescan()
 
 
 func _layers_vanilla() -> bool:

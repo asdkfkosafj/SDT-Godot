@@ -133,7 +133,14 @@ static func element(label: String, tip: String, helper: Callable, alpha := false
 # ---------------------------------------------------------------- sections
 
 static func sections() -> Array:
-	return [_her(), _clothes(), _him(), _scene(), _behaviour(), _effects(), _dialogue(), _mods(), _settings(), _help()]
+	return [_her(), _clothes(), _him(), _scene(), _positions(), _behaviour(), _effects(), _dialogue(), _mods(), _settings(),
+		_help()]
+
+
+## The body positions page (the built-in positions extension fills it; its button shows only while that is on). The
+## game runs while it is shown ("live"), so the player sees the positions they pick.
+static func _positions() -> Dictionary:
+	return {"id": "positions", "name": "Positions", "owner": "positions", "live": true, "groups": []}
 
 
 static func _her() -> Dictionary:

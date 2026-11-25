@@ -503,11 +503,12 @@ func show_section(sec: String) -> void:
 	_show()
 
 
-## The pause setting changed: pause or resume now if the menu is open.
+## The pause setting changed (or the page): pause or resume now if the menu is open. A page with "live" (Positions:
+## the player watches what a click changes) keeps the game running while it is shown.
 func pause_setting_changed() -> void:
 	if not is_open:
 		return
-	var want := pause_on_open()
+	var want: bool = _pauses() and not (query == "" and _find_section(section).get("live", false))
 	if want != _paused_by_menu:
 		_paused_by_menu = want
 		g.gamePaused = want
@@ -616,7 +617,7 @@ func _show() -> void:
 		_search_view = view
 	else:
 		s = _find_section(section)
-		if s.is_empty():
+		if s.is_empty() or not _shown(s):
 			section = _home()
 			s = _find_section(section)
 		_heading.text = s["name"]
@@ -628,9 +629,11 @@ func _show() -> void:
 	for v in _content.get_children():
 		v.visible = v == view
 	_rows = view.get_meta("rows")
+	pause_setting_changed()
 	_pump(view, BUILD_BUDGET_US)
 	var nav_id: String = s.get("parent", s.get("id", "")) if query == "" else ""
 	for sid in _nav_buttons:
+		_nav_buttons[sid].visible = _shown(_find_section(sid))   # a page an extension owns: only while it is on
 		_nav_buttons[sid].set_pressed_no_signal(sid == nav_id)
 		_nav_buttons[sid].add_theme_color_override("font_color", MenuTheme.INK if sid == nav_id else MenuTheme.MUTED)
 	_refresh_rows()

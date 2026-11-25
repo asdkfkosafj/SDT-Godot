@@ -69,15 +69,14 @@ func _contact(what: String):
 	return bc.resistance_scaled()
 
 
-func _load_named(name: String) -> void:
-	if _ext.load_position(name):
-		_ext.loaded_name = name.replace("_slash5C_", "\\")   # (animtools: the name as dialogues give it, folders with \)
+## A dialogue's or code's position (animtools keeps the name as dialogues give it, folders with \); a dialogue's
+## comes with the transition, a code's at once (it is part of loading her).
+func _load_named(name: String, fade := true) -> void:
+	_ext.request(name, name.replace("_slash5C_", "\\"), fade)
 
 
 func _random() -> void:
-	var full: Array = Array(_ext.library.names).filter(func(n): return not "_partial" in str(n).to_lower())
-	if not full.is_empty():
-		_ext.load_position(full[randi() % full.size()])
+	_ext.random()
 
 
 func _code_get():
@@ -87,7 +86,7 @@ func _code_get():
 
 
 func _code_set(value: String, _load) -> void:
-	_load_named(value.split(",")[0])
+	_load_named(value.split(",")[0], false)
 
 
 func _after_code() -> void:

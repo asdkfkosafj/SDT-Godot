@@ -9,8 +9,10 @@ extends SDTExtension
 ## stroke and with her body size), her torso numbers and the mouse's sideways range, the camera (zoom, zoom point,
 ## scene rotation), the joint limits by file version, props (position_props.gd), his right arm's path, her left leg
 ## and breast behind him and her shadow (position_layers.gd), her arms (position_arms.gd: animtools' arm positions
-## and Custom); back to the game's default. Him reversed / flipped and body contact come in later stages. Until the
-## position browser exists, the developer panel (Tools > Positions) loads a position by name.
+## and Custom), him reversed / flipped, the dialogue triggers and variables (position_dialogue.gd); back to the
+## game's default. The menu's Positions page (position_browser.gd) and hotkeys load positions with a transition
+## (request): a dark fade that applies the position while the screen is dark (animtools' "shade", off in its own
+## settings file; here on, as it hides the load). Body contact is its own extension (bodycontact).
 ##
 ## A position is a temporary state: it does not change the player's saved settings; switching the extension off (or
 ## Vanilla mode) gives the game's default animation back.
@@ -22,6 +24,9 @@ const Props := preload("res://src/ext/positions/position_props.gd")
 const Layers := preload("res://src/ext/positions/position_layers.gd")
 const Arms := preload("res://src/ext/positions/position_arms.gd")
 const Talk := preload("res://src/ext/positions/position_dialogue.gd")
+const Browser := preload("res://src/ext/positions/position_browser.gd")
+const TRANSITIONS := ["Dark fade", "Instant"]
+const FADE_LAYER := 40   # over the game, under the menu (50)
 
 const ANIM := "position"   # the AnimationControl key of the applied position
 ## The value points an applied position modifies (taken off when it ends; the arms' own stay while the extension is on).
@@ -36,14 +41,19 @@ var props = Props.new()
 var layers = null          # PositionLayers (her leg / breast behind him, her shadow)
 var arms = null            # PositionArms (animtools' arm positions, a position's arms)
 var talk = null            # PositionDialogue (dialogue triggers and variables, the character code field)
+var browser = null         # PositionBrowser (the menu's Positions page)
 var loaded_name := ""      # the name the current position was loaded by (a dialogue's, a code's or the library's)
 
 
 func _init() -> void:
 	id = "positions"
 	title = "Positions"
-	description = "animtools' body positions: positions from .txt files in Mods/Positions (work in progress: developer panel only)."
+	description = "animtools' body positions: positions from .txt files in Mods/Positions, picked on the menu's Positions page."
 	default_enabled = true
+	setting("transition", TRANSITIONS[0], {"label": "Transition", "options": TRANSITIONS,
+		"tip": "How the scene changes to another position: a short fade to dark (the change happens while it is dark) or at once. Partial positions always change at once."})
+	setting("fade_ticks", 18, {"label": "Fade length", "min": 6, "max": 60, "step": 1,
+		"tip": "How long the dark fade takes, in game frames (60 a second). animtools' default: 18."})
 
 
 func _enable() -> void:
@@ -55,7 +65,13 @@ func _enable() -> void:
 	arms.start()
 	talk = Talk.new(self)
 	talk.start()
+	browser = Browser.new(self)
+	browser.start()
 	on_tick(_tick)
+	on_key(122, random, "random position", "random")
+	on_key(121, reload, "reload the position", "reload")
+	on_key(34, func(): step(1), "next position in the folder", "next")
+	on_key(33, func(): step(-1), "previous position in the folder", "previous")
 	hook_before(&"Her.startClenchingTeeth", func(c): if not _oral(): c.cancel())
 	menu_control("dev_tools", "Positions", MenuSchema.choice("Position", "Load a body position (animtools .txt)",
 		func(): return ["(game default)"] + Array(library.names),
@@ -64,6 +80,7 @@ func _enable() -> void:
 
 
 func _disable() -> void:
+	_end_fade()
 	clear()
 	props.stop()
 	if arms != null:
@@ -76,6 +93,125 @@ func positions_root() -> String:
 
 func rescan() -> void:
 	library.scan(positions_root())
+	Browser.forget_thumbnails()
+
+
+# ---------------------------------------------------------------- picking positions (menu, hotkeys, dialogue)
+
+## Loads a position by name with the transition (the dark fade; at once for a partial one, with "Instant" or when
+## `fade` is false); `shown` is the name the dialogue variable atv_position_name gives (default: `given`). false
+## when there is none by that name.
+func request(given: String, shown := "", fade := true) -> bool:
+	var n: String = library.find(given)
+	if n == "":
+		push_warning("Positions: no position \"%s\"" % given)
+		return false
+	var change := func():
+		if load_position(given) and shown != "":
+			loaded_name = shown
+	if library.is_partial(n) or not fade:
+		change.call()
+	else:
+		_transition(change)
+	return true
+
+
+## Back to the game's default animation, with the transition.
+func request_default() -> void:
+	if current != null:
+		_transition(clear)
+
+
+## A random full position (not partial, not the current one): animtools' random key / [ANIMTOOLSRANDOM].
+func random() -> void:
+	var cur: String = "" if current == null else current.name
+	var full: Array = Array(library.names).filter(func(n): return not library.is_partial(n) and n != cur)
+	if not full.is_empty():
+		request(full[randi() % full.size()])
+
+
+## Reads the folder again and loads the current position's file again (after it was edited): animtools' reload key.
+func reload() -> void:
+	rescan()
+	if current != null and current.name != "":
+		var keep := loaded_name
+		if load_position(current.name):
+			loaded_name = keep
+
+
+## The next (`by` 1) or previous (-1) position in the current position's folder, as the browser shows it (its
+## dominance filter too); from the game's default: the first or last position.
+func step(by: int) -> void:
+	var cur: String = "" if current == null else current.name
+	var cat: String = library.category(cur) if cur != "" else ""
+	var list: Array = Array(library.names).filter(func(n):
+		return not library.is_partial(n) and (cat == "" or library.category(n) == cat) \
+			and (browser == null or browser.filter == "All" or library.dominance(n) == browser.filter))
+	if list.is_empty():
+		return
+	var i := list.find(cur)
+	i = (0 if by > 0 else list.size() - 1) if i < 0 else posmod(i + by, list.size())
+	if list[i] != cur:
+		request(list[i])
+
+
+# ---------------------------------------------------------------- the transition (dark fade)
+
+var _fade: CanvasLayer = null
+var _shade: ColorRect = null
+var _fade_left := 0          # ticks left (0: no fade)
+var _fade_len := 0
+var _fade_do := Callable()   # runs at the darkest point
+
+
+## Runs `change` now (Instant, or in Vanilla-like states without a scene) or at the midpoint of a dark fade. A
+## second request during a fade replaces the change if the screen is not dark yet, else waits for the next fade.
+func _transition(change: Callable) -> void:
+	var n := int(get_setting("fade_ticks"))
+	if get_setting("transition") != TRANSITIONS[0] or n < 2 or g.sceneLayer == null:
+		change.call()
+		return
+	if _fade_left > 0 and _fade_do.is_valid():   # still fading out: the newer pick wins
+		_fade_do = change
+		return
+	var dark: float = 0.0 if _shade == null else _shade.modulate.a   # fading in: back to dark from where it is
+	_fade_len = n
+	_fade_left = n - roundi(dark * n * 0.5)
+	_fade_do = change
+	if _fade == null:
+		_fade = CanvasLayer.new()
+		_fade.layer = FADE_LAYER
+		_shade = ColorRect.new()
+		_shade.color = Color.BLACK
+		_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_fade.add_child(_shade)
+		Flash.add_child(_fade)
+	_shade.modulate.a = dark
+
+
+func _fade_tick() -> void:
+	_fade_left -= 1
+	var half := _fade_len / 2
+	if _fade_left == half and _fade_do.is_valid():   # animtools: the change at the midpoint
+		var c := _fade_do
+		_fade_do = Callable()
+		c.call()
+	_shade.modulate.a = 1.0 - absf(_fade_left - _fade_len * 0.5) / (_fade_len * 0.5)
+	if _fade_left <= 0:
+		_end_fade()
+
+
+func _end_fade() -> void:
+	if _fade_do.is_valid():
+		var c := _fade_do
+		_fade_do = Callable()
+		c.call()
+	_fade_left = 0
+	if _fade != null:
+		_fade.queue_free()
+		_fade = null
+		_shade = null
 
 
 ## Reads a position by name (see PositionLibrary.find); a partial one applies to the current position. null when not
@@ -126,6 +262,8 @@ func apply(p) -> void:
 
 
 func _tick() -> void:
+	if _fade_left > 0:
+		_fade_tick()
 	if current != null and _knee_moves:
 		_update_knee()
 

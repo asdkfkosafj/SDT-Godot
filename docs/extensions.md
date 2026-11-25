@@ -59,7 +59,7 @@ func _passed_out(call: Hooks.Call) -> void:
 | `mood()` | Her current mood, including extended moods (see Moods). |
 | `charcode_field(key, get, set, reset, after_mods)` | A field in the character code, see below. |
 | `on_dialogueactions(setup)` | Dialogue triggers and variables, see [Dialogue triggers](#dialogue-triggers). |
-| `menu_control(section, group, spec)` | A control in the new in-game menu: `section` is `"her"`, `"clothes"`, `"him"`, `"scene"`, `"behaviour"`, `"effects"`, `"dialogue"`, `"mods"` or `"settings"` (or `"dev_tools"`, `"dev_info"`, `"dev_panel"`: the developer panel, shown only in Developer mode); `group` an existing group of it (e.g. `"Face"`) or a new one. `spec` is a control spec (`MenuWidgets`: `type` toggle / choice / slider / actions / ..., `label`, `tip`, `get` / `set`, optional `visible()` / `enabled()`, `wide`, `after` = the label of the row to follow instead of the group's end); `MenuSchema.choice(...)` and friends build them. Tagged with the extension's name in the menu; removed when the extension is disabled. Settings declared with `setting()` get a page of their own automatically. |
+| `menu_control(section, group, spec)` | A control in the new in-game menu: `section` is `"her"`, `"clothes"`, `"him"`, `"scene"`, `"positions"` (shown while the positions extension is on; the game runs while it is open), `"behaviour"`, `"effects"`, `"dialogue"`, `"mods"` or `"settings"` (or `"dev_tools"`, `"dev_info"`, `"dev_panel"`: the developer panel, shown only in Developer mode); `group` an existing group of it (e.g. `"Face"`) or a new one. `spec` is a control spec (`MenuWidgets`: `type` toggle / choice / slider / actions / ..., `label`, `tip`, `get` / `set`, optional `visible()` / `enabled()`, `wide`, `after` = the label of the row to follow instead of the group's end); `MenuSchema.choice(...)` and friends build them. Tagged with the extension's name in the menu; removed when the extension is disabled. Settings declared with `setting()` get a page of their own automatically. |
 | `menu_button(menu, x, y, text, on_click)` | A small button in a game menu (`"optionsMenu"`, `"sceneMenu"`, ...), styled like the Loader's mod buttons; `set_color(0x00FF00)` shows a state. |
 | `menu_slider(menu, x, y, w, h, value, on_change)` | A slider (ExtSlider, value 0..1) in a game menu. |
 | `menu_label(menu, x, y, w, text)` | A text label in a game menu. |
@@ -203,7 +203,13 @@ While it is on, the extension adds animtools' 7 arm positions (Cupping Breast ..
 arm lists; `positions.arms.holds(left)` tells whether a position holds that arm in its pose now (code that moves her
 arms by itself, like armoverhaul's dynamic arms, leaves it alone). A position is a temporary state: the options
 save and the character code keep the player's zoom and arms (`SaveData.sceneZoom`, `InGameMenu.savedArms`), and
-everything comes back when it ends. Work in progress: the developer panel (Tools > Positions) loads one.
+everything comes back when it ends. The menu's Positions page (its button only while the extension is on) shows the
+positions by folder with their thumbnails (HimD / HerD folders = who leads, a filter), the game's default, Random and
+Rescan; hotkeys: F11 random, F10 reload the file, Page Down / Page Up the next / previous position in the folder.
+`positions.request(name)` loads one with the transition (a dark fade that applies it at the darkest point, the
+"Transition" setting; partial positions at once), as the page, the hotkeys and the dialogue triggers do;
+`load_position(name)` at once. The Loader import also copies the Loader's positions (Settings/animtools_positions and
+character folders' animtoolscharposition.txt) into `Mods/Positions/Imported`.
 
 The built-in `bodycontact` extension (animtools' body contact) runs while a non-oral position does (or an oral one with
 pleasure from contact): his tip on her body (her breast, backside, back, chest, head, thigh, calf) is contact, which
