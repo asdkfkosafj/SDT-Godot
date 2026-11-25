@@ -27,6 +27,8 @@ func giveExternalLayer(layer: FlashSprite) -> void:
 	layer.y = y
 	layer.scaleX = scaleX
 	layer.scaleY = scaleY
+	if rotation_degrees != 0.0:   # port: a body position may turn the scene
+		layer.rotation_degrees = rotation_degrees
 	externalLayers.append(layer)
 
 
@@ -94,6 +96,13 @@ func updateExternalLayerScales() -> void:
 
 
 func updateCamera() -> void:
+	var rot := 0.0
+	if Hooks.has_value(&"SceneLayer.rotation"):   # HOOK value point: the scene's rotation in degrees (0), on this layer and the external layers
+		rot = float(Hooks.value(&"SceneLayer.rotation", self, 0.0))
+	if rotation_degrees != rot:
+		rotation_degrees = rot
+		for l in externalLayers:
+			l.rotation_degrees = rot
 	scaleX = -currentZoom if g.mirrored else currentZoom
 	scaleY = currentZoom
 	updateExternalLayerScales()
@@ -101,7 +110,10 @@ func updateCamera() -> void:
 	var cx := maxf(200.0, 370.0 - currentZoom * 200.0)
 	if g.mirrored:
 		cx = g.screenSize.x - cx
-	aimCamera(cx, 50)
+	var aim := Vector2(cx, 50)
+	if Hooks.has_value(&"SceneLayer.cameraAim"):   # HOOK value point: where the camera puts this layer's origin on the screen (the zoom's point, mirrored)
+		aim = Hooks.value(&"SceneLayer.cameraAim", self, aim)
+	aimCamera(aim.x, aim.y)
 	x = camera.x
 	y = camera.y
 	updateExternalLayerPositions()

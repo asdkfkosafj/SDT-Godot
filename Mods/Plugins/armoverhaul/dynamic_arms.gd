@@ -341,6 +341,8 @@ func _heaviest(w: Dictionary, order: Array) -> Array:
 	var kind := ""
 	var most := -999.0
 	for n in order:
+		if not Her.armPositions.has(n):   # animtools' positions: only while the Positions extension is on
+			continue
 		var a: Array = w[n]
 		if a[POS] > most:
 			best = n; kind = "Positive"; most = a[POS]
@@ -382,7 +384,7 @@ func _decide(her: Her) -> void:
 	var awkward: bool = V["disableNonTransitions"] == 1
 	if not x.restrained and post_wake <= 0:
 		var cur: String = x._left_name()
-		if mode != 3 and not her.passedOut and cooldown[0] <= 0 and (l[0] != cur or l[1] != left_type) \
+		if mode != 3 and not her.passedOut and cooldown[0] <= 0 and (l[0] != cur or l[1] != left_type) and not x.position_holds(true) \
 				and l[2] >= V["minimumWeightThreshold"]:
 			if not awkward or not (cur == "On His Hand" and l[0] in ["Back", "On Legs", "On Her Ass", "On Hips", "Masturbating"]):
 				if not (l[0] != "Loose" and r[0] == "Loose"):
@@ -393,7 +395,7 @@ func _decide(her: Her) -> void:
 			else:
 				wl[l[0]] = [0.0, 0.0, 0.0]
 		cur = x._right_name()
-		if mode != 2 and not her.passedOut and cooldown[1] <= 0 and (r[0] != cur or r[1] != right_type) \
+		if mode != 2 and not her.passedOut and cooldown[1] <= 0 and (r[0] != cur or r[1] != right_type) and not x.position_holds(false) \
 				and r[2] >= V["minimumWeightThreshold"] and not (cur == "In His Hand" and not her.rightArmIK.dropping):
 			if not (l[0] == "Loose" and r[0] != "Loose"):
 				if not awkward or not (cur == "Back" and r[0] in ["Holding Breast", "Gripping Thigh", "Holding Stomach", "On Hips"]

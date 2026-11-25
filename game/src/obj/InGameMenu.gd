@@ -1885,7 +1885,10 @@ func getSaveDataString(includeFiles = true) -> String:
 	var charName: String = "charName:" + str(cc.currentName)
 	var mood: String = "mood:" + g.her.mood
 	var bodyScale: String = "bodyScale:" + _s(g.sigRound(6, g.her.bodyScale))
-	var arms: String = "arms:" + g.dataName(Her.armPositions[g.her.currentLeftArmPosition]) + "," + g.dataName(Her.armPositions[g.her.currentRightArmPosition])
+	var armNames: Array = [Her.armPositions[g.her.currentLeftArmPosition], Her.armPositions[g.her.currentRightArmPosition]]
+	if Hooks.has_value(&"InGameMenu.savedArms"):   # HOOK value point: her arms the character code saves ([left, right] names; a temporary pose keeps the player's)
+		armNames = Hooks.value(&"InGameMenu.savedArms", self, armNames)
+	var arms: String = "arms:" + g.dataName(armNames[0]) + "," + g.dataName(armNames[1])
 	var throat: String = "throatResist:" + _s(g.throatResistance)
 	var hair: String = "hair:" + g.dataName(charNames[cc.currentHair]) + "," + ",".join(PackedStringArray(cc.currentElementsStatus.map(func(v): return _s(v))))
 	var iris: String = "iris:" + g.dataName(irisTypes[cc.currentIris]) + "," + _rgba(cc.irisRGB)

@@ -17,7 +17,9 @@ var _steps: Array = []
 var _next := 0
 var x: SDTExtension = null
 var _ik_base: Array = []    # her torso IK's own leg angle offset / end rotation
-var _her_end := Vector2()   # where she is at the end of the stroke in the sample position
+var _her_end := Vector2()
+var _player_zoom := 0.0     # the zoom before the first position
+var _player_arms := []      # her arms before the first position   # where she is at the end of the stroke in the sample position
 
 
 func _check(name: String, ok: bool, detail := "") -> void:
@@ -40,11 +42,16 @@ func _init() -> void:
 		_at(10 + k, func(): _move(Vector2(lerpf(-300.0, 600.0, k / 39.0), 250)))
 	_at(60, _applied_checks)
 	_at(61, _clear_checks)
-	_at(62, func(): x.load_position(SAMPLE))
-	_at(64, func():
+	_at(62, _layer_checks)
+	_at(63, func():
+		x.clear()
+		_check("cleared: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state()))
+	_at(64, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
+	_at(66, func():
 		Extensions.set_enabled("positions", false)
-		_check("switched off: the game's default animation and her leg angles back", _is_vanilla(), _state()))
-	_at(66, _finish)
+		_check("switched off: the game's default animation and her leg angles back", _is_vanilla(), _state())
+		_check("switched off: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state()))
+	_at(68, _finish)
 
 
 func step(_frame: int) -> void:
@@ -229,6 +236,8 @@ static func is_equal_approx_any(u, v) -> bool:
 
 
 func _apply() -> void:
+	_player_zoom = g.sceneZoom
+	_player_arms = [Her.armPositions[g.her.currentLeftArmPosition], Her.armPositions[g.her.currentRightArmPosition]]
 	_check("sample position loads", x.load_position(SAMPLE))
 
 
@@ -257,6 +266,87 @@ func _applied_checks() -> void:
 		"%s, line %s-%s, %.0f from the game's" % [m.origin, start, end, _dist_to_line(m.origin, vstart, vend)])
 	_check("her torso start angle is the position's, not the game's", ac.torsoStartAng != d.torsoStartAng)
 	_check("the save keeps the game's style (default)", ac.currentAnimationName == AnimationControl.DEFAULT)
+	# stage 2: camera, props, joint limits
+	var sl: SceneLayer = g.sceneLayer
+	_check("the position's zoom, and at that zoom its camera (v32+ curve starts there)",
+		is_equal_approx(sl.currentZoom, v["zoom"]) and sl.camera.distance_to(Vector2(v["camerax"], v["cameray"])) < 0.01,
+		"zoom %s camera %s" % [sl.currentZoom, sl.camera])
+	_check("the options save keeps the player's zoom", is_equal_approx(
+		Hooks.value(&"SaveData.sceneZoom", g.saveData, g.sceneZoom), _player_zoom), str(_player_zoom))
+	var active := []
+	for pr in Fields.PROPS:
+		if v[pr[0] + "active"] == 1:
+			active.append(pr[0])
+	var shown: Array = x.props.shown()
+	shown.sort()
+	active.sort()
+	_check("the position's props show (and only those)", shown == active and not active.is_empty(), "%s vs %s" % [shown, active])
+	_check("joint end limits lifted by version (her leg >= 29, her hands >= 32)",
+		Hooks.value(&"IKController.endLimit", g.her.torsoIK, 1.22) == INF
+		and Hooks.value(&"IKController.endLimit", g.her.leftArmIK, 1.22) == INF
+		and Hooks.value(&"IKController.endLimit", g.him.currentBody.rightArmIK, 1.22) == 1.22)
+
+
+## Stage 2's layers and rotation, one position after another (applying is immediate).
+func _layer_checks() -> void:
+	var her: Her = g.her
+	var sl: SceneLayer = g.sceneLayer
+	x.load_position("animtools/Oral/BedBJ")
+	_check("scene rotation from the file, on the scene and its outside layers (BedBJ 88)",
+		is_equal_approx(sl.rotation_degrees, 88.0) and is_equal_approx(g.backLayer.rotation_degrees, 88.0)
+		and is_equal_approx(x.props.holder.rotation_degrees, 88.0), str(sl.rotation_degrees))
+	sl.toggleMirrored()
+	_check("mirrored: the rotation the other way", is_equal_approx(sl.rotation_degrees, -88.0), str(sl.rotation_degrees))
+	sl.toggleMirrored()
+	var bg_shadow: bool = x.layers._shadow().visible
+	x.load_position("animtools/Oral/ATV_laydownarmsback")
+	_check("her shadow off (hidehershadow)", bg_shadow and not x.layers._shadow().visible)
+	x.load_position("animtools/Titfuck/ATV_titfuck")
+	_check("her left leg and breast behind him: out of her, at the bottom of the scene",
+		her.leftLegContainer.parent != her and her.torsoBack.leftBreast.parent != her.torsoBack
+		and sl.getChildIndex(her.leftLegContainer.parent) < sl.getChildIndex(g.him)
+		and sl.getChildIndex(her.torsoBack.leftBreast.parent) < sl.getChildIndex(g.him))
+	her.updateTorso()
+	x.layers._follow()
+	var leg_ok: Vector2 = her.leftLegContainer.localToGlobal(Vector2(10, 20))
+	her.leftLegContainer.parent.removeChild(her.leftLegContainer)
+	x.layers._leg_home[0].addChildAt(her.leftLegContainer, x.layers._leg_home[1])
+	her.updateTorso()
+	var leg_in: Vector2 = her.leftLegContainer.localToGlobal(Vector2(10, 20))
+	x.layers._leg_holder.addChild(her.leftLegContainer)
+	_check("her moved leg is where it would be in her", leg_ok.distance_to(leg_in) < 0.01, "%s vs %s" % [leg_ok, leg_in])
+	_check("her moved breast keeps her skin colour", her.torsoBack.leftBreast.filters == her.torsoBack.filters)
+	g.changeLayer(her.leftArmContainer, her, her.leftLegContainer)
+	_check("while her leg is out, \"next to her leg\" puts her left arm behind her; the leg stays out",
+		her.leftLegContainer.parent != her and her.leftArmContainer.parent == g.backLayer)
+	# her arms: the position's (titfuck: Cupping Breast both), the player's kept for the code and for the end
+	_check("the position's arms (Cupping Breast)", Her.armPositions[her.currentLeftArmPosition] == "Cupping Breast"
+		and Her.armPositions[her.currentRightArmPosition] == "Cupping Breast",
+		"%s %s" % [Her.armPositions[her.currentLeftArmPosition], Her.armPositions[her.currentRightArmPosition]])
+	var code: String = g.inGameMenu.getSaveDataString()
+	_check("the character code keeps the player's arms", ("arms:%s,%s" % [g.dataName(_player_arms[0]),
+		g.dataName(_player_arms[1])]) in code, code.substr(code.find("arms:"), 40))
+	_check("her left arm's hand angle counts her while it is out of her", her in her.leftArmIK.endRotationTargets)
+	x.load_position("animtools/Oral/ATV_all_fours_onewithshadows_edit")
+	var v: Dictionary = x.current.values
+	_check("Custom arm: her hand aims at the position's point", Her.armPositions[her.currentLeftArmPosition] == "Custom"
+		and her.leftArmIK.targetPoint == Vector2(v["armpos2x"], v["armpos2y"]) and her.leftArmIK.targetPointCoordinateSpace == g.sceneLayer,
+		"%s %s" % [Her.armPositions[her.currentLeftArmPosition], her.leftArmIK.targetPoint])
+
+
+func _layers_vanilla() -> bool:
+	var her: Her = g.her
+	return her.leftLegContainer.parent == her and her.torsoBack.leftBreast.parent == her.torsoBack \
+		and her.torsoBack.leftBreast.filters.is_empty() and g.sceneLayer.rotation_degrees == 0.0 \
+		and g.backLayer.rotation_degrees == 0.0 and x.layers._shadow().visible and x.props.shown().is_empty() \
+		and is_equal_approx(g.sceneZoom, _player_zoom) 		and Her.armPositions[her.currentLeftArmPosition] == _player_arms[0] 		and Her.armPositions[her.currentRightArmPosition] == _player_arms[1]
+
+
+func _layers_state() -> String:
+	var her: Her = g.her
+	return "leg in her %s, breast in torsoBack %s, rotation %s, shadow %s, props %s, zoom %s / %s" % [
+		her.leftLegContainer.parent == her, her.torsoBack.leftBreast.parent == her.torsoBack,
+		g.sceneLayer.rotation_degrees, x.layers._shadow().visible, x.props.shown(), g.sceneZoom, _player_zoom]
 
 
 static func _dist_to_line(p: Vector2, a: Vector2, b: Vector2) -> float:
@@ -267,6 +357,7 @@ func _clear_checks() -> void:
 	x.clear()
 	g.her.updateTorso()
 	_check("cleared: the game's default animation and her leg angles back", _is_vanilla(), _state())
+	_check("cleared: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state())
 
 
 func _is_vanilla() -> bool:

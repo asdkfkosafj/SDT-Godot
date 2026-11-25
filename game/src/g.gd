@@ -236,6 +236,14 @@ func resetIntro() -> void:
 ## Moves obj into newParent: at the bottom, just above 'above', or on top.
 func changeLayer(obj: FlashDisplayObject, newParent: FlashSprite, above: FlashDisplayObject = null,
 		atBottom: bool = false) -> void:
+	if Hooks.has(&"g.changeLayer"):   # HOOK
+		var h := Hooks.before(&"g.changeLayer", self, [obj, newParent, above, atBottom])
+		if h.cancelled:
+			return
+		obj = h.args[0]
+		newParent = h.args[1]
+		above = h.args[2]
+		atBottom = h.args[3]
 	obj.parent.removeChild(obj)
 	if atBottom:
 		newParent.addChildAt(obj, 0)

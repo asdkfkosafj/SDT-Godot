@@ -109,6 +109,8 @@ func saveOptionsData() -> void:
 	d["resetIntro"] = g.resetIntroOnNewChar
 	d["introResistance"] = g.introResistance
 	d["sceneZoom"] = g.sceneZoom
+	if Hooks.has_value(&"SaveData.sceneZoom"):   # HOOK value point: the zoom saved with the options (g.sceneZoom; a temporary zoom keeps the player's)
+		d["sceneZoom"] = Hooks.value(&"SaveData.sceneZoom", self, g.sceneZoom)
 	d["autoMode"] = AutomaticControl.autoModeNameList[g.autoMode]
 	d["himArmPos"] = Him.armPositions[g.him.currentArmPosition]
 	d["himLeftArmPos"] = Him.leftArmPositions[g.him.currentLeftArmPosition]

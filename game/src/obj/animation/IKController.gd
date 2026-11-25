@@ -223,7 +223,10 @@ func trackTarget(start = null) -> void:
 		s3Ang += getEndRotation()
 		var cur := s3.rotation_degrees / 180.0 * PI
 		s3Ang = cur + (s3Ang - cur) / s3Mass
-		s3Ang = maxf(-1.22, minf(1.22, s3Ang))
+		var lim := 1.22
+		if Hooks.has_value(&"IKController.endLimit"):   # HOOK value point: how far the end joint may turn either way (1.22 rad; INF: no limit)
+			lim = Hooks.value(&"IKController.endLimit", self, lim)
+		s3Ang = maxf(-lim, minf(lim, s3Ang))
 		if is_nan(s3Ang):
 			s3Ang = 0.0
 	if s3Mass > 1:

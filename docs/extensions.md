@@ -179,7 +179,7 @@ him while she's held), `"slip"` (ticks the arm takes to drop when she passes out
 (`Callable(her, left)` run instead of the drop). The menu's Left arm / Right arm lists, the "arms:" character code
 field and dialogue triggers use the names. `Her.armPositionsFor(left)`, `Her.armPositionAllowed(i, left)` and
 `Her.stepArmPosition(from, dir, left)` list and step through the positions one arm can take. The armoverhaul plugin
-(`Mods/Plugins/armoverhaul`) adds 18.
+(`Mods/Plugins/armoverhaul`) adds 11; the positions extension adds animtools' 7 and Custom while it is on.
 
 ## Body positions
 
@@ -189,8 +189,16 @@ brings old files to the current format (animtools V40). A position runs as an an
 game's two: `AnimationControl.addAnimation(name, anim)` / `removeAnimation(name)` (removing the current one goes back
 to the default; an added animation counts as style 1 for the menu, dialogue and save). A `MainAnimation` may also set
 her torso IK's leg angle offset and end rotation (`torsoS2OffsetAng`, `torsoEndRotation`; NAN in the game's two).
-Work in progress: so far her and his paths, his feet, her knee and torso numbers apply; the developer panel
-(Tools > Positions) loads one.
+A position also sets the camera (value points `SceneLayer.cameraAim` / `SceneLayer.rotation`), props (animtools'
+furniture, a layer above the background given to the scene layer like the game's outside layers), his right arm's
+path (`HimMaleBody.armPoint` / `shoulderPoint` / `handRotation`), her left leg and breast behind him (moved into
+layers at the bottom of the scene; the hook point `g.changeLayer` keeps the game from moving the leg back) and her
+arms. While it is on, the extension adds animtools' 7 arm positions (Cupping Breast ... On Her Ass) and Custom to her
+arm lists; `positions.arms.holds(left)` tells whether a position holds that arm in its pose now (code that moves her
+arms by itself, like armoverhaul's dynamic arms, leaves it alone). A position is a temporary state: the options
+save and the character code keep the player's zoom and arms (`SaveData.sceneZoom`, `InGameMenu.savedArms`), and
+everything comes back when it ends. Work in progress: him reversed / flipped and body contact come later; the
+developer panel (Tools > Positions) loads one.
 
 ## Hooks
 
@@ -354,6 +362,14 @@ The value points in the game, with the field that keeps the result for code that
 | `Neck.swallowScale` | how a swallow pushes her neck out, while she swallows (`Vector2(0.8, 0.5)`: out, down) | |
 | `Neck.bulgeCap` | the most the bulge pushes the neck out, px (35); throatcumbulge's "Neck follows his size" scales it with his width | |
 | `Neck.bumps` | swallow lumps held in her throat, asked once per render: `[]`, or `{at, size}` each (`at`: where along the front of her neck, as `Neck.depth`; `size`: as `neck.swallowSize`, 10 for a swallow): the swallow's own lump (`Neck.lump`, pushed by `Neck.swallowScale`), before `Neck.band`; the condoms plugin's cum in her throat | `neck.renderedPoints` |
+| `SceneLayer.cameraAim` | where the camera puts the scene's origin on the screen (`Vector2`; the game: from the zoom, mirrored), whenever the camera updates (zoom, mirror); body positions aim at their own camera and zoom point | `sceneLayer.camera` |
+| `SceneLayer.rotation` | the scene's rotation in degrees (0), set on the scene layer and its outside layers (back, front, strands, cum, props) whenever the camera updates | `sceneLayer.rotation_degrees` |
+| `SaveData.sceneZoom` | the zoom the options save keeps (`g.sceneZoom`); a temporary zoom (a body position's) keeps the player's | |
+| `IKController.endLimit` | how far an IK's end joint (her foot, her hands, his hands) may turn either way (1.22 rad; `INF`: no limit), every IK update; the IK is the object (body positions lift it for her leg and hands by file version) | `ik.s3Ang` |
+| `HimMaleBody.armPoint` | where his right hand goes this tick (his male body, in his arm container's coordinates; the game's: by her head), before his arm's IK | `arm.x` / `arm.y` |
+| `HimMaleBody.shoulderPoint` | the point his right arm's IK aims his shoulder at this tick (his coordinates) | `body.shoulderPoint` |
+| `HimMaleBody.handRotation` | his right hand's angle on his arm (degrees; the game's: along her head), while his hands are on | `arm.hand.rotation_degrees` |
+| `InGameMenu.savedArms` | her arms the character code saves (`[left, right]` names; the game's: her current ones); a temporary pose (a body position's) keeps the player's | |
 | `Neck.band` | a band that holds the front of her neck in, asked once per render: `null`, or `{top, bottom, inside, soft}` (edges as depth along the front, px her neck may push out between them, depth over which that blends into the free bulge past each edge); a second holder returns `Neck.narrower(value, its own)` | `neck.renderedPoints` |
 
 `Hooks.explain(name)` returns the last evaluation step by step (recording starts with the first call),

@@ -68,6 +68,12 @@ func move(p: float, hand: float, yp: float) -> void:
 		shoulderPoint.x = 150.0 + 40.0 * armPos
 		shoulderPoint.x += (arm.x + 580.0 - shoulderPoint.x) * 0.5
 		shoulderPoint.y = -450.0 - 100.0 * armPos
+	if Hooks.has_value(&"HimMaleBody.armPoint"):   # HOOK value point: where his right hand goes this tick (in his arm container)
+		var to: Vector2 = Hooks.value(&"HimMaleBody.armPoint", self, Vector2(arm.x, arm.y))
+		arm.x = to.x
+		arm.y = to.y
+	if Hooks.has_value(&"HimMaleBody.shoulderPoint"):   # HOOK value point: the point his right arm's IK aims his shoulder at (his space)
+		shoulderPoint = Hooks.value(&"HimMaleBody.shoulderPoint", self, shoulderPoint)
 	updateArmPosition()
 
 
@@ -98,7 +104,10 @@ func updateArmPosition() -> void:
 	if g.handsOff:
 		arm.hand.rotation_degrees *= 0.5
 	else:
-		arm.hand.rotation_degrees = g.her.rotation_degrees - arm.rotation_degrees
+		var hr: float = g.her.rotation_degrees - arm.rotation_degrees
+		if Hooks.has_value(&"HimMaleBody.handRotation"):   # HOOK value point: his right hand's angle on his arm (degrees; the game: along her head)
+			hr = Hooks.value(&"HimMaleBody.handRotation", self, hr)
+		arm.hand.rotation_degrees = hr
 	leftArmSpeed.x += (leftArmDefaultPoint.x - leftArmTarget.x) * 0.1 - xMovement * 0.1
 	leftArmSpeed.y += (leftArmDefaultPoint.y - leftArmTarget.y) * 0.1 - absf(xMovement * 0.05)
 	leftArmTarget += leftArmSpeed

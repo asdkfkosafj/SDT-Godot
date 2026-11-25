@@ -1,6 +1,7 @@
 extends SDTExtension
-## Port of sby's armOverhaulV1 Loader mod: her arms get animtools' extra positions (Cupping Breast to On Her Ass)
-## and the mod's own (On Hips to Holding Hand), in Her > Arms and the "arms:" field of the character code;
+## Port of sby's armOverhaulV1 Loader mod: her arms get the mod's own positions (On Hips to Holding Hand), in Her > Arms
+## and the "arms:" field of the character code; animtools' extra positions (Cupping Breast to On Her Ass) come from the
+## game's Positions extension while it is on, and the mod uses them then (dynamic arms, hotkeys, transitions);
 ## In Air, Holding Stomach, Cupping Balls, On Neck and Masturbating move every tick; In His Hand / Holding Hand put her
 ## hand in his left hand; hotkeys cycle her arms, his arms and his leg layer, with the mod's arm transitions.
 ## Dynamic arms (dynamic_arms.gd): her arms move by themselves, following what happens and her mood.
@@ -9,7 +10,7 @@ extends SDTExtension
 ## Spank reactions (spank.gd, with the spankanywhere plugin): hits move her arms, by where they land.
 ## The mod's numbers are in values.cfg (its own key names); the menu has only the switches.
 
-## animtools' positions, then the mod's own, in the Loader's order (animtools' "Custom" pose editor is not ported)
+## animtools' positions (added by the Positions extension, not here), then the mod's own, in the Loader's order
 const ANIMTOOLS := ["Cupping Breast", "Holding Breast", "On His Waist", "On His Chest", "Gripping Breast", "Gripping Thigh",
 	"On Her Ass"]
 const OWN := ["On Hips", "On Neck", "In Face", "In Air", "Holding Stomach", "Cupping Balls", "On His Ass", "On His Hand",
@@ -96,7 +97,7 @@ func _enable() -> void:
 	modify(&"Her.drag", {"phase": Hooks.MOOD, "op": "fn", "fn": func(v, _her): return v + hands.drag})
 	_load_values()
 	var her: Her = g.her
-	for n in ANIMTOOLS + OWN:
+	for n in OWN:
 		var key := _key(n)
 		Her.addArmPosition(n, Callable() if n in RIGHT_ONLY else _set_up.bind(n, true),
 			Callable() if n in LEFT_ONLY else _set_up.bind(n, false), id,
@@ -128,6 +129,8 @@ func _enable() -> void:
 		da.register_trigger("DYNAMIC_ARMS_MODE", 1, func(args): set_dynamic(int(args[0])))
 		da.register_trigger("RESTRAINED_MODE", 1, func(args): set_restrained(int(args[0]))))
 	hook_after(&"Him.givePleasure", _pleasure)
+	hook_after(&"Her.setLeftArmPosition", func(_c): _tied_thigh(true))
+	hook_after(&"Her.setRightArmPosition", func(_c): _tied_thigh(false))
 	hook_after(&"Him.setLeftArmPosition", _his_left_arm)
 	hook_after(&"Him.setBody", func(_c): _his_body())
 	hook_after(&"g.setPenisOut", func(_c): _penis_out())
@@ -233,6 +236,12 @@ func _rand_int(lo: String, hi: String) -> int:
 	return int(round(randf() * (V[hi] - V[lo]) + V[lo]))
 
 
+## Whether the game's Positions extension holds that arm in a body position's pose now (dynamic arms leave it alone).
+func position_holds(left: bool) -> bool:
+	var p = Extensions.get_extension("positions")
+	return p != null and p.enabled and p.arms != null and p.arms.holds(left)
+
+
 func _left_name() -> String:
 	return Her.armPositions[g.her.currentLeftArmPosition]
 
@@ -247,54 +256,16 @@ func _set_up(her: Her, n: String, left: bool) -> void:
 	var ik: IKController = her.leftArmIK if left else her.rightArmIK
 	var side := "Left" if left else "Right"
 	var on_him: Vector2 = Her.leftHandOnHim if left else Her.rightHandOnHim
-	var bs: float = g.characterControl.breastSize
 	ik.stopDropping()
 	if left:
-		# animtools first puts the arm in her own layer, by her leg; the mod's positions go behind
-		if n in ANIMTOOLS and n not in ["On His Waist", "On His Chest"]:
-			g.changeLayer(her.leftArmContainer, her, her.leftLegContainer)
-		elif n == "On Neck" or n == "On His Hand":
+		# the mod's positions go behind her
+		if n == "On Neck" or n == "On His Hand":
 			g.changeLayer(her.leftArmContainer, g.backLayer, null, true)
 		elif n == "Masturbating":
 			g.changeLayer(her.leftArmContainer, her, her.leftLegContainer)
 		else:
 			g.changeLayer(her.leftArmContainer, g.backLayer)
-	var breast = her.torsoBack.leftBreast if left else her.torso.midLayer.rightBreast
-	var breast_chain: Array = [breast.nipple, breast, her.torsoBack] if left else \
-		[breast.nipple, breast, her.torso.midLayer, her.torso, her]
 	match n:
-		"Cupping Breast":
-			ik.newTarget(Vector2(-40 + bs / 10.0, 95 - bs / 8.0), breast.nipple, true)
-			ik.reversedEnd = true
-			ik.setEndRotationTarget(-168 + bs / 12.0, breast_chain)
-			(her.leftBreastController if left else her.rightBreastController).updateFirmness(bs, true)
-		"Holding Breast":
-			ik.newTarget(Vector2(-50 - minf(110, bs), 80 - bs / 2.65), breast.nipple, true)
-			ik.reversedEnd = true
-			ik.setEndRotationTarget((-160.0 if left else -165.0) + minf(75.0 if left else 80.0, bs * 1.2), breast_chain)
-		"On His Waist":
-			ik.newTarget(on_him + (Vector2(-20, -106) if left else Vector2(-12, -36)), g.him.rightLeg, true)
-			ik.setEndRotationTarget(-185 if left else -183, [g.him.rightLeg, g.him])
-		"On His Chest":
-			ik.newTarget(on_him + (Vector2(136, -246) if left else Vector2(144, -176)), g.him.torsoLayer, true)
-			ik.setEndRotationTarget(-175 if left else -173, [g.him.torsoLayer, g.him])
-		"Gripping Breast":
-			ik.newTarget(Vector2(-150 + bs / 1.8, -25 + bs / 13.0), breast.nipple, true)
-			ik.setEndRotationTarget(-70, breast_chain)
-			_close(her, left, true)
-		"Gripping Thigh":
-			if restrained:   # tied: where her struggling puts the hand, open
-				if left:
-					g.changeLayer(her.leftArmContainer, g.backLayer)
-				res.aim(her, left)
-			else:
-				ik.newTarget(Vector2(105, -90) if left else Vector2(95, -75), her.torsoBack.backside, true)
-				ik.setEndRotationTarget(-22, [her.torsoBack.backside, her.torsoBack] + ([] if left else [her]))
-				_close(her, left, true)
-		"On Her Ass":
-			ik.reversedEnd = true
-			ik.newTarget(Vector2(-5, -80), her.torsoBack.backside, true)
-			ik.setEndRotationTarget(36, [her.torsoBack.backside, her.torsoBack] + ([] if left else [her]))
 		"On Hips":
 			var p := on_him + Vector2(V["onHipsXOffset" + side], -V["onHipsYOffset" + side])
 			if left:
@@ -348,6 +319,18 @@ func _set_up(her: Her, n: String, left: bool) -> void:
 			hold_released = false
 			if n == "Holding Hand":
 				her.rightHandClosed = true   # direct: her hand's state, as her arm positions set it (the game has no method)
+
+
+## Tied (restrained) and her arm on her thigh (animtools' Gripping Thigh, from the Positions extension): the hand goes
+## where her struggling puts it, open.
+func _tied_thigh(left: bool) -> void:
+	if not restrained or (_left_name() if left else _right_name()) != "Gripping Thigh":
+		return
+	var her: Her = g.her
+	if left:
+		g.changeLayer(her.leftArmContainer, g.backLayer)
+	_close(her, left, false)
+	res.aim(her, left)
 
 
 ## A closed hand; the left one also shows the hand drawn over her breast (her.leftHandOver)
@@ -757,6 +740,13 @@ func _arrivals(her: Her) -> void:
 	for s in 2:
 		var left := s == 0
 		var ik: IKController = her.leftArmIK if left else her.rightArmIK
+		if position_holds(left):   # a body position put the arm in its pose: a move under way ends here
+			_reverse[s] = false
+			_to_back[s] = false
+			_to_hand_job[s] = false
+			_close_hand[s] = false
+			_to_his_legs[s] = false
+			continue
 		if _reverse[s] and ik.s3Mass == 1:
 			ik.reversedEnd = not ik.reversedEnd
 			_reverse[s] = false
