@@ -38,7 +38,7 @@ func _init() -> void:
 	id = "positions"
 	title = "Positions"
 	description = "animtools' body positions: positions from .txt files in Mods/Positions (work in progress: developer panel only)."
-	default_enabled = false
+	default_enabled = true
 
 
 func _enable() -> void:
