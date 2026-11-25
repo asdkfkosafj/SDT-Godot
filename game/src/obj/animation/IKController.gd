@@ -219,7 +219,10 @@ func trackTarget(start = null) -> void:
 	m1 = Transform2D(m1Ang, Vector2(scaling, scaling), 0.0, s1StartPoint)
 	m2 = Transform2D(m2Ang, s2StartPoint)
 	if not tapping:
-		s3Ang = -(s1.parent.rotation_degrees / 180.0 * PI) - offsetAng - s2Ang + s2OffsetAng
+		var pr := s1.parent.rotation_degrees / 180.0 * PI
+		if Hooks.has_value(&"IKController.parentRotation"):   # HOOK value point: the rotation (rad) the end joint turns against: its chain's parent's
+			pr = Hooks.value(&"IKController.parentRotation", self, pr)
+		s3Ang = -pr - offsetAng - s2Ang + s2OffsetAng
 		s3Ang += getEndRotation()
 		var cur := s3.rotation_degrees / 180.0 * PI
 		s3Ang = cur + (s3Ang - cur) / s3Mass

@@ -722,7 +722,7 @@ func move(p: float, mx: float, my: float) -> void:
 								g.her.fillMouth()
 							currentSpurt.detachSourceLink(Vector2(0, 0), 0)
 						else:
-							var ang := randomSpurtAngle + sin(timerScale * PI) * randomSpurtAngleRange
+							var ang := spurtAngle() + sin(timerScale * PI) * randomSpurtAngleRange
 							startSpeed = Vector2(cos(ang) * (randomSpurtSpeed - randf()), sin(ang) * (randomSpurtSpeed - randf()))
 							currentSpurt.insertLink(startSpeed, randomSpurtCollisionDelay + int(floor(timerScale * 2.0)), g.randomCumMass())
 							g.soundControl.adjustCumVolume(timerScale, 0.3)
@@ -751,7 +751,8 @@ func move(p: float, mx: float, my: float) -> void:
 					catchCum(g.randomCumMass())
 		else:
 			if spurting:
-				currentSpurt.detachSourceLink(Vector2(cos(randomSpurtAngle) * randomSpurtSpeed, sin(randomSpurtAngle) * randomSpurtSpeed), 0)
+				var ang := spurtAngle()
+				currentSpurt.detachSourceLink(Vector2(cos(ang) * randomSpurtSpeed, sin(ang) * randomSpurtSpeed), 0)
 			startedSpurt = false
 			spurting = false
 			if ejaculation.size() > 0:
@@ -812,6 +813,13 @@ func ejaculate() -> void:
 		nextSpurt()
 		g.automaticControl.ejaculate()
 		ejaculating = true
+
+
+## The way this spurt shoots (radians, scene space): the random angle picked for it.
+func spurtAngle() -> float:
+	if Hooks.has_value(&"Him.spurtAngle"):   # HOOK value point: the way the current spurt shoots (rad, scene space; the game: its random angle, -3.3..-2.5), each link
+		return Hooks.value(&"Him.spurtAngle", self, randomSpurtAngle)
+	return randomSpurtAngle
 
 
 func addRandomSpurt(time: int, first: bool = false) -> void:

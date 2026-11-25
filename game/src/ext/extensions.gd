@@ -61,6 +61,7 @@ const BUILTIN: Array[String] = [
 	"res://src/ext/extramod/extramod.gd",
 	"res://src/ext/extramodhim/extramodhim.gd",
 	"res://src/ext/positions/positions.gd",
+	"res://src/ext/bodycontact/bodycontact.gd",
 ]
 
 const CONFIG_FILE := "extensions.cfg"

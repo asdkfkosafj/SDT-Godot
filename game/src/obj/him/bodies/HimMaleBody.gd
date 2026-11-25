@@ -37,6 +37,9 @@ func move(p: float, hand: float, yp: float) -> void:
 	_him.overLayer.x = _him.x
 	_him.overLayer.y = _him.y
 	_him.overLayer.rotation_degrees = _him.rotation_degrees
+	var mirrored: bool = mHim.determinant() < 0.0   # a mirrored animation (body positions turning him round): his
+	if (_him.overLayer.scaleY < 0.0) != mirrored:   # over layer and his arm mirror with him
+		_him.overLayer.scaleY = -_him.overLayer.scaleY
 	_him.overLayer.torso.rotation_degrees = -3.0 + 1.0 * p
 	_him.torsoLayer.torso.rotation_degrees = -3.0 + 1.0 * p
 	_him.midLayer.hips.rotation_degrees = -3.0 + 1.0 * p
@@ -53,6 +56,8 @@ func move(p: float, hand: float, yp: float) -> void:
 	var arm = _him.armContainer.arm
 	_him.armContainer.x = _him.x
 	_him.armContainer.rotation_degrees = _him.rotation_degrees
+	if (_him.armContainer.scaleY < 0.0) != mirrored:
+		_him.armContainer.scaleY = -_him.armContainer.scaleY
 	if g.handsOff:
 		arm.x += (80.0 - arm.x) * 0.25
 		arm.y += (200.0 - arm.y) * 0.25

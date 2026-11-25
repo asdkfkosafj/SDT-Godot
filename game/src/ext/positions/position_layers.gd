@@ -100,8 +100,17 @@ func _put_back(o: FlashDisplayObject, home: Array) -> void:
 
 
 ## Every tick: the layers take her transform (and her torso's for the breast), and the moved breast her skin colour.
+## They stay under him (the game puts him back at the bottom of the scene when his penis goes back in).
 func _follow() -> void:
 	var her: Her = g.her
+	var sl: SceneLayer = g.sceneLayer
+	if g.him.parent == sl:
+		var top := -1
+		for h in [_leg_holder, _breast_holder, _breast_cos_holder]:
+			if h != null:
+				top = maxi(top, sl.getChildIndex(h))
+		if top > sl.getChildIndex(g.him):
+			sl.setChildIndex(g.him, top)
 	if _leg_holder != null:
 		_leg_holder.transform = her.transform
 	if _breast_holder != null:   # (the breast's own parents carry her torso's transform; the leg container its own)

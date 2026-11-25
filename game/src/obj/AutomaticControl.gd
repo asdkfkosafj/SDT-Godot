@@ -311,6 +311,10 @@ func getPos() -> Vector2:
 
 
 func adjustAim() -> void:
+	if Hooks.has(&"AutomaticControl.adjustAim"):   # HOOK (can cancel)
+		var h := Hooks.before(&"AutomaticControl.adjustAim", self, [])
+		if h.cancelled:
+			return
 	if g.her.isInMouth() or g.handJobMode:
 		currentPos.y *= 0.8
 	else:
@@ -479,6 +483,10 @@ func fullSlam() -> Vector2:
 
 
 func hiltMove() -> Vector2:
+	if Hooks.has(&"AutomaticControl.hiltMove"):   # HOOK (can cancel with the position to aim at)
+		var h := Hooks.before(&"AutomaticControl.hiltMove", self, [])
+		if h.cancelled:
+			return h.result
 	if g.penisOut:
 		avoidPenisOut()
 		return currentPos
@@ -561,6 +569,10 @@ func offHoldWithTongue() -> Vector2:
 
 
 func tipHold() -> Vector2:
+	if Hooks.has(&"AutomaticControl.tipHold"):   # HOOK (can cancel with the position to aim at)
+		var h := Hooks.before(&"AutomaticControl.tipHold", self, [])
+		if h.cancelled:
+			return h.result
 	var d: float = g.her.getPenisMouthDist() + 10.0
 	currentPos.x -= d * 0.001
 	currentPos.y = offTilt
@@ -569,6 +581,10 @@ func tipHold() -> Vector2:
 
 
 func outsideLickBalls() -> Vector2:
+	if Hooks.has(&"AutomaticControl.outsideLickBalls"):   # HOOK (can cancel with the position to aim at)
+		var h := Hooks.before(&"AutomaticControl.outsideLickBalls", self, [])
+		if h.cancelled:
+			return h.result
 	if transitioning:
 		currentPos.x = maxf(currentPenisTipPos - 0.2, lastPos.x - 0.03)
 	elif g.penisOut:
@@ -600,6 +616,10 @@ func waggleEyebrowsWithTongue() -> void:
 
 
 func oneDeep() -> void:
+	if Hooks.has(&"AutomaticControl.oneDeep"):   # HOOK (can cancel)
+		var h := Hooks.before(&"AutomaticControl.oneDeep", self, [])
+		if h.cancelled:
+			return
 	nextModeTimer = 0
 	singleActionTime = 120
 	deepthroatTarget = randf() * 0.1 + 0.1 + deepthroatProgress

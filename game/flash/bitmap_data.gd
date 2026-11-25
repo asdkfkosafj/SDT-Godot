@@ -287,6 +287,8 @@ func _draw_rec(o: FlashDisplayObject, m: Transform2D, ct: FlashColorTransform, c
 		var y0 := maxi(clip.position.y, int(floor(r.position.y)))
 		var x1 := mini(clip.end.x, int(ceil(r.end.x)))
 		var y1 := mini(clip.end.y, int(ceil(r.end.y)))
+		if x1 <= x0 or y1 <= y0:   # all of it outside the bitmap (the clip)
+			return
 		_grow(Rect2i(x0, y0, x1 - x0, y1 - y0))
 		if img.get_format() != Image.FORMAT_RGBA8:
 			img = img.duplicate()

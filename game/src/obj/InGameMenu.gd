@@ -2231,6 +2231,8 @@ func loadData(param1, param2 = true, param3 = false, param4 = null):
 	updateEyebrowsList()
 	updateCharMenu(0,true)
 	CharCode.load_fields(_loc6_, str(param1), onlyLoadCostume)   # HOOK port extension: extension fields
+	if Hooks.has(&"InGameMenu.loadData"):   # HOOK (args: the code, costume only; after every field applied)
+		Hooks.after(&"InGameMenu.loadData", self, [str(param1), onlyLoadCostume])
 	if param2:
 		g.saveData.saveCharData()
 

@@ -1172,7 +1172,10 @@ func move(targetPos: float, tilt: float) -> float:
 	generateSpit()
 	movement = pos * range - previousPos * range
 	absMovement = movement if movement > 0 else -movement
-	vigour += absMovement * 0.2 if g.penisOut else absMovement
+	var gain := absMovement * 0.2 if g.penisOut else absMovement
+	if Hooks.has_value(&"Her.vigourGain"):   # HOOK value point: how much her vigour grows this tick (the game: her movement, a fifth of it with the penis out)
+		gain = Hooks.value(&"Her.vigourGain", self, gain)
+	vigour += gain
 	vigour = minf(1050.0, maxf(0.0, vigour - 20.0))
 	if currentMood == HAPPY_MOOD or currentMood == AHEGAO_MOOD:
 		if movement < 0 and not passedOut:
@@ -1557,6 +1560,8 @@ func checkMovementSounds() -> void:
 	var tip: Vector2 = globalToLocal(g.him.getPenisTipPoint())
 	var tipVec := Vector2(tip.x - topLipA.x, tip.y - topLipA.y)
 	var crossV := Maths.cross(mouthVec, tipVec)
+	if Hooks.has_value(&"Her.mouthContact") and not Hooks.value(&"Her.mouthContact", self, true):   # HOOK value point: whether his tip can reach her mouth at all (true; false: it is always outside her lips)
+		crossV = minf(crossV, -0.001)
 	var inside := crossV > 0
 	var entering := false
 	var dotV := Maths.pointDot(topLipA, lipB, tip)

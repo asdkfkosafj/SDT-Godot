@@ -46,12 +46,22 @@ func _init() -> void:
 	_at(63, func():
 		x.clear()
 		_check("cleared: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state()))
-	_at(64, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
-	_at(66, func():
+	_at(64, _him_start)
+	for k in 40:
+		_at(65 + k, func(): _him_stroke(k))
+	_at(106, _him_checks)
+	_at(107, _contact_start)
+	for k in 160:
+		_at(108 + k, func(): _contact_stroke(k))
+	_at(270, _contact_checks)
+	_at(271, _dialogue_checks)
+	_at(272, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
+	_at(274, func():
 		Extensions.set_enabled("positions", false)
 		_check("switched off: the game's default animation and her leg angles back", _is_vanilla(), _state())
-		_check("switched off: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state()))
-	_at(68, _finish)
+		_check("switched off: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state())
+		_check("switched off: him unmirrored, in the scene, his body shown, her mouth open to him", _him_vanilla(), _him_state()))
+	_at(276, _finish)
 
 
 func step(_frame: int) -> void:
@@ -345,6 +355,186 @@ func _layer_checks() -> void:
 	_check("Custom arm: her hand aims at the position's point", Her.armPositions[her.currentLeftArmPosition] == "Custom"
 		and her.leftArmIK.targetPoint == Vector2(v["armpos2x"], v["armpos2y"]) and her.leftArmIK.targetPointCoordinateSpace == g.sceneLayer,
 		"%s %s" % [Her.armPositions[her.currentLeftArmPosition], her.leftArmIK.targetPoint])
+
+
+## Stage 3: him turned round, his layer, her mouth closed to him in non-oral positions, his body hidden.
+var _mouth_before := []
+var _mouth_full_seen := false
+
+
+func _him_start() -> void:
+	var her: Her = g.her
+	x.load_position("animtools/Anal/ATV_doggy_hard")   # reversed, penis behind her, anal
+	var him: Him = g.him
+	him.currentBody.move(her.pos, 0.0, 0.0)
+	_check("reversed: his body, his over layer and his arm mirrored",
+		g.him.transform.determinant() < 0.0 and him.overLayer.scaleY < 0.0 and him.armContainer.scaleY < 0.0)
+	var leg: IKController = him.currentBody.leftLegIK
+	_check("reversed: his feet turn against his unmirrored turn",
+		is_equal_approx(Hooks.value(&"IKController.parentRotation", leg, deg_to_rad(him.rotation_degrees)),
+			wrapf(_his_turn(), -PI, PI)))
+	_check("anal: her mouth closed to him, his feet not limited",
+		Hooks.has_value(&"Her.mouthContact") and not Hooks.value(&"Her.mouthContact", her, true)
+		and Hooks.value(&"IKController.endLimit", leg, 1.22) == INF)
+	her.startClenchingTeeth()
+	_check("anal: her teeth do not clench", not her.clenchTeeth)
+	g.setPenisOut(false)
+	g.setPenisOut(true)
+	_check("penis behind her: he stays in the scene, under her, while his penis is out",
+		him.parent == g.sceneLayer and g.sceneLayer.getChildIndex(him) < g.sceneLayer.getChildIndex(her) and g.penisOut,
+		"%s %s" % [him.parent, g.penisOut])
+	g.setPenisOut(false)
+
+
+## The tween's angle before the mirror (doggy_hard: reversed).
+func _his_turn() -> float:
+	var t: Transform2D = x._anim.hisTween._tweenMatrix
+	return Transform2D(t.x * Vector2(-1, 1), t.y * Vector2(-1, 1), Vector2()).get_rotation()
+
+
+func _him_stroke(k: int) -> void:
+	if k == 2:   # (from here: the first ticks end what the oral stroke before left pending, e.g. her intro relaxing)
+		_mouth_before = [g.her.intro, g.her.firstDT, g.her.mouthFull]
+	_move(Vector2(lerpf(600.0, -300.0, absf(sin(k * 0.4))), 250))
+	if g.her.mouthFull:
+		_mouth_full_seen = true
+
+
+func _him_checks() -> void:
+	var her: Her = g.her
+	var him: Him = g.him
+	_check("anal: her mouth never full over a stroke, intro and first deep throat kept",
+		not _mouth_full_seen and [her.intro, her.firstDT, her.mouthFull] == _mouth_before, str([_mouth_full_seen, her.intro, her.firstDT]))
+	var t: Transform2D = g.sceneLayer.flash_global_transform().affine_inverse() * him.penis.flash_global_transform()
+	var axis: float = t.basis_xform(Vector2(-1, 0)).angle()
+	_check("spurts along his penis (here: to the right, at her)",
+		absf(angle_difference(Hooks.value(&"Him.spurtAngle", him, -2.9), axis)) < 0.01 and absf(axis) < PI / 2, str(axis))
+	x.load_position("animtools/Vaginal/ATV_Missionary_V2_Medium_QuiteQuaint")
+	_check("vaginal, penis not behind her: he draws in front of her", him.parent == g.frontLayer and not g.penisOut)
+	x.load_position("animtools/Other/HerD/Futa_anal")
+	_check("himhidden = 0: his body hidden, his penis shows", him.bodyHidden and him.penis.visible)
+	x.load_position("animtools/Oral/BedBJ")
+	_check("oral again: his body back, him where his penis says, her mouth open to him",
+		not him.bodyHidden and him.parent == (g.frontLayer if g.penisOut else g.sceneLayer) and not Hooks.has_value(&"Her.mouthContact")
+		and not Hooks.has_value(&"g.penisInFront"))
+	x.clear()
+	_check("cleared: him unmirrored, in the scene, his body shown, her mouth open to him", _him_vanilla(), _him_state())
+
+
+func _him_vanilla() -> bool:
+	var him: Him = g.him
+	him.currentBody.move(g.her.pos, 0.0, 0.0)
+	return (him.transform.determinant() > 0.0 and him.overLayer.scaleY > 0.0 and him.armContainer.scaleY > 0.0
+		and him.parent == (g.frontLayer if g.penisOut else g.sceneLayer) and not him.bodyHidden
+		and not Hooks.has_value(&"Her.mouthContact") and not Hooks.has_value(&"g.penisInFront")
+		and not Hooks.has_value(&"IKController.parentRotation"))
+
+
+func _him_state() -> String:
+	var him: Him = g.him
+	return "det %.2f, over %.1f, arm %.1f, in scene %s, penis out %s, hidden %s, mouth gate %s" % [
+		him.transform.determinant(), him.overLayer.scaleY, him.armContainer.scaleY, him.parent == g.sceneLayer,
+		g.penisOut, him.bodyHidden, Hooks.has_value(&"Her.mouthContact")]
+
+
+## Stage 4: body contact in a non-oral position (the bodycontact extension; the experience preset Average).
+var bc: SDTExtension = null
+var _seen := {}            # what the stroke showed: contact, depth, drag, mask, caught, lowest resistance
+var _tick_us := 0
+var _ticks := 0
+
+
+func _contact_start() -> void:
+	bc = Extensions.get_extension("bodycontact")
+	bc.set_setting("experience", "Average")
+	x.load_position("animtools/Oral/BedBJ")
+	bc._tick()
+	_check("body contact: off in oral positions", bc != null and bc.enabled and not bc.active)
+	x.load_position("animtools/Anal/ATV_doggy_hard")
+	bc._load(false)
+	_check("anal: on, Average's anal resistance (10), full", bc.active and bc.v["startingresistance"] == 10.0
+		and bc.resistance == 10.0, "%s %s %s" % [bc.active, bc.v.get("startingresistance"), bc.resistance])
+	_seen = {"contact": false, "depth": 0.0, "drag": 0.0, "mask": -100.0, "caught": false, "low": INF, "back": false}
+
+
+func _contact_stroke(k: int) -> void:
+	_move(Vector2(lerpf(-200.0, 700.0, 0.5 + 0.5 * sin(k * 0.08)), 250))
+	var a := Time.get_ticks_usec()
+	bc._tick()
+	_tick_us += Time.get_ticks_usec() - a
+	_ticks += 1
+	var her: Her = g.her
+	if bc.contact:
+		_seen["contact"] = true
+		_seen["depth"] = maxf(_seen["depth"], bc.depth)
+		_seen["drag"] = maxf(_seen["drag"], Hooks.value(&"Her.drag", her, 0.0))
+		_seen["mask"] = maxf(_seen["mask"], Hooks.value(&"Him.penisMask", g.him, {"x": -100.0, "scale": 1.0})["x"])
+		if Hooks.value(&"Him.cumCaught", g.him, false):
+			_seen["caught"] = true
+		_seen["low"] = minf(_seen["low"], bc.resistance)
+	elif _seen["low"] < 10.0 and bc.resistance > _seen["low"]:
+		_seen["back"] = true
+
+
+func _contact_checks() -> void:
+	var her: Her = g.her
+	_check("a stroke: contact, depth past the entry point, her resistance pushes back, his penis masked inside her",
+		_seen["contact"] and _seen["depth"] > 100.0 and _seen["drag"] > 0.05 and _seen["mask"] > -100.0, str(_seen))
+	_check("in contact his spurts stay inside her", _seen["caught"])
+	_check("her resistance wears down while he is in her and comes back while he is out",
+		_seen["low"] < 10.0 and _seen["back"], str(_seen))
+	bc._vigour = 0.0
+	_check("her vigour: the game's gain undone (the position's own instead)", Hooks.value(&"Her.vigourGain", her, 5.0) == 0.0)
+	_check("body contact's tick under 0.2 ms (mean)", _tick_us / maxi(1, _ticks) < 200, "%d us" % (_tick_us / maxi(1, _ticks)))
+	bc.set_setting("experience", "Position's own")
+	_check("experience \"Position's own\": the file's resistance", bc.v["startingresistance"] == x.current.values["startingresistance"])
+	bc.set_setting("experience", "Average")
+	x.clear()
+	bc._tick()
+	_check("cleared: body contact off, nothing applied", not bc.active and Hooks.value(&"Her.drag", her, 0.0) == 0.0
+		and not Hooks.value(&"Him.cumCaught", g.him, false) and Hooks.value(&"Her.vigourGain", her, 5.0) == 5.0)
+
+
+## Stage 5: dialogue triggers, variables and line types, auto mode, character code.
+func _dialogue_checks() -> void:
+	var da = Extensions.get_extension("dialogueactions")
+	_check("DialogueActions on", da != null and da.enabled)
+	var val := func(n: String) -> String: return da.vars.value_text(n)
+	_check("atv_active 1, atv_position 0 with the game's animation", val.call("atv_active") == "1"
+		and val.call("atv_position") == "0", "%s %s" % [val.call("atv_active"), val.call("atv_position")])
+	_check("[ANIMTOOLS_<name>] loads the position (folders as _slash5C_)",
+		da.run_code("[ANIMTOOLS_Anal_slash5C_ATV_doggy_hard]") and x.current != null and x.current.name.ends_with("ATV_doggy_hard"))
+	_check("atv_position 3, atv_position_name as the dialogue gave it, atv_dominant", val.call("atv_position") == "3"
+		and val.call("atv_position2") == "3" and val.call("atv_position_name") == "Anal\\ATV_doggy_hard"
+		and val.call("atv_dominant") == str(int(x.current.values["dominant"])),
+		"%s %s %s" % [val.call("atv_position"), val.call("atv_position_name"), val.call("atv_dominant")])
+	_check("animtools' voice triggers are taken (no voice pack yet)", da.run_code("[ANIMTOOLSSETVOICECHAR3]")
+		and da.run_code("[ANIMTOOLSDISABLEHUNNIESOUNDS]"))
+	var dc = g.dialogueControl
+	dc.loadCustomDialogue('bodyentered:"in"\nbodyentered_anal:"anal in"\ncuminher:"cum"\n', false)
+	bc._tick()
+	_check("line types for the dialogue's animtools lines (and only those)", dc.states.has("bodyentered")
+		and dc.states.has("bodyentered_anal") and dc.states.has("cuminher") and not dc.states.has("inbody"))
+	bc._line("bodyentered")
+	_check("the line for the position's type goes first", dc.states["bodyentered_anal"].build > 0
+		and dc.states["bodyentered"].build == 0)
+	_check("auto mode: her tip position is where he met her", is_equal_approx(g.animationControl.estimateTipPos(),
+		0.15 if bc.meet == INF else bc.meet))
+	var ac = g.automaticControl
+	ac.currentPos = Vector2(0.2, 0.3)
+	ac.lastPos = Vector2(0.0, 0.3)
+	ac.adjustAim()
+	_check("auto mode: no aiming at her mouth in non-oral positions", is_equal_approx(ac.currentPos.y, 0.3), str(ac.currentPos))
+	_check("character code: animtoolsSexExperience (Average), the position only with animtools' saving on",
+		bc._code_get() == "0,Average" and x.talk._code_get() == null)
+	bc._code_set("0,Tight", null)
+	var tight: bool = bc.get_setting("experience") == "Tight" and bc.v["startingresistance"] == 12.5
+	bc._code_set("0,Average", null)
+	_check("a code's sexual experience applies", tight and bc.get_setting("experience") == "Average")
+	_check("[ANIMTOOLSRANDOM] loads a full position", da.run_code("[ANIMTOOLSRANDOM]") and x.current != null
+		and not "_partial" in x.current.name.to_lower())
+	dc.loadCustomDialogue("", false)
+	x.clear()
 
 
 func _layers_vanilla() -> bool:

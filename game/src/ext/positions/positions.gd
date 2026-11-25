@@ -21,18 +21,22 @@ const Fields := preload("res://src/ext/positions/position_fields.gd")
 const Props := preload("res://src/ext/positions/position_props.gd")
 const Layers := preload("res://src/ext/positions/position_layers.gd")
 const Arms := preload("res://src/ext/positions/position_arms.gd")
+const Talk := preload("res://src/ext/positions/position_dialogue.gd")
 
 const ANIM := "position"   # the AnimationControl key of the applied position
 ## The value points an applied position modifies (taken off when it ends; the arms' own stay while the extension is on).
 const POSITION_POINTS: Array[StringName] = [&"SceneLayer.rotation", &"SceneLayer.cameraAim", &"SaveData.sceneZoom",
 	&"IKController.endLimit", &"HimMaleBody.armPoint", &"HimMaleBody.shoulderPoint", &"HimMaleBody.handRotation",
-	&"StrandControl.gravityDirection", &"Rope.gravityOffset"]
+	&"StrandControl.gravityDirection", &"Rope.gravityOffset", &"IKController.parentRotation", &"Him.penisAngle",
+	&"Him.spurtAngle", &"Her.mouthContact", &"g.penisInFront"]
 
 var library = Library.new()
 var current = null         # the applied Position (null: the game's default)
 var props = Props.new()
 var layers = null          # PositionLayers (her leg / breast behind him, her shadow)
 var arms = null            # PositionArms (animtools' arm positions, a position's arms)
+var talk = null            # PositionDialogue (dialogue triggers and variables, the character code field)
+var loaded_name := ""      # the name the current position was loaded by (a dialogue's, a code's or the library's)
 
 
 func _init() -> void:
@@ -49,7 +53,10 @@ func _enable() -> void:
 	layers.start()
 	arms = Arms.new(self)
 	arms.start()
+	talk = Talk.new(self)
+	talk.start()
 	on_tick(_tick)
+	hook_before(&"Her.startClenchingTeeth", func(c): if not _oral(): c.cancel())
 	menu_control("dev_tools", "Positions", MenuSchema.choice("Position", "Load a body position (animtools .txt)",
 		func(): return ["(game default)"] + Array(library.names),
 		func(): return "(game default)" if current == null else current.name,
@@ -92,6 +99,7 @@ func load_position(given: String) -> bool:
 		push_warning("Positions: no position \"%s\"" % given)
 		return false
 	apply(p)
+	loaded_name = given
 	return true
 
 
@@ -106,6 +114,8 @@ func apply(p) -> void:
 	_apply_camera(p)
 	_apply_limits(p)
 	_apply_his_arm(p)
+	_apply_him(p)
+	_apply_penis(p)
 	props.show(p.values)
 	layers.show(p.values)
 	arms.show(p.values)
@@ -226,6 +236,84 @@ func _his_hand_rotation(_r: float, body) -> float:
 	return lerpf(v["hishandstartrotation"], v["hishandendrotation"], _u(her.pos)) + against
 
 
+# ---------------------------------------------------------------- him turned round, his penis
+
+## His body mirrored (the tween does that), his feet's angles against his unmirrored turn, his penis's angle offset
+## along her stroke (or steady: without its tilt), and his spurts along his penis.
+func _apply_him(p) -> void:
+	unmodify(&"IKController.parentRotation")
+	unmodify(&"Him.penisAngle")
+	unmodify(&"Him.spurtAngle")
+	var v: Dictionary = p.values
+	var rev: bool = v["himreversed"] == 1
+	if rev or v["himflipped"] == 1:
+		modify(&"IKController.parentRotation", {"op": "fn", "fn": _his_leg_turn, "when": func(ik): return ik.s1.parent == g.him})
+	if v["usesteadypenis"] == 1 or v["hispenisrotationoffset"] != 0 or v["hispenisrotationoffsetend"] != 0:
+		modify(&"Him.penisAngle", {"phase": Hooks.FINAL, "op": "fn", "fn": _penis_angle})
+	modify(&"Him.spurtAngle", {"op": "fn", "fn": _spurt_angle})
+
+
+## His body's rotation as his feet see it: the turn before the mirror (animtools: the mirrored body's rotation the
+## other way round, half a turn more when reversed).
+func _his_leg_turn(r: float, _ik) -> float:
+	var v: Dictionary = current.values
+	var odd: bool = (v["himreversed"] == 1) != (v["himflipped"] == 1)
+	return wrapf((-r if odd else r) - (PI if v["himreversed"] == 1 else 0.0), -PI, PI)
+
+
+func _penis_angle(a: float, _him) -> float:
+	var v: Dictionary = current.values
+	var off := lerpf(v["hispenisrotationoffset"], v["hispenisrotationoffsetend"], _u(g.her.pos))
+	return (0.0 if v["usesteadypenis"] == 1 else a) + off
+
+
+## Spurts shoot along his penis (animtools: along his body's angle and the penis offset), with part of the game's
+## random spread (spurtanglerandomamount; the game's spurts are -2.9 +- 0.4 rad).
+func _spurt_angle(a: float, him) -> float:
+	var t: Transform2D = g.sceneLayer.flash_global_transform().affine_inverse() * him.penis.flash_global_transform()
+	var spread := (a + 2.9) * _setting_global("spurtanglerandomamount")
+	return t.basis_xform(Vector2(-1, 0)).angle() + (-spread if t.determinant() < 0.0 else spread)
+
+
+# ---------------------------------------------------------------- her mouth, his layer, his body
+
+var _hid_body := false   # his body hidden by the position (the player's "Show his body" was on)
+
+
+## Not oral (tit fuck, vaginal, anal, other): his tip never reaches her mouth (so no mouth full, intro, deep throat,
+## gag, nose squash...: they keep their values for the next oral position) and her teeth do not clench; he draws
+## behind her (setpenisoutbehind) or in front of her (the files that do not set it). His body hides in the files that
+## hide it (himhidden = 0).
+func _apply_penis(p) -> void:
+	unmodify(&"Her.mouthContact")
+	unmodify(&"g.penisInFront")
+	var v: Dictionary = p.values
+	if not _oral():
+		modify(&"Her.mouthContact", {"op": "set", "value": false})
+		if g.her.clenchTeeth:
+			g.her.releaseTeeth()
+	if v["setpenisoutbehind"] == 1:
+		modify(&"g.penisInFront", {"op": "set", "value": false})
+	elif not _oral():
+		modify(&"g.penisInFront", {"op": "set", "value": true})
+	g.updatePenisLayer()
+	_show_body(v["himhidden"] != 0)
+
+
+func _oral() -> bool:
+	return current == null or current.values["positiontype"] == 0
+
+
+func _show_body(on: bool) -> void:
+	if not on and not g.him.bodyHidden:
+		g.him.setBodyHidden(true)
+		_hid_body = true
+	elif on and _hid_body:
+		if g.him.bodyHidden:
+			g.him.setBodyHidden(false)
+		_hid_body = false
+
+
 # ---------------------------------------------------------------- joint limits
 
 ## The game keeps her leg's and her hands' end joints within 1.22 rad; animtools lifted that for newer files (her
@@ -234,14 +322,15 @@ func _apply_limits(p) -> void:
 	unmodify(&"IKController.endLimit")
 	var leg: bool = p.version >= 29
 	var hands: bool = p.version >= 32 or _setting_global("preventswitchinganglehandsforoldpositions") != 0
-	if leg or hands:
-		modify(&"IKController.endLimit", {"op": "fn", "fn": func(lim: float, ik) -> float:
-			var h = g.her
-			if ik == h.torsoIK:
-				return INF if leg else lim
-			if ik == h.leftArmIK or ik == h.rightArmIK:
-				return INF if hands else lim
-			return lim})
+	modify(&"IKController.endLimit", {"op": "fn", "fn": func(lim: float, ik) -> float:
+		var h = g.her
+		if ik == h.torsoIK:
+			return INF if leg else lim
+		if ik == h.leftArmIK or ik == h.rightArmIK:
+			return INF if hands else lim
+		if ik.s1.parent == g.him:   # his legs: animtools' own leg IK has no limit
+			return INF
+		return lim})
 
 
 ## Back to the game's default animation.
@@ -252,6 +341,9 @@ func clear() -> void:
 		unmodify(n)
 	if g.animationControl != null:
 		g.animationControl.removeAnimation(ANIM)
+	if g.him != null:
+		g.updatePenisLayer()
+		_show_body(true)
 	props.show(null)
 	if layers != null:
 		layers.show(null)
@@ -354,8 +446,10 @@ static func build_animation(p) -> MainAnimation:
 	var a := MainAnimation.new()
 	a.herTween = _tween(v["hertweenstartx"], v["hertweenstarty"], v["hertweenstartang"],
 		v["hertweenendx"], v["hertweenendy"], v["hertweenendangle"])
+	var his := MirrorTween.new()
+	his.mirror = Vector2(-1.0 if v["himreversed"] == 1 else 1.0, -1.0 if v["himflipped"] == 1 else 1.0)
 	a.hisTween = _tween(v["histweenstartx"], v["histweenstarty"], v["histweenstartang"],
-		v["histweenendx"], v["histweenendy"], v["histweenendangle"])
+		v["histweenendx"], v["histweenendy"], v["histweenendangle"], his)
 	a.herKneeTarget = Vector2(v["torsox"], v["torsoy"])
 	a.altVector = Vector2(0, 1)
 	a.altRange = v["offpathposmovement"]
@@ -374,10 +468,22 @@ static func build_animation(p) -> MainAnimation:
 
 ## A tween from start / end points and angles (radians). animtools never turns on his skew at runtime (the skew keys
 ## are only read and written), so the tweens rotate.
-static func _tween(sx: float, sy: float, sa: float, ex: float, ey: float, ea: float) -> LinearTween:
-	var t := LinearTween.new()
+static func _tween(sx: float, sy: float, sa: float, ex: float, ey: float, ea: float, t := LinearTween.new()) -> LinearTween:
 	t.start = Transform2D(0.0, Vector2(sx, sy))
 	t.end = Transform2D(0.0, Vector2(ex, ey))
 	t.rotateStart(sa)
 	t.rotateEnd(ea)
 	return t
+
+
+## His tween, mirrored (animtools' himreversed: left-right, himflipped: up-down) in the scene's space.
+class MirrorTween extends LinearTween:
+	var mirror := Vector2.ONE
+
+	func tween(r: float) -> Transform2D:
+		super.tween(r)
+		if mirror != Vector2.ONE:
+			var o := _tweenMatrix.origin
+			_tweenMatrix = _tweenMatrix.scaled(mirror)
+			_tweenMatrix.origin = o
+		return _tweenMatrix

@@ -158,6 +158,8 @@ var penisOutTransition: float:
 
 
 func estimateTipPos() -> float:
+	if Hooks.has_value(&"AnimationControl.estimateTipPos"):   # HOOK value point: her position where his tip meets her (auto mode, her mouth limits; the game: from the animation)
+		return Hooks.value(&"AnimationControl.estimateTipPos", self, animations[currentAnimation].estimateTipPos)
 	return animations[currentAnimation].estimateTipPos
 
 

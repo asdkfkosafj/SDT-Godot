@@ -193,13 +193,37 @@ A position also sets the camera (value points `SceneLayer.cameraAim` / `SceneLay
 furniture, a layer above the background given to the scene layer like the game's outside layers), gravity (strands and
 hair fall to the screen's bottom: `StrandControl.gravityDirection`, `Rope.gravityOffset`), his right arm's
 path (`HimMaleBody.armPoint` / `shoulderPoint` / `handRotation`), her left leg and breast behind him (moved into
-layers at the bottom of the scene; the hook point `g.changeLayer` keeps the game from moving the leg back) and her
-arms. While it is on, the extension adds animtools' 7 arm positions (Cupping Breast ... On Her Ass) and Custom to her
+layers at the bottom of the scene; the hook point `g.changeLayer` keeps the game from moving the leg back), her
+arms, and him: turned round (his tween mirrored; his over layer and arm mirror with him, `IKController.parentRotation`
+turns his feet against his unmirrored turn), his penis's angle offset or a steady penis (`Him.penisAngle`), his
+spurts along his penis (`Him.spurtAngle`), behind her or in front (`g.penisInFront`, `g.updatePenisLayer()`), his body
+hidden (the files with himhidden = 0). Non-oral positions close her mouth to him (`Her.mouthContact` false: no mouth
+full, intro or deep throat; they keep their values) and keep her teeth from clenching.
+While it is on, the extension adds animtools' 7 arm positions (Cupping Breast ... On Her Ass) and Custom to her
 arm lists; `positions.arms.holds(left)` tells whether a position holds that arm in its pose now (code that moves her
 arms by itself, like armoverhaul's dynamic arms, leaves it alone). A position is a temporary state: the options
 save and the character code keep the player's zoom and arms (`SaveData.sceneZoom`, `InGameMenu.savedArms`), and
-everything comes back when it ends. Work in progress: him reversed / flipped and body contact come later; the
-developer panel (Tools > Positions) loads one.
+everything comes back when it ends. Work in progress: the developer panel (Tools > Positions) loads one.
+
+The built-in `bodycontact` extension (animtools' body contact) runs while a non-oral position does (or an oral one with
+pleasure from contact): his tip on her body (her breast, backside, back, chest, head, thigh, calf) is contact, which
+gives him pleasure, her vigour (`Her.vigourGain`: the position's own instead of the game's), entry, exit and hilt
+sounds, the mask over his penis inside her (`Him.penisMask`), his spurts kept inside her (`Him.cumCaught`), and her
+resistance past the entry point (`Her.drag`), which wears down while he is in her and comes back while he is out.
+Its "Sexual experience" setting picks animtools' preset for vaginal and anal positions (Average) or the file's own
+values. Distances count in the scene at the position's own zoom. `bodycontact.contact`, `.depth` and
+`.resistance_scaled()` tell where it is. It adds animtools' dialogue line types (bodyentered, bodyexited,
+vigorousbodyexited, vigorousbodyexitedrelax, inbody, bodycontacthilt, bodycontactresistive, bodycontactloose,
+bodycontactmovementvigour, bodycontactspaceheldpush, bodycontactspaceheldpushinhilt, cuminher; each also with a type
+suffix such as `_anal`, which goes first) for the lines a dialogue has; holding the "Hold her" key while she resists
+is animtools' space push. In non-oral positions auto mode goes by the contact (hook points `AutomaticControl.hiltMove`,
+`tipHold`, `outsideLickBalls`, `oneDeep`, `adjustAim`; `AnimationControl.estimateTipPos` is where he met her).
+
+Dialogues and codes (positions): `[ANIMTOOLS_<position>]` loads a position (folders as `_slash5C_`),
+`[ANIMTOOLSRANDOM]` a random one; the variables `atv_active`, `atv_position(2)`, `atv_position_name`,
+`atv_dominant(2)`, `atv_dominant_held(2)`, `atv_inbody`, `atv_inbodycontactloose`, `atv_curresist(2)`; the character
+code fields `animtoolsPosition` and `animtoolsSexExperience`. After any code loads (hook point `InGameMenu.loadData`)
+her arms go back to the position's.
 
 ## Hooks
 
@@ -302,6 +326,7 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.swallowAmount` | how much one swallow takes from her mouth (5-9 at random; never more than there is) | `her.cumInMouth` |
 | `Her.targetPhoneme` | the mouth shape a spoken word aims for (its phoneme: `{name, upperLip, lowerLip, jaw}`; return a new one); the word's "L" tongue flick plays only with the word's own shape | `her.targetPhoneme` |
 | `Her.speakingMouth` | her mouth's target as she starts or stops speaking (the same Dictionary; `her.speaking` is still the old state) | `her.targetPhoneme` |
+| `Her.mouthContact` | whether his tip can reach her mouth at all (true), each movement check; false: it counts as outside her lips (no mouth full, intro, deep throat, gag or nose squash), as in non-oral body positions | |
 | `Her.clenchTime` | how long she keeps her teeth clenched, ticks (the game: 60..179 at random) | `her.clenchedTeethTime` |
 | `Her.clenchTaps` | whether she taps him as she clenches her teeth (true) | |
 | `Her.teethClosing` | whether her clenched teeth close further this tick (true; false holds them where they are) | `her.clenchTeethRatio` |
@@ -336,6 +361,8 @@ The value points in the game, with the field that keeps the result for code that
 | `IKController.tapPower` | how hard a tap of her hand is (its multiplier x `maxTapPower`; the grab sound's volume stays the multiplier) | `ik.tapPower` |
 | `IKController.tapSpeed` | how fast that tap starts (-6 x its power) | `ik.tapSpeed` |
 | `Him.penisTiltTarget` | the angle his penis eases towards (bukkake mode's mouse aim and her push already in), before easing | `him.penisTiltTarget` |
+| `AnimationControl.estimateTipPos` | her position where his tip meets her (the game: estimated from the animation), for auto mode and her mouth's limits; body contact: where he met her body | `her.currentPenisTipPos` |
+| `Him.spurtAngle` | the way the current spurt shoots (rad, scene space; the game: the spurt's random angle, -3.3..-2.5), each link of it; body positions: along his penis, with part of the random spread | `him.randomSpurtAngle` keeps the game's |
 | `Him.penisAngle` | his penis's angle this tick, after easing and the game's -10..25 limits (`him.penisTilt`: the eased angle before them) | `him.penis.rotation_degrees` |
 | `Him.penisMask` | the mask that hides his penis inside her mouth, every tick: `{x, scale}` (the game's x: -100 + his depth x 200 in her mouth, -100 hides it all; scale 1) | `him.penisMask` |
 | `Him.mouthSmoothing` | how much her mouth holds his penis's tilt while he is in it (0..1, the game's rises by 0.4 a tick) | `him.mouthConstraintSmoothing` |
@@ -352,6 +379,7 @@ The value points in the game, with the field that keeps the result for code that
 | `Her.resistance` | what holds him back as he pushes in, per tick (`checkPosition`'s throat resistance zones) | (subtracted from her speed) |
 | `Her.limpResistance` | the same while she is passed out (0: the game holds nothing then) | (subtracted from her speed) |
 | `Her.pushBack` | how far her head is pushed back off him this tick (0), before the `minPos`/`maxPos` clamp | `her.pos` |
+| `Her.vigourGain` | how much her vigour grows this tick (the game: her movement, a fifth of it with his penis out), before its decay and limits | `her.vigour` |
 | `Her.drag` | how much her head is slowed this tick (0; subtracted from her speed before friction, positive: away from him), e.g. her arms resisting | `her.speed` |
 | `Her.holdOut` | the share of her head's motion away from him held back this tick (0..1; 0): her speed after `Her.drag`, her resistance and her pull-off, and `Her.pushBack`; whatever moves her out (the condoms plugin's sack stuck behind her throat ring) | `her.speed` |
 | `Her.tremble` | how much her head trembles on him this tick (0; along him, in her position's units, `her.pos`): an offset that turns round every tick and does not add up, not held back by `Her.holdOut` (the condoms plugin: her trembling as the stuck sack gets close to popping out) | `her.pos` |
@@ -368,6 +396,8 @@ The value points in the game, with the field that keeps the result for code that
 | `StrandControl.gravityDirection` | the way spit, drool and cum strands fall (`Vector2`, scene space; the game: `(0, 1)`), each strand tick; the strands die past the screen's bottom edge that way; body positions with turned gravity make it the screen's bottom | |
 | `Rope.gravityOffset` | the angle a hanging hair strand falls at, off straight down in scene space (degrees; the game: the hair's own `gOffset`), each rope tick; the rope is the object (also the dynamic hair extension's ropes); body positions with turned hair gravity turn it with the scene | `rope.gravityDirection` |
 | `SaveData.sceneZoom` | the zoom the options save keeps (`g.sceneZoom`); a temporary zoom (a body position's) keeps the player's | |
+| `IKController.parentRotation` | the rotation (rad) an IK's end joint turns against (its chain's parent's: his legs' him), every IK update; the IK is the object (body positions: his turn before a mirror, so his feet stay right when he is turned round) | |
+| `g.penisInFront` | whether he draws in front of her (the game: while his penis is out of her mouth), when his penis goes in or out and on `g.updatePenisLayer()`; body positions keep him behind her or in front | `him.parent` |
 | `IKController.endLimit` | how far an IK's end joint (her foot, her hands, his hands) may turn either way (1.22 rad; `INF`: no limit), every IK update; the IK is the object (body positions lift it for her leg and hands by file version) | `ik.s3Ang` |
 | `HimMaleBody.armPoint` | where his right hand goes this tick (his male body, in his arm container's coordinates; the game's: by her head), before his arm's IK | `arm.x` / `arm.y` |
 | `HimMaleBody.shoulderPoint` | the point his right arm's IK aims his shoulder at this tick (his coordinates) | `body.shoulderPoint` |

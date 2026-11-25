@@ -261,24 +261,53 @@ func clearSmudgeCache() -> void:
 
 func setPenisOut(out: bool = true) -> void:
 	if out and not penisOut:
-		# port change: him above her head and hair but below her right arm, which stays in front of him as when the
-		# penis is in (the game put him above the arm). Her hair goes below him for this; her arm is then above it.
-		frontLayer.addChildAt(sceneLayer.removeChild(him), 0)
-		frontLayer.setChildIndex(hairOverContainer, 0)
-		frontLayer.setChildIndex(hairCostumeUnderOver, 0)
-		frontLayer.addChildAt(her.leftHandOver, frontLayer.getChildIndex(himOverLayer))
+		if _penisInFront(true):
+			_himToFront()
 		penisOut = true
 	elif penisOut:
-		sceneLayer.addChildAt(frontLayer.removeChild(him), 0)
-		frontLayer.setChildIndex(hairCostumeUnderOver, frontLayer.getChildIndex(hairCostumeOver) - 1)
-		frontLayer.setChildIndex(hairOverContainer, frontLayer.getChildIndex(hairCostumeOver) - 1)
-		# port fix: only if it is still where the penis put it (plugins move her hand overlay, e.g. armoverhaul's
-		# taps; Flash threw here and left the penis out)
-		if her.leftHandOver.parent == frontLayer:
-			her.leftHandOverContainer.addChild(frontLayer.removeChild(her.leftHandOver))
+		if not _penisInFront(false):
+			_himToBack()
 		penisOut = false
 	if Hooks.has(&"g.setPenisOut"):   # HOOK
 		Hooks.after(&"g.setPenisOut", self, [out])
+
+
+## Port: puts him in front of her or back as the penis's state and g.penisInFront say now (after that value point
+## changed: body positions keep him behind her or in front).
+func updatePenisLayer() -> void:
+	if _penisInFront(penisOut):
+		_himToFront()
+	else:
+		_himToBack()
+
+
+func _penisInFront(out: bool) -> bool:
+	if Hooks.has_value(&"g.penisInFront"):   # HOOK value point: whether he draws in front of her (the game: while his penis is out of her mouth)
+		return Hooks.value(&"g.penisInFront", self, out)
+	return out
+
+
+func _himToFront() -> void:
+	if him.parent == frontLayer:
+		return
+	# port change: him above her head and hair but below her right arm, which stays in front of him as when the
+	# penis is in (the game put him above the arm). Her hair goes below him for this; her arm is then above it.
+	frontLayer.addChildAt(sceneLayer.removeChild(him), 0)
+	frontLayer.setChildIndex(hairOverContainer, 0)
+	frontLayer.setChildIndex(hairCostumeUnderOver, 0)
+	frontLayer.addChildAt(her.leftHandOver, frontLayer.getChildIndex(himOverLayer))
+
+
+func _himToBack() -> void:
+	if him.parent != frontLayer:
+		return
+	sceneLayer.addChildAt(frontLayer.removeChild(him), 0)
+	frontLayer.setChildIndex(hairCostumeUnderOver, frontLayer.getChildIndex(hairCostumeOver) - 1)
+	frontLayer.setChildIndex(hairOverContainer, frontLayer.getChildIndex(hairCostumeOver) - 1)
+	# port fix: only if it is still where the penis put it (plugins move her hand overlay, e.g. armoverhaul's
+	# taps; Flash threw here and left the penis out)
+	if her.leftHandOver.parent == frontLayer:
+		her.leftHandOverContainer.addChild(frontLayer.removeChild(her.leftHandOver))
 
 
 func setAuto(mode: int) -> void:
