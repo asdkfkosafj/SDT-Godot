@@ -30,7 +30,9 @@ func start() -> void:
 	ext.menu_control("positions", "Position", MenuSchema.actions("", "", [
 		["Game's default", func(): ext.request_default(), "Back to the game's own animation."],
 		["Random", func(): ext.random(), "A random position (not a partial one)."],
-		["Rescan", func(): ext.rescan(), "Reads the Mods/Positions folder again (after you add or change files)."]],
+		["Rescan", func(): ext.rescan(), "Reads the Mods/Positions folder again (after you add or change files)."],
+		["Edit", func(): ext.editor.begin(), "Opens the position editor on the current position (a new one at the game's default)."],
+		["New", func(): ext.editor.begin(true), "Opens the position editor on a new position from the game's default values."]],
 		{"keywords": "position animtools default random reload"}))
 	ext.menu_control("positions", "Position", MenuSchema.setting_control(ext, "transition"))
 	ext.menu_control("positions", "Position", {"type": "chips", "label": "Who leads",

@@ -62,6 +62,10 @@ func _init() -> void:
 	_at(320, _fade_end)
 	_at(321, _browse_checks)
 	_at(322, _import_checks)
+	_at(323, _editor_start)
+	_at(326, _editor_checks)
+	_at(327, func(): x.clear(); g.inGameMenu.style2Clicked())
+	_at(329, _style_checks)
 	_at(330, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
 	_at(332, func():
 		Extensions.set_enabled("positions", false)
@@ -675,6 +679,90 @@ func _import_checks() -> void:
 			imp.path_join("Mine"), imp.path_join("Characters"), imp]:
 		DirAccess.remove_absolute(p)
 	x.rescan()
+
+
+## S7: the editor (values, live update, undo, saving; the handles' drag is a windowed check, not here).
+var _ed_anim = null
+
+
+func _editor_start() -> void:
+	var ed = x.editor
+	x.set_setting("transition", "Instant")
+	x.load_position("animtools/Anal/ATV_doggy_hard")
+	ed.begin()
+	_check("editor: opens on the current position", ed.editing and ed.base_name == "animtools/Anal/ATV_doggy_hard"
+		and ed.values["positiontype"] == 3.0)
+	_ed_anim = x._anim
+	ed.set_value("hertweenstarty", ed.values["hertweenstarty"] + 50.0)
+	ed.commit()
+
+
+func _editor_checks() -> void:
+	var ed = x.editor
+	var y0: float = Position.from_text(FileAccess.get_file_as_string(
+		x.library.path_of("animtools/Anal/ATV_doggy_hard")), "").values["hertweenstarty"]
+	_check("editor: a path change rebuilds the animation (her path moved at once)", x._anim != _ed_anim
+		and x.current.values["hertweenstarty"] == y0 + 50.0 and x._anim.herTween.start.origin.y == y0 + 50.0,
+		"%s %s" % [x.current.values["hertweenstarty"], y0])
+	var rev: float = ed.values["himreversed"]
+	var det_before := g.him.transform.determinant()
+	ed.set_value("himreversed", 1.0 - rev)
+	ed.commit()
+	ed._tick()
+	_check("editor: other keys apply the whole position (him turned the other way)", x.current.values["himreversed"] == 1.0 - rev
+		and signf(g.him.transform.determinant()) == -signf(det_before), "%s %s" % [det_before, g.him.transform.determinant()])
+	ed.undo()
+	ed._tick()
+	_check("editor: undo", x.current.values["himreversed"] == rev and x.current.values["hertweenstarty"] == y0 + 50.0,
+		"%s %s %s" % [x.current.values["himreversed"], x.current.values["hertweenstarty"], y0])
+	ed.revert()
+	ed._tick()
+	_check("editor: revert to the file", x.current.values["hertweenstarty"] == y0)
+	ed.set_value("hertweenstarty", y0 + 10.0)
+	ed.save()
+	var copy := "My positions/ATV_doggy_hard"
+	var shipped_text := FileAccess.get_file_as_string(x.library.path_of("animtools/Anal/ATV_doggy_hard"))
+	_check("editor: Save on a shipped position writes a copy in My positions (the shipped file unchanged)",
+		x.library.has(copy) and ed.base_name == copy and not ed.dirty
+		and Position.from_text(shipped_text, "").values["hertweenstarty"] == y0
+		and Position.from_text(FileAccess.get_file_as_string(x.library.path_of(copy)), "").values["hertweenstarty"] == y0 + 10.0)
+	ed.set_value("hertweenstarty", y0 + 20.0)
+	ed.save()
+	_check("editor: Save again writes its own file", not x.library.has(copy + " 2")
+		and Position.from_text(FileAccess.get_file_as_string(x.library.path_of(copy)), "").values["hertweenstarty"] == y0 + 20.0)
+	ed.save_as("ATV_doggy_hard")
+	_check("editor: Save as keeps the same name only for its own file", x.library.has(copy) and ed.status.begins_with("Saved"))
+	ed.save_as("other one")
+	ed.save_as("ATV_doggy_hard")
+	_check("editor: Save as will not write over another position", ed.status.contains("exists"), ed.status)
+	var file: String = x.library.path_of("My positions/other one")
+	var back = Position.from_text(FileAccess.get_file_as_string(file), "")
+	var same := true
+	for k in ed.values:
+		if back.values.get(k) != ed.values[k]:
+			same = false
+	_check("editor: a saved file reads back with the same values", same)
+	x.load_position("animtools/Oral/ATV_facefuck")
+	ed._tick()
+	_check("editor: loading another position ends the editing", not ed.editing)
+	for n in ["My positions/ATV_doggy_hard", "My positions/other one"]:
+		DirAccess.remove_absolute(x.library.path_of(n))
+	DirAccess.remove_absolute(x.positions_root().path_join("My positions"))
+	x.rescan()
+
+
+## The game's face fuck style is not offered while positions is on; the player's choice is kept and comes back.
+func _style_checks() -> void:
+	var ac: AnimationControl = g.animationControl
+	_check("the game's face fuck style gives way to its default while positions is on, kept for the save",
+		ac.currentAnimation == AnimationControl.DEFAULT and ac.currentAnimationName == AnimationControl.FACE_FUCK,
+		"%s %s" % [ac.currentAnimation, ac.currentAnimationName])
+	Extensions.set_enabled("positions", false)
+	_check("positions off: the player's face fuck style back", ac.currentAnimation == AnimationControl.FACE_FUCK
+		and ac.heldStyle == "")
+	g.inGameMenu.style1Clicked()
+	Extensions.set_enabled("positions", true)
+	x = Extensions.get_extension("positions")
 
 
 func _layers_vanilla() -> bool:

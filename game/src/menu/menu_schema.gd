@@ -133,14 +133,19 @@ static func element(label: String, tip: String, helper: Callable, alpha := false
 # ---------------------------------------------------------------- sections
 
 static func sections() -> Array:
-	return [_her(), _clothes(), _him(), _scene(), _positions(), _behaviour(), _effects(), _dialogue(), _mods(), _settings(),
-		_help()]
+	return [_her(), _clothes(), _him(), _scene(), _positions(), _positions_edit(), _behaviour(), _effects(), _dialogue(),
+		_mods(), _settings(), _help()]
 
 
 ## The body positions page (the built-in positions extension fills it; its button shows only while that is on). The
 ## game runs while it is shown ("live"), so the player sees the positions they pick.
 static func _positions() -> Dictionary:
 	return {"id": "positions", "name": "Positions", "owner": "positions", "live": true, "groups": []}
+
+
+## Its editor page (opened from it; the extension fills it).
+static func _positions_edit() -> Dictionary:
+	return load("res://src/ext/positions/position_editor.gd").section()
 
 
 static func _her() -> Dictionary:
@@ -396,7 +401,7 @@ static func _scene() -> Dictionary:
 					if v == "Style 1":
 						_m().style1Clicked()
 					else:
-						_m().style2Clicked()),
+						_m().style2Clicked(), {"visible": func(): return not Extensions.is_on("positions")}),
 			check("Invert controls", "", func(): return _m().optionsMenu.cbInvertControls, _m().cbInvertControlsClicked),
 		]},
 	]}

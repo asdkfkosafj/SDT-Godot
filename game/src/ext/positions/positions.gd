@@ -25,6 +25,7 @@ const Layers := preload("res://src/ext/positions/position_layers.gd")
 const Arms := preload("res://src/ext/positions/position_arms.gd")
 const Talk := preload("res://src/ext/positions/position_dialogue.gd")
 const Browser := preload("res://src/ext/positions/position_browser.gd")
+const Editor := preload("res://src/ext/positions/position_editor.gd")
 const TRANSITIONS := ["Dark fade", "Instant"]
 const FADE_LAYER := 40   # over the game, under the menu (50)
 
@@ -42,6 +43,7 @@ var layers = null          # PositionLayers (her leg / breast behind him, her sh
 var arms = null            # PositionArms (animtools' arm positions, a position's arms)
 var talk = null            # PositionDialogue (dialogue triggers and variables, the character code field)
 var browser = null         # PositionBrowser (the menu's Positions page)
+var editor = null          # PositionEditor (the menu's Edit position page and the handles)
 var loaded_name := ""      # the name the current position was loaded by (a dialogue's, a code's or the library's)
 
 
@@ -67,6 +69,8 @@ func _enable() -> void:
 	talk.start()
 	browser = Browser.new(self)
 	browser.start()
+	editor = Editor.new(self)
+	editor.start()
 	on_tick(_tick)
 	on_key(122, random, "random position", "random")
 	on_key(121, reload, "reload the position", "reload")
@@ -81,6 +85,15 @@ func _enable() -> void:
 
 func _disable() -> void:
 	_end_fade()
+	var ac: AnimationControl = g.animationControl
+	if ac != null and ac.heldStyle != "":   # the player's face fuck style back
+		var style := ac.heldStyle
+		ac.heldStyle = ""
+		clear()
+		ac.setAnimation(style)
+	if editor != null:
+		editor.stop()
+		editor.editing = false
 	clear()
 	props.stop()
 	if arms != null:
@@ -261,9 +274,32 @@ func apply(p) -> void:
 	_update_knee()
 
 
+## The game's face fuck style is not offered while positions is on (ATV_facefuck is a position like the others): its
+## animation gives way to the game's default (or the position), the player's choice kept for the save.
+func _no_face_fuck() -> void:
+	var ac: AnimationControl = g.animationControl
+	if ac == null or ac.currentAnimation != AnimationControl.FACE_FUCK:
+		return
+	ac.heldStyle = AnimationControl.FACE_FUCK
+	ac.setAnimation(ANIM if current != null and ac.animations.has(ANIM) else AnimationControl.DEFAULT)
+
+
+## The position's animation made again from its values (the editor's path, knee, feet and torso changes), without
+## the rest of apply().
+func rebuild_animation(p) -> void:
+	current = p
+	_anim = build_animation(p)
+	g.animationControl.addAnimation(ANIM, _anim)
+	g.animationControl.dispatchUpdates()
+	_knee_moves = p.values["torsox"] != p.values["torsox2"] or p.values["torsoy"] != p.values["torsoy2"] 		or (p.values["savedBodySize"] != -999 and _setting_global("enablelegmountbodyscaling") == 1)
+	_knee = Vector2(INF, INF)
+	_update_knee()
+
+
 func _tick() -> void:
 	if _fade_left > 0:
 		_fade_tick()
+	_no_face_fuck()
 	if current != null and _knee_moves:
 		_update_knee()
 

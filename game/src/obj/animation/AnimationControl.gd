@@ -96,8 +96,14 @@ var currentAnimationID: int:
 
 var currentAnimationName: String:
 	get:
-		# port: an added animation (a body position) saves as the game's default style
+		# port: an added animation (a body position) saves as the game's default style; a held style saves as itself
+		if heldStyle != "":
+			return heldStyle
 		return currentAnimation if currentAnimation == FACE_FUCK else DEFAULT
+
+## Port addition: the player's style kept for the save while an extension shows another animation (the positions
+## extension does not offer the game's face fuck; it comes back when positions is switched off). "" = none.
+var heldStyle := ""
 
 
 ## Port addition (the positions extension, animtools' body positions): animations besides the game's two. An added

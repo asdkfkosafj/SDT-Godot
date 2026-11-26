@@ -967,6 +967,7 @@ func updateMoods():
 
 
 func style1Clicked(param1 = null):
+	g.animationControl.heldStyle = ""   # port: the player chose style 1 (a held face fuck style is dropped)
 	g.animationControl.setAnimation(AnimationControl.DEFAULT)
 	g.saveData.saveCharOptionsData()
 	setStyleCheckboxes()

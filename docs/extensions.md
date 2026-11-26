@@ -209,7 +209,10 @@ Rescan; hotkeys: F11 random, F10 reload the file, Page Down / Page Up the next /
 `positions.request(name)` loads one with the transition (a dark fade that applies it at the darkest point, the
 "Transition" setting; partial positions at once), as the page, the hotkeys and the dialogue triggers do;
 `load_position(name)` at once. The Loader import also copies the Loader's positions (Settings/animtools_positions and
-character folders' animtoolscharposition.txt) into `Mods/Positions/Imported`.
+character folders' animtoolscharposition.txt) into `Mods/Positions/Imported`. Edit / New on the page open the position editor
+(`positions.editor`): animtools' keys in folding cards, the open cards' points as handles on the scene (hold Ctrl and
+drag; she keeps still meanwhile through `DT.mousePos`), undo, revert, and saving into `Mods/Positions/My positions`
+with a 700x600 thumbnail of the scene (the shipped files are never written: saving one makes a copy).
 
 The built-in `bodycontact` extension (animtools' body contact) runs while a non-oral position does (or an oral one with
 pleasure from contact): his tip on her body (her breast, backside, back, chest, head, thigh, calf) is contact, which
