@@ -417,6 +417,18 @@ func _reset_layers() -> void:
 			o._flash_parent.setChildIndex(o, o._flash_parent.numChildren - 1)
 
 
+## The parts (dotted child paths under `root`) that exist on its current frame: the faceless head has no eyes.
+static func _head_parts(root, paths: Array) -> Array:
+	var out: Array = []
+	for path in paths:
+		var o = root
+		for n in path.split("."):
+			o = o.get(n) if o != null else null
+		if o != null:
+			out.append(o)
+	return out
+
+
 static func _label(mc, label: String) -> void:
 	if mc is FlashMovieClip and mc.has_label(label):
 		mc.gotoAndStop(label)
@@ -534,14 +546,16 @@ func _update_head() -> void:
 	# its own parts back, then what the mods replace
 	var hp = head.headoriginpt
 	var ec = hp.himEyeContainer
-	var own := [hp.himFaceContainer.tpFace, hp.himNoseContainer.tpNose, hp.himEarContainer.tpEar,
-		hp.himEyebrowContainer.tpLeftBrow, hp.himEyebrowContainer.tpRightBrow, head.neckoriginpt.tpNeck,
-		ec.eyeball.deEyeball, ec.hisIris.hisPupil, ec.hisIris.iriscolor, ec.lowerEyeLid.tplowerEyeLid,
-		ec.upperEyeLid.tpupperEyeLid]
-	for o in own:
+	var eyes := ["headoriginpt.himEyeContainer.eyeball.deEyeball", "headoriginpt.himEyeContainer.hisIris.hisPupil",
+		"headoriginpt.himEyeContainer.hisIris.iriscolor", "headoriginpt.himEyeContainer.lowerEyeLid.tplowerEyeLid",
+		"headoriginpt.himEyeContainer.upperEyeLid.tpupperEyeLid"]
+	for o in _head_parts(head, ["headoriginpt.himFaceContainer.tpFace", "headoriginpt.himNoseContainer.tpNose",
+			"headoriginpt.himEarContainer.tpEar", "headoriginpt.himEyebrowContainer.tpLeftBrow",
+			"headoriginpt.himEyebrowContainer.tpRightBrow", "neckoriginpt.tpNeck"] + eyes):
 		o.visible = true
-	for i in ec.numChildren:
-		ec.getChildAt(i).visible = true
+	if ec != null:
+		for i in ec.numChildren:
+			ec.getChildAt(i).visible = true
 	for r in _records:
 		var m = r["mod"]
 		if m == null or not is_instance_valid(m):
@@ -550,23 +564,23 @@ func _update_head() -> void:
 		if r["type"] == "HimHead" and m.get("defaultHeadOverwrite"):
 			var ht := int(m.get("headType") if m.get("headType") != null else 0)
 			if not (him.currentBodyID == 0 and ht == 2) and not (him.currentBodyID == 1 and ht == 1):
-				for pair in [["himFace", [hp.himFaceContainer.tpFace]], ["himNose", [hp.himNoseContainer.tpNose]],
-						["himEar", [hp.himEarContainer.tpEar]], ["himNeck", [head.neckoriginpt.tpNeck]],
-						["himEyebrow", [hp.himEyebrowContainer.tpLeftBrow, hp.himEyebrowContainer.tpRightBrow]],
-						["himEye", [ec.eyeball.deEyeball, ec.hisIris.hisPupil, ec.hisIris.iriscolor,
-							ec.lowerEyeLid.tplowerEyeLid, ec.upperEyeLid.tpupperEyeLid]]]:
+				for pair in [["himFace", ["headoriginpt.himFaceContainer.tpFace"]],
+						["himNose", ["headoriginpt.himNoseContainer.tpNose"]], ["himEar", ["headoriginpt.himEarContainer.tpEar"]],
+						["himNeck", ["neckoriginpt.tpNeck"]],
+						["himEyebrow", ["headoriginpt.himEyebrowContainer.tpLeftBrow", "headoriginpt.himEyebrowContainer.tpRightBrow"]],
+						["himEye", eyes]]:
 					if have.has(pair[0]):
-						for o in pair[1]:
+						for o in _head_parts(head, pair[1]):
 							o.visible = false
 		if m.get("defaultEyeOverwrite"):
 			if r["type"] == "HimHead":
-				for i in ec.numChildren:
+				for i in (ec.numChildren if ec != null else 0):
 					ec.getChildAt(i).visible = false
 			elif r["type"] == "HimEye":
-				for pair in [["eyeball", [ec.eyeball.deEyeball]], ["hisIris", [ec.hisIris.hisPupil, ec.hisIris.iriscolor]],
-						["lowerEyeLid", [ec.lowerEyeLid.tplowerEyeLid]], ["upperEyeLid", [ec.upperEyeLid.tpupperEyeLid]]]:
+				for pair in [["eyeball", [eyes[0]]], ["hisIris", [eyes[1], eyes[2]]], ["lowerEyeLid", [eyes[3]]],
+						["upperEyeLid", [eyes[4]]]]:
 					if have.has(pair[0]):
-						for o in pair[1]:
+						for o in _head_parts(head, pair[1]):
 							o.visible = false
 	_head_hsl(true)
 
