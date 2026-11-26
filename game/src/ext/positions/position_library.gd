@@ -137,8 +137,9 @@ static func dominance(n: String) -> String:
 	return "Neutral"
 
 
+## animtools' rule (the same as Position.is_partial_name): the file name ends in "_partial".
 static func is_partial(n: String) -> bool:
-	return category(n) == "Partial" or "_partial" in n.get_file().to_lower()
+	return n.get_file().to_lower().ends_with("_partial")
 
 
 ## A shorter name for the browser: the file name without animtools' "ATV_", "_" as spaces.

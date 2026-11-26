@@ -23,3 +23,20 @@ static func to_flash(k: Key) -> int:
 	if k >= KEY_F1 and k <= KEY_F15:
 		return 112 + (k - KEY_F1)
 	return SPECIAL.get(k, 0)
+
+
+## The Godot keycode for a Flash keyCode (to_flash backwards; KEY_NONE when there is none). For the two keys that
+## share a code (Enter), the main one.
+static func to_godot(code: int) -> int:
+	if code >= 65 and code <= 90:
+		return KEY_A + (code - 65)
+	if code >= 48 and code <= 57:
+		return KEY_0 + (code - 48)
+	if code >= 96 and code <= 105:
+		return KEY_KP_0 + (code - 96)
+	if code >= 112 and code <= 126:
+		return KEY_F1 + (code - 112)
+	for k in SPECIAL:
+		if SPECIAL[k] == code:
+			return k
+	return KEY_NONE

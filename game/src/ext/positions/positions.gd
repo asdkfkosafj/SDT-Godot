@@ -45,6 +45,8 @@ var talk = null            # PositionDialogue (dialogue triggers and variables, 
 var browser = null         # PositionBrowser (the menu's Positions page)
 var editor = null          # PositionEditor (the menu's Edit position page and the handles)
 var loaded_name := ""      # the name the current position was loaded by (a dialogue's, a code's or the library's)
+var file_settings := {}    # animtools global settings loaded files set (kept for the session, as animtools' globals)
+var serial := 0            # counts the positions loaded (the editor's changes do not: body contact keeps its state)
 
 
 func _init() -> void:
@@ -95,6 +97,7 @@ func _disable() -> void:
 		editor.stop()
 		editor.editing = false
 	clear()
+	file_settings.clear()
 	props.stop()
 	if arms != null:
 		arms.stop()
@@ -120,7 +123,8 @@ func request(given: String, shown := "", fade := true) -> bool:
 		push_warning("Positions: no position \"%s\"" % given)
 		return false
 	var change := func():
-		if load_position(given) and shown != "":
+		var had = current
+		if load_position(given) and shown != "" and not (library.is_partial(n) and had != null):
 			loaded_name = shown
 	if library.is_partial(n) or not fade:
 		change.call()
@@ -206,7 +210,7 @@ func _transition(change: Callable) -> void:
 func _fade_tick() -> void:
 	_fade_left -= 1
 	var half := _fade_len / 2
-	if _fade_left == half and _fade_do.is_valid():   # animtools: the change at the midpoint
+	if _fade_left <= half and _fade_do.is_valid():   # animtools: the change at the midpoint (or at once when the fade started dark)
 		var c := _fade_do
 		_fade_do = Callable()
 		c.call()
@@ -236,24 +240,42 @@ func read_position(given: String):
 	var text := FileAccess.get_file_as_string(library.path_of(n))
 	if text == "" and FileAccess.get_open_error() != OK:
 		return null
-	var p = Position.from_text(text, n, current)
-	p.path = library.path_of(n)
+	var p = Position.from_text(text, n, current, file_settings, library.is_partial(n))
+	if p.partial and current == null:   # a partial on the game's default: a changed default, no file of its own
+		p.name = ""
+	elif p.path == "":   # (a partial keeps the file of the position it changes)
+		p.path = library.path_of(n)
 	return p
 
 
-## Loads and applies a position by name; false when there is none by that name.
+## Loads and applies a position by name; false when there is none by that name. A partial changes the current
+## position (its name stays); the global settings a file sets stay for later positions, as in animtools.
 func load_position(given: String) -> bool:
+	var before = current
 	var p = read_position(given)
 	if p == null:
 		push_warning("Positions: no position \"%s\"" % given)
 		return false
+	var n: String = library.find(given)
+	file_settings.merge(p.own_settings, true)
+	serial += 1
 	apply(p)
 	_da_masturbate(p)
-	loaded_name = given
+	if not (library.is_partial(n) and before != null):
+		loaded_name = given
 	return true
 
 
-func apply(p) -> void:
+## An animtools global setting: the value a loaded file set (kept for later positions, as animtools' globals), else
+## animtools' shipped value.
+func setting_value(key: String) -> float:
+	return float(file_settings.get(key, Fields.SETTINGS[key]))
+
+
+## Applies a position. `edit`: the editor's change of the current one (the zoom and her arms are set again only when
+## their own keys changed, so the player's zoom and her arm stay while other keys are edited).
+func apply(p, edit := false) -> void:
+	var prev = current if edit else null
 	if current == null and g.sceneLayer != null:
 		player_zoom = g.sceneZoom
 	current = p
@@ -261,7 +283,7 @@ func apply(p) -> void:
 	_anim = build_animation(p)
 	ac.addAnimation(ANIM, _anim)
 	ac.setAnimation(ANIM)
-	_apply_camera(p)
+	_apply_camera(p, prev == null or prev.values["zoom"] != p.values["zoom"])
 	_apply_limits(p)
 	_apply_his_arm(p)
 	_apply_him(p)
@@ -269,7 +291,8 @@ func apply(p) -> void:
 	_apply_breath()
 	props.show(p.values)
 	layers.show(p.values)
-	arms.show(p.values)
+	if prev == null or Arms.KEYS.any(func(k): return prev.values[k] != p.values[k]):
+		arms.show(p.values)
 	_knee_moves = p.values["torsox"] != p.values["torsox2"] or p.values["torsoy"] != p.values["torsoy2"] \
 		or (p.values["savedBodySize"] != -999 and _setting_global("enablelegmountbodyscaling") == 1)
 	_knee = Vector2(INF, INF)
@@ -558,7 +581,7 @@ var player_zoom := 0.0     # g.sceneZoom before the first position (saved instea
 ## The position's camera: its zoom now (the player can still zoom), its rotation, and the camera's aim as the zoom
 ## changes (animtools' updateCamera: from posversion 32 a curve from the position's camera towards its zoom point,
 ## older files a straight line).
-func _apply_camera(p) -> void:
+func _apply_camera(p, zoom := true) -> void:
 	unmodify(&"SceneLayer.rotation")
 	unmodify(&"SceneLayer.cameraAim")
 	unmodify(&"SaveData.sceneZoom")
@@ -573,7 +596,7 @@ func _apply_camera(p) -> void:
 		modify(&"StrandControl.gravityDirection", {"op": "fn", "fn": func(_d, _sc): return screen_down()})
 	if p.values["changegravityforhairstrands"] == 1:
 		modify(&"Rope.gravityOffset", {"op": "fn", "fn": _hair_offset})
-	if _setting_global("allowcamerazoomchanges") == 1:
+	if zoom and _setting_global("allowcamerazoomchanges") == 1:
 		g.sceneLayer.zoomTo(p.values["zoom"] - 0.4, true)
 		g.inGameMenu.updateZoomSlider()
 	else:
@@ -596,7 +619,7 @@ func _hair_offset(go: float, _rope) -> float:
 
 
 func _setting_global(key: String) -> float:
-	return float(Fields.SETTINGS[key])
+	return setting_value(key)
 
 
 ## The scene's rotation (degrees): the position's, the other way round while the screen is mirrored.

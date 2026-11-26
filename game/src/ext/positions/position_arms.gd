@@ -9,6 +9,9 @@ extends RefCounted
 ## a point it is On Legs. The arms a position sets are temporary: the character code keeps the player's arms, and
 ## they come back when the position ends (P2). The player can still change them while it is on.
 ##
+## With animtools' preV33herarmonlegs setting on (a partial switches it), the game's On Legs takes the position's
+## point too, as Custom does (older files used On Legs for that).
+##
 ## While her left leg is behind him (PositionLayers), the game's "next to her leg" moves put her left arm behind
 ## her (g.changeLayer redirected), and her hand angles that count her own parts then also count her (animtools).
 
@@ -17,6 +20,10 @@ const NAMES := ["Cupping Breast", "Holding Breast", "On His Waist", "On His Ches
 const CUSTOM := "Custom"
 const TAPS := ["On His Waist", "On His Chest"]   # her hand may tap him from these while she's held
 const OWNER := "positions"
+## The position keys her arms use (a change of one sets her arms again).
+const KEYS := ["armpostypeleft", "armpostyperight", "armposx", "armposy", "armposxend", "armposyend", "armpos2x",
+	"armpos2y", "armpos2xend", "armpos2yend", "handangler", "handanglel", "handrinverted", "handlinverted",
+	"userightclosehand", "useleftclosehand"]
 
 var _ext
 var player_arms := ["", ""]    # the player's arm choices (names) while a position has set hers; "" = none set
@@ -113,8 +120,21 @@ func _arm_set(left: bool) -> void:
 	var s := 0 if left else 1
 	if not _setting and player_arms[s] != "":
 		player_arms[s] = _name(left)
+	if _legs_custom(left):
+		_set_up_custom(g.her, left)
 	if left:
 		_fix_left_chain()
+
+
+## Her arm on the position's point: Custom, or On Legs with preV33herarmonlegs on (animtools' usingcustomleftarm).
+func _on_point(left: bool) -> bool:
+	return _name(left) == CUSTOM or _legs_custom(left)
+
+
+func _legs_custom(left: bool) -> bool:
+	var v = _values()
+	var s := "armpos2" if left else "armpos"
+	return v != null and (g.her.currentLeftArmPosition if left else g.her.currentRightArmPosition) == 1 		and _ext.setting_value("preV33herarmonlegs") == 1 and v[s + "x"] != -5000 and v[s + "y"] != -5000
 
 
 ## The arm names the character code saves: the player's, not a position's.
@@ -253,7 +273,7 @@ func _tick() -> void:
 		return
 	for left in [true, false]:   # Custom with an end point: the hand moves along her stroke
 		var s := "armpos2" if left else "armpos"
-		if _name(left) == CUSTOM and v[s + "x"] != -5000 and v[s + "y"] != -5000 and v[s + "xend"] != -5000 \
+		if _on_point(left) and v[s + "x"] != -5000 and v[s + "y"] != -5000 and v[s + "xend"] != -5000 \
 				and v[s + "yend"] != -5000 and not (her.leftArmIK if left else her.rightArmIK).dropping:
 			(her.leftArmIK if left else her.rightArmIK).newTarget(_custom_point(v, left), g.sceneLayer, true)
 

@@ -136,20 +136,27 @@ func _load(fresh: bool) -> void:
 		return
 	if not fresh and active and cur == _source:
 		return
+	# the position editor's changes (same load, same type): new values, the contact state kept
+	var edit: bool = not fresh and active and positions.serial == _serial and t == _type
 	_source = cur
+	_serial = positions.serial
 	_type = t
 	_zoom = maxf(0.05, float(cur.values["zoom"]))
 	v = cur.values.duplicate()
 	var exp: String = get_setting("experience")
 	if _type > TIT and PRESETS.has(exp):
 		_apply_preset(PRESETS[exp])
-	_reset()
-	resistance = v["startingresistance"]
+	if edit:
+		_set_resistance(resistance)
+	else:
+		_reset()
+		resistance = v["startingresistance"]
 	_width = NAN
 	active = true
 
 
 var _source = null   # the position v came from
+var _serial := -1    # positions.serial when v came from it
 
 
 func _apply_preset(p: Array) -> void:
@@ -576,10 +583,8 @@ func _holding_key() -> bool:
 		_hold_binding = b
 		_hold_key = -1
 		var code := b & Hotkeys.KEY_MASK
-		for k in range(32, 128):
-			if code != 0 and FlashKeys.to_flash(k) == code:
-				_hold_key = k
-				break
+		var k := FlashKeys.to_godot(code) if code != 0 else KEY_NONE
+		_hold_key = k if k != KEY_NONE else -1
 	return _hold_key >= 0 and Input.is_key_pressed(_hold_key)
 
 
@@ -643,4 +648,4 @@ func _code_set(value: String, _load) -> void:
 
 
 func _setting_global(key: String) -> float:
-	return float(Fields.SETTINGS[key])
+	return positions.setting_value(key) if positions != null else float(Fields.SETTINGS[key])

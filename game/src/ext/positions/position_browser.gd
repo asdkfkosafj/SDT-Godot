@@ -53,7 +53,10 @@ func _current_label() -> Control:
 		var t := "Now: the game's default"
 		if _ext.current != null:
 			var n: String = _ext.current.name
-			t = "Now: %s (%s)" % [_ext.library.short_name(n), _ext.library.category(n)] if _ext.library.has(n) else "Now: " + n
+			if n == "":
+				t = "Now: the game's default, changed by a partial position"
+			else:
+				t = "Now: %s (%s)" % [_ext.library.short_name(n), _ext.library.category(n)] if _ext.library.has(n) else "Now: " + n
 		if l.text != t:
 			l.text = t)
 	l.get_meta("refresh").call()

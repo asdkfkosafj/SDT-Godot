@@ -10,13 +10,13 @@ const Position := preload("res://src/ext/positions/position.gd")
 const Fields := preload("res://src/ext/positions/position_fields.gd")
 const Handles := preload("res://src/ext/positions/position_handles.gd")
 const Browser := preload("res://src/ext/positions/position_browser.gd")
+const Arms := preload("res://src/ext/positions/position_arms.gd")
 
 const SECTION := "positions_edit"
 const MY_FOLDER := "My positions"
 const UNSET := -5000.0
 const TYPES := ["Oral", "Tit fuck", "Vaginal", "Anal", "Other", "Alt pleasure"]
 const DOMINANT := ["Neutral", "Her", "Him"]
-const ARM_TYPES := ["Position's own / player's", "Custom (the point below)"]
 
 ## Keys whose change needs only the animation rebuilt (MainAnimation: paths, feet, knee, torso numbers).
 const ANIM_KEYS := ["hertweenstartx", "hertweenstarty", "hertweenendx", "hertweenendy", "hertweenstartang",
@@ -30,12 +30,13 @@ const SCENE_Y := [-1000.0, 2500.0]
 const HIS_X := [-900.0, 900.0]
 
 ## [title, fields, handles]. A field: [key, label, kind, a, b]: kind "n" a slider from a to b, "f" a switch, "c" a
-## choice (a: the option names, the value is the index), "r" radians shown in degrees from a to b. A handle:
+## choice (a: the option names, the value is the index), "a" her arm type (-1 keep, 0-4 the game's, 5-11 animtools',
+## 12 Custom), "r" radians shown in degrees from a to b. A handle:
 ## [label, x key, y key, angle key ("" none; "deg:" + key for degrees), space, colour].
 const CARDS := [
 	["Position", [
 		["positiontype", "Type", "c", TYPES], ["dominant", "Who leads", "c", DOMINANT],
-		["maxpenissize", "Max penis size", "n", 0.0, 999.0], ["reversescreen", "Screen reversed", "c", ["No", "Yes", "Not mirrored"]],
+		["maxpenissize", "Max penis size", "n", 0.0, 999.0], ["reversescreen", "Screen mirror", "c", ["Player's", "Normal", "Reversed"]],
 		["enablelicking", "Licking", "c", ["Off", "On", "Player's"]], ["hisarmfree", "His arm free", "c", ["No", "Yes", "Player's"]],
 	], []],
 	["Scene & camera", [
@@ -81,12 +82,12 @@ const CARDS := [
 		["left foot", "leftfootx", "leftfooty", "", "scene", Color("9fe0a0")],
 		["right foot", "rightfootx", "rightfooty", "", "scene", Color("5fbf60")]]],
 	["Her arms", [
-		["armpostyperight", "Right arm", "n", -1.0, 12.0], ["armposx", "Right hand x", "n", SCENE_X[0], SCENE_X[1]],
+		["armpostyperight", "Right arm", "a"], ["armposx", "Right hand x", "n", SCENE_X[0], SCENE_X[1]],
 		["armposy", "Right hand y", "n", SCENE_Y[0], SCENE_Y[1]], ["armposxend", "Right hand x at the end", "n", SCENE_X[0], SCENE_X[1]],
 		["armposyend", "Right hand y at the end", "n", SCENE_Y[0], SCENE_Y[1]], ["handangler", "Right hand angle", "n", -270.0, 270.0],
 		["handrinverted", "Right hand reversed", "f"], ["userightclosehand", "Right hand closed", "f"],
 		["allowrightarmdrop", "Right arm may drop", "f"], ["allowrightarmtap", "Right arm may tap", "f"],
-		["armpostypeleft", "Left arm", "n", -1.0, 12.0], ["armpos2x", "Left hand x", "n", SCENE_X[0], SCENE_X[1]],
+		["armpostypeleft", "Left arm", "a"], ["armpos2x", "Left hand x", "n", SCENE_X[0], SCENE_X[1]],
 		["armpos2y", "Left hand y", "n", SCENE_Y[0], SCENE_Y[1]], ["armpos2xend", "Left hand x at the end", "n", SCENE_X[0], SCENE_X[1]],
 		["armpos2yend", "Left hand y at the end", "n", SCENE_Y[0], SCENE_Y[1]], ["handanglel", "Left hand angle", "n", -270.0, 270.0],
 		["handlinverted", "Left hand reversed", "f"], ["useleftclosehand", "Left hand closed", "f"],
@@ -357,7 +358,7 @@ func _tick() -> void:
 		_ext.current = p
 		_ext.rebuild_animation(p)
 	else:
-		_ext.apply(p)
+		_ext.apply(p, true)
 	_ext.loaded_name = keep
 	_applied = p
 
@@ -453,6 +454,10 @@ func _spec(f: Array) -> Dictionary:
 		"f":
 			spec = MenuSchema.toggle(label, "", func(): return values.get(key, d) == 1.0,
 				func(on: bool): set_value(key, 1.0 if on else 0.0); commit())
+		"a":
+			var opts: Array = ["Keep hers"] + Array(Her.armPositions.slice(0, Her.GAME_ARM_POSITIONS)) + Arms.NAMES + [Arms.CUSTOM]
+			spec = MenuSchema.choice(label, "", opts, func(): return opts[clampi(int(values.get(key, d)) + 1, 0, opts.size() - 1)],
+				func(v: String): set_value(key, float(opts.find(v) - 1)); commit())
 		"c":
 			var opts: Array = f[3]
 			spec = MenuSchema.choice(label, "", opts, func(): return opts[clampi(int(values.get(key, d)), 0, opts.size() - 1)],

@@ -61,18 +61,19 @@ func _init() -> void:
 	_at(284, _fade_again)
 	_at(320, _fade_end)
 	_at(321, _browse_checks)
-	_at(322, _import_checks)
-	_at(323, _editor_start)
-	_at(326, _editor_checks)
-	_at(327, func(): x.clear(); g.inGameMenu.style2Clicked())
-	_at(329, _style_checks)
-	_at(330, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
-	_at(332, func():
+	_at(322, _fade_dark_start)
+	_at(323, _import_checks)
+	_at(324, _editor_start)
+	_at(327, _editor_checks)
+	_at(328, func(): x.clear(); g.inGameMenu.style2Clicked())
+	_at(330, _style_checks)
+	_at(331, func(): x.load_position("animtools/Titfuck/ATV_titfuck"))
+	_at(333, func():
 		Extensions.set_enabled("positions", false)
 		_check("switched off: the game's default animation and her leg angles back", _is_vanilla(), _state())
 		_check("switched off: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state())
 		_check("switched off: him unmirrored, in the scene, his body shown, her mouth open to him", _him_vanilla(), _him_state()))
-	_at(334, _finish)
+	_at(335, _finish)
 
 
 func step(_frame: int) -> void:
@@ -210,6 +211,18 @@ func _rule_checks() -> void:
 	_check("a partial changes only its keys and takes the base's version",
 		part.partial and part.version == 34 and part.values["himhidden"] == 0 and part.values["camerax"] == 111,
 		"%s %d" % [part.partial, part.version])
+	var based = _p("posversion=34;camerax=111;mykey=7")
+	based.path = "base.txt"
+	var part2 = Position.from_text("himhidden=0\npreV33herarmonlegs=1", "test/x_partial", based)
+	_check("a partial keeps its base's name, file and unknown lines; its own settings apart", part2.name == "test/rules"
+		and part2.path == "base.txt" and part2.extra == [["mykey", "7"]] and part2.own_settings == {"preV33herarmonlegs": 1.0},
+		"%s %s %s %s" % [part2.name, part2.path, part2.extra, part2.own_settings])
+	_check("partial files: the name ends in _partial (animtools' rule), in the library and the reader alike",
+		L.is_partial("animtools/_partial/a_partial") and not L.is_partial("animtools/_partial/b")
+		and not L.is_partial("x_partial_v2") and Position.is_partial_name("a_partial") and not Position.is_partial_name("x_partial_v2"))
+	_check("Flash key codes back to Godot keys (the Hold key may be any key)", FlashKeys.to_godot(16) == KEY_SHIFT
+		and FlashKeys.to_godot(65) == KEY_A and FlashKeys.to_godot(113) == KEY_F2 and FlashKeys.to_godot(37) == KEY_LEFT
+		and FlashKeys.to_godot(13) == KEY_ENTER and FlashKeys.to_godot(0) == KEY_NONE)
 
 
 func _find_checks() -> void:
@@ -594,6 +607,19 @@ func _fade_again() -> void:
 		and x._shade.modulate.a >= _dark_before - 0.01, "%.2f -> %.2f" % [_dark_before, x._shade.modulate.a if x._shade else -1.0])
 
 
+func _fade_dark_start() -> void:
+	# a pick just after the midpoint (the screen still dark): the change still comes while it is dark
+	x.set_setting("transition", "Dark fade")
+	var before = x.current
+	x._transition(func(): x.load_position("animtools/Oral/ATV_facefuck"))
+	x._shade.modulate.a = 1.0
+	x._fade_left = x._fade_len / 2
+	x._fade_tick()
+	_check("dark fade: a pick at full dark changes while it is still dark", x.current != before
+		and x.current.name.ends_with("ATV_facefuck") and x._shade.modulate.a > 0.8, "%.2f" % x._shade.modulate.a)
+	x._end_fade()
+
+
 func _fade_end() -> void:
 	_check("dark fade: the second pick applied, the shade gone", x.current != null
 		and x.current.name.ends_with("ATV_doggy_hard") and x._fade == null and x._fade_left == 0)
@@ -601,8 +627,23 @@ func _fade_end() -> void:
 
 func _browse_checks() -> void:
 	var cur = x.current
+	var kept: String = x.loaded_name
 	x.request("animtools/_partial/himhidden_on_partial")
 	_check("a partial position applies at once, even with the fade", x.current != cur and x._fade == null)
+	_check("a partial changes the current position: its name, file and dialogue name stay", x.current.name == cur.name
+		and x.current.path == cur.path and x.loaded_name == kept, "%s %s" % [x.current.name, x.loaded_name])
+	x.load_position("animtools/_partial/preV33herarmonlegs_on_partial")
+	var set_on: bool = x.setting_value("preV33herarmonlegs") == 1.0
+	var legs = Position.from_text("posversion=40\narmpostypeleft=1\narmpos2x=100\narmpos2y=400", "test/legs")
+	x.apply(legs)
+	var ik: IKController = g.her.leftArmIK
+	_check("preV33herarmonlegs on: On Legs takes the position's point (scene space), and the setting stays",
+		set_on and g.her.currentLeftArmPosition == 1 and x.arms._legs_custom(true)
+		and ik.targetPointCoordinateSpace == g.sceneLayer and ik.originalTarget == Vector2(100, 400), str(ik.originalTarget))
+	x.load_position("animtools/_partial/preV33herarmonlegs_off_partial")
+	_check("preV33herarmonlegs off: On Legs is the game's again", x.setting_value("preV33herarmonlegs") == 0.0
+		and not x.arms._legs_custom(true) and ik.targetPointCoordinateSpace != g.sceneLayer)
+	x.file_settings.erase("preV33herarmonlegs")
 	x.set_setting("transition", "Instant")
 	x.load_position("animtools/Anal/ATV_doggy_hard")
 	var names: Array = []
@@ -723,6 +764,28 @@ func _editor_checks() -> void:
 	ed._tick()
 	_check("editor: other keys apply the whole position (him turned the other way)", x.current.values["himreversed"] == 1.0 - rev
 		and signf(g.him.transform.determinant()) == -signf(det_before), "%s %s" % [det_before, g.him.transform.determinant()])
+	var bcx = Extensions.get_extension("bodycontact")
+	g.sceneLayer.zoomTo(g.sceneZoom + 0.2, true)
+	var zoomed: float = g.sceneLayer.currentZoom
+	bcx._tick()
+	bcx.meet = 0.4
+	bcx.resistance = bcx.v["startingresistance"] - 0.5
+	var r_before: float = bcx.resistance
+	ed.set_value("handpointrestx", ed.values["handpointrestx"] + 5.0)
+	ed.commit()
+	ed._tick()
+	bcx._load(false)
+	_check("editor: a change keeps the player's zoom and body contact's state", is_equal_approx(g.sceneLayer.currentZoom, zoomed)
+		and bcx.meet == 0.4 and is_equal_approx(bcx.resistance, r_before), "zoom %s / %s, meet %s, resistance %s / %s"
+		% [g.sceneLayer.currentZoom, zoomed, bcx.meet, bcx.resistance, r_before])
+	ed.set_value("zoom", ed.values["zoom"] + 0.1)
+	ed.commit()
+	ed._tick()
+	_check("editor: a zoom change zooms", is_equal_approx(g.sceneLayer.currentZoom, x.current.values["zoom"]),
+		"%s %s" % [g.sceneLayer.currentZoom, x.current.values["zoom"]])
+	ed.undo()
+	ed.undo()
+	ed._tick()
 	ed.undo()
 	ed._tick()
 	_check("editor: undo", x.current.values["himreversed"] == rev and x.current.values["hertweenstarty"] == y0 + 50.0,

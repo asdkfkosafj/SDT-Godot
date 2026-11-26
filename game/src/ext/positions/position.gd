@@ -4,7 +4,8 @@ extends RefCounted
 ## - `values`: every position key -> number (the field table's keys; a full file starts from their defaults, a
 ##   partial from the position it is applied to).
 ## - `extra`: lines the port does not know, kept in their order so a save writes them back ([key, text]).
-## - `settings`: animtools global settings the file sets (see PositionFields.SETTINGS), kept apart.
+## - `settings`: animtools global settings the file sets (see PositionFields.SETTINGS), kept apart (a partial: its
+##   base's and its own); positions keeps the ones a loaded file sets for the session (Positions.setting_value).
 ## - `version`: the file's posversion (-1 when it has none). Some behaviour depends on it at runtime (the camera's
 ##   zoom model, the joint limits), so it is kept; the values themselves are converted to V40 meaning on load.
 ##
@@ -21,6 +22,7 @@ var version := -1
 var values: Dictionary = {}
 var extra: Array = []
 var settings: Dictionary = {}
+var own_settings: Dictionary = {}   # the settings this file's own text sets (a partial: not its base's)
 
 
 ## The lines of a position file: [[key, text], ...] in file order (comments after ';' and empty lines left out).
@@ -57,8 +59,15 @@ static func from_text(text: String, pos_name: String, base = null, globals: Dict
 	p.name = pos_name
 	p.partial = is_partial_name(pos_name) if partial_override == null else partial_override
 	var prev_version: int = Fields.VERSION
-	if p.partial and base != null:
+	var seen := {}
+	if p.partial and base != null:   # a partial changes the position it is applied to: that one's name, file and lines
+		p.name = base.name
+		p.path = base.path
 		p.values = base.values.duplicate()
+		p.extra = base.extra.duplicate()
+		p.settings = base.settings.duplicate()
+		for i in p.extra.size():
+			seen[p.extra[i][0]] = i
 		prev_version = base.version
 	else:
 		p.values = Fields.defaults().duplicate()
@@ -66,7 +75,6 @@ static func from_text(text: String, pos_name: String, base = null, globals: Dict
 			p.values[k] = Fields.LEGACY[k]
 	if p.partial:
 		p.version = prev_version
-	var seen := {}
 	for kv in parse_lines(text):
 		var k: String = kv[0]
 		var v: String = kv[1]
@@ -76,6 +84,7 @@ static func from_text(text: String, pos_name: String, base = null, globals: Dict
 			p.values[k] = v.to_float()
 		elif Fields.SETTINGS.has(k):
 			p.settings[k] = v.to_float() if is_number(v) else v
+			p.own_settings[k] = p.settings[k]
 		elif not seen.has(k):
 			seen[k] = p.extra.size()
 			p.extra.append([k, v])
