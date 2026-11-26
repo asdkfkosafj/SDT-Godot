@@ -372,6 +372,9 @@ def convert(swf_path, out_dir, scale, ffdec, scripts_dir=None):
     # FFDec does not anti-alias gradient / bitmap fills: re-render those shapes supersampled.
     subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'supersample.py'),
                     swf_path, out_dir, '--ffdec', ffdec], check=True)
+    # Shapes that end on the edge of a shape drawn over them: pull in that edge only (no light line along it).
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shared_edges.py'),
+                    out_dir], check=True)
     print('chars', len(chars), 'synthetic shapes', len(shape_jobs))
 
 
