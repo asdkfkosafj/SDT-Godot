@@ -2,7 +2,7 @@ extends RefCounted
 ## Body positions in dialogues and character codes (animtools):
 ## - [ANIMTOOLS_<position>] loads a position by the name dialogues write (a path with _slash5C_ for folders, or a file
 ##   name), [ANIMTOOLSRANDOM] a random full position. animtools' voice triggers ([ANIMTOOLSSETVOICECHAR0] ... 7,
-##   [ANIMTOOLSDISABLEHUNNIESOUNDS], [ANIMTOOLSENABLEHUNNIESOUNDS]) are taken and do nothing (no voice pack yet).
+##   [ANIMTOOLSDISABLEHUNNIESOUNDS], [ANIMTOOLSENABLEHUNNIESOUNDS]) are taken and do nothing (the voices are not ported).
 ## - The variables dialogues check: atv_active (1 while positions is on), atv_position / atv_position2 (the type: 0
 ##   oral, 1 tit fuck, 2 vaginal, 3 anal, 4 other, 5 alt pleasure; 0 with the game's own animation), atv_position_name,
 ##   atv_dominant / atv_dominant2 (0 neutral, 1 her, 2 him), atv_dominant_held / 2 (oral and neutral: 2 while his

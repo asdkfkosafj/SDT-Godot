@@ -15,7 +15,7 @@ extends SDTExtension
 ## with animtools' life, priority and delay. The game's "vigorous" lines stay quiet in contact when the dialogue has
 ## its own movement vigour lines. Holding the "Hold her" key (space) while she resists pushes: her vigour and the
 ## push lines. Auto mode: in non-oral positions it goes by the contact depth and the meeting point, and it does not
-## aim his penis at her mouth. Character code: animtoolsSexExperience. Voices come later.
+## aim his penis at her mouth. Character code: animtoolsSexExperience. animtools' voices are not ported.
 
 const Fields := preload("res://src/ext/positions/position_fields.gd")
 const EXPERIENCE := ["Position's own", "No Resistance", "Porn Star", "Experienced", "Average", "Tight", "Virgin"]

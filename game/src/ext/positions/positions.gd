@@ -34,7 +34,7 @@ const ANIM := "position"   # the AnimationControl key of the applied position
 const POSITION_POINTS: Array[StringName] = [&"SceneLayer.rotation", &"SceneLayer.cameraAim", &"SaveData.sceneZoom",
 	&"IKController.endLimit", &"HimMaleBody.armPoint", &"HimMaleBody.shoulderPoint", &"HimMaleBody.handRotation",
 	&"StrandControl.gravityDirection", &"Rope.gravityOffset", &"IKController.parentRotation", &"Him.penisAngle",
-	&"Him.spurtAngle", &"Her.mouthContact", &"g.penisInFront"]
+	&"Him.spurtAngle", &"Her.mouthContact", &"g.penisInFront", &"SoundControl.breathOpenness"]
 
 var library = Library.new()
 var current = null         # the applied Position (null: the game's default)
@@ -248,6 +248,7 @@ func load_position(given: String) -> bool:
 		push_warning("Positions: no position \"%s\"" % given)
 		return false
 	apply(p)
+	_da_masturbate(p)
 	loaded_name = given
 	return true
 
@@ -265,6 +266,7 @@ func apply(p) -> void:
 	_apply_his_arm(p)
 	_apply_him(p)
 	_apply_penis(p)
+	_apply_breath()
 	props.show(p.values)
 	layers.show(p.values)
 	arms.show(p.values)
@@ -472,6 +474,26 @@ func _apply_penis(p) -> void:
 		modify(&"g.penisInFront", {"op": "set", "value": true})
 	g.updatePenisLayer()
 	_show_body(v["himhidden"] != 0)
+
+
+## Her breath grows louder with her mouth half open (animtools' newRandomBreath: the openness / 0.6, between 0.4 and
+## 0.9, or the openness when more), only while a position is applied.
+func _apply_breath() -> void:
+	unmodify(&"SoundControl.breathOpenness")
+	modify(&"SoundControl.breathOpenness", {"op": "fn", "fn": func(v: float, _sc) -> float:
+		var m: float = g.herMouthOpeness
+		return maxf(v, maxf(clampf(m / 0.6, 0.4, 0.9), m))})
+
+
+## animtools tells DialogueActions to start or stop her masturbating with each position it loads (its "shady DA
+## injection", on in its settings file): the position's DAhermasterbate (0 in every shipped file, so she stops and
+## her arm goes back to the position's).
+func _da_masturbate(p) -> void:
+	if _setting_global("enableshadyDAinjection") != 1:
+		return
+	var da = Extensions.get_extension("dialogueactions")
+	if da != null and da.enabled:
+		da.run_code("[MASTURBATE_ON]" if p.values["DAhermasterbate"] == 1 else "[MASTURBATE_OFF]")
 
 
 func _oral() -> bool:

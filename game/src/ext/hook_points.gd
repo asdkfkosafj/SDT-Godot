@@ -210,6 +210,7 @@ const VALUES := {
 	&"Scene.backgroundBrightness": true,
 	&"SceneLayer.cameraAim": true,
 	&"SceneLayer.rotation": true,
+	&"SoundControl.breathOpenness": true,
 	&"SoundControl.herSoundVolume": true,
 	&"StrandControl.gravityDirection": true,
 	&"Tears.lowerMascaraTop": true,

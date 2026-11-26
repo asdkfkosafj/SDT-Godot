@@ -440,10 +440,13 @@ func newRandomBreath() -> void:
 		lastBreath = i
 		_startBreathSound(normalBreath[i])
 		g.addBreath(-1)
+	var open := maxf(0.4, g.herMouthOpeness)
+	if Hooks.has_value(&"SoundControl.breathOpenness"):   # HOOK value point: how much her open mouth makes the breath loud (the game: her mouth's openness, at least 0.4)
+		open = Hooks.value(&"SoundControl.breathOpenness", self, open)
 	if g.her.passedOut:
-		currentBreathVolume = 0.15 * maxf(0.4, g.herMouthOpeness)
+		currentBreathVolume = 0.15 * open
 	else:
-		currentBreathVolume = minf(1.0, g.breathLevel / g.outOfBreathPoint + 0.15) * maxf(0.4, g.herMouthOpeness)
+		currentBreathVolume = minf(1.0, g.breathLevel / g.outOfBreathPoint + 0.15) * open
 	currentBreathST.volume = currentBreathVolume
 	currentBreathST.pan = leftPan
 	if currentBreath:

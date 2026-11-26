@@ -199,6 +199,9 @@ turns his feet against his unmirrored turn), his penis's angle offset or a stead
 spurts along his penis (`Him.spurtAngle`), behind her or in front (`g.penisInFront`, `g.updatePenisLayer()`), his body
 hidden (the files with himhidden = 0). Non-oral positions close her mouth to him (`Her.mouthContact` false: no mouth
 full, intro or deep throat; they keep their values) and keep her teeth from clenching.
+While a position is shown her breath is louder with her mouth half open (`SoundControl.breathOpenness`), and
+each position it loads starts or stops her masturbating (DialogueActions' `[MASTURBATE_ON]` / `[MASTURBATE_OFF]`, by
+the file's DAhermasterbate). animtools' voices are not ported (its voice triggers are taken and do nothing).
 While it is on, the extension adds animtools' 7 arm positions (Cupping Breast ... On Her Ass) and Custom to her
 arm lists; `positions.arms.holds(left)` tells whether a position holds that arm in its pose now (code that moves her
 arms by itself, like armoverhaul's dynamic arms, leaves it alone). A position is a temporary state: the options
@@ -412,6 +415,7 @@ The value points in the game, with the field that keeps the result for code that
 | `HimMaleBody.shoulderPoint` | the point his right arm's IK aims his shoulder at this tick (his coordinates) | `body.shoulderPoint` |
 | `HimMaleBody.handRotation` | his right hand's angle on his arm (degrees; the game's: along her head), while his hands are on | `arm.hand.rotation_degrees` |
 | `InGameMenu.savedArms` | her arms the character code saves (`[left, right]` names; the game's: her current ones); a temporary pose (a body position's) keeps the player's | |
+| `SoundControl.breathOpenness` | how much her open mouth makes each new breath sound loud (the game: her mouth's openness, at least 0.4); body positions raise it with a half open mouth | `soundControl.currentBreathVolume` |
 | `Neck.band` | a band that holds the front of her neck in, asked once per render: `null`, or `{top, bottom, inside, soft}` (edges as depth along the front, px her neck may push out between them, depth over which that blends into the free bulge past each edge); a second holder returns `Neck.narrower(value, its own)` | `neck.renderedPoints` |
 
 `Hooks.explain(name)` returns the last evaluation step by step (recording starts with the first call),

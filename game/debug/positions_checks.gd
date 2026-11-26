@@ -306,6 +306,15 @@ func _applied_checks() -> void:
 		Hooks.value(&"IKController.endLimit", g.her.torsoIK, 1.22) == INF
 		and Hooks.value(&"IKController.endLimit", g.her.leftArmIK, 1.22) == INF
 		and Hooks.value(&"IKController.endLimit", g.him.currentBody.rightArmIK, 1.22) == 1.22)
+	# stage 8: her breath louder with her mouth half open (animtools' newRandomBreath)
+	var mo: float = g.herMouthOpeness
+	g.herMouthOpeness = 0.3
+	var half: float = Hooks.value(&"SoundControl.breathOpenness", g.soundControl, maxf(0.4, 0.3))
+	g.herMouthOpeness = 0.95
+	var wide: float = Hooks.value(&"SoundControl.breathOpenness", g.soundControl, 0.95)
+	g.herMouthOpeness = mo
+	_check("breath openness: 0.3 open = 0.5 (the game 0.4), 0.95 open = 0.95", is_equal_approx(half, 0.5)
+		and is_equal_approx(wide, 0.95), "%s %s" % [half, wide])
 
 
 ## Stage 2's layers and rotation, one position after another (applying is immediate).
@@ -438,7 +447,7 @@ func _him_vanilla() -> bool:
 	return (him.transform.determinant() > 0.0 and him.overLayer.scaleY > 0.0 and him.armContainer.scaleY > 0.0
 		and him.parent == (g.frontLayer if g.penisOut else g.sceneLayer) and not him.bodyHidden
 		and not Hooks.has_value(&"Her.mouthContact") and not Hooks.has_value(&"g.penisInFront")
-		and not Hooks.has_value(&"IKController.parentRotation"))
+		and not Hooks.has_value(&"IKController.parentRotation") and not Hooks.has_value(&"SoundControl.breathOpenness"))
 
 
 func _him_state() -> String:
@@ -514,13 +523,16 @@ func _dialogue_checks() -> void:
 	var val := func(n: String) -> String: return da.vars.value_text(n)
 	_check("atv_active 1, atv_position 0 with the game's animation", val.call("atv_active") == "1"
 		and val.call("atv_position") == "0", "%s %s" % [val.call("atv_active"), val.call("atv_position")])
+	da.game.masturbating = true   # (not [MASTURBATE_ON]: that also sets her left arm, which later checks compare)
+	var was: bool = da.game.masturbating
 	_check("[ANIMTOOLS_<name>] loads the position (folders as _slash5C_)",
 		da.run_code("[ANIMTOOLS_Anal_slash5C_ATV_doggy_hard]") and x.current != null and x.current.name.ends_with("ATV_doggy_hard"))
+	_check("a loaded position stops her masturbating (DAhermasterbate 0: [MASTURBATE_OFF])", was and not da.game.masturbating)
 	_check("atv_position 3, atv_position_name as the dialogue gave it, atv_dominant", val.call("atv_position") == "3"
 		and val.call("atv_position2") == "3" and val.call("atv_position_name") == "Anal\\ATV_doggy_hard"
 		and val.call("atv_dominant") == str(int(x.current.values["dominant"])),
 		"%s %s %s" % [val.call("atv_position"), val.call("atv_position_name"), val.call("atv_dominant")])
-	_check("animtools' voice triggers are taken (no voice pack yet)", da.run_code("[ANIMTOOLSSETVOICECHAR3]")
+	_check("animtools' voice triggers are taken (voices not ported)", da.run_code("[ANIMTOOLSSETVOICECHAR3]")
 		and da.run_code("[ANIMTOOLSDISABLEHUNNIESOUNDS]"))
 	var dc = g.dialogueControl
 	dc.loadCustomDialogue('bodyentered:"in"\nbodyentered_anal:"anal in"\ncuminher:"cum"\n', false)

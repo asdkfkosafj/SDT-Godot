@@ -3,6 +3,13 @@ extends SDTExtension
 ## Reactions toggle or a button by the mood selector (classic Scene menu) switches it on (green) and off per character;
 ## saved in the character code as autoCloseMouth:CloseMouth / Normal, like the Loader mod. It closes her mouth through
 ## the value point Her.jawAngle, so her lips follow (the mod's "updatelips" setting is not needed).
+## With the Positions extension, each position type can switch it on or off while such a position is shown (animtools'
+## autoclosemouth_closefor<type> / openfor<type> settings, all off in its settings file); the character's own choice
+## is not changed.
+
+## Position types animtools gives a choice for (positiontype 0 ... 4).
+const POSITION_TYPES := ["oral", "tit fuck", "vaginal", "anal", "other"]
+const POSITION_CHOICES := ["Character's choice", "On", "Off"]
 
 const MOODS := ["Angry", "Normal", "Happy", "Ahegao", "Upset", "Worried", "Aggressive", "Drugged", "Frightened",
 	"Spent", "Submissive", "Depressed", "Nervous", "Elated", "Disgusted", "Broken"]
@@ -42,6 +49,10 @@ func _setup() -> void:
 	for m in MOODS:
 		setting("closeon" + m.to_lower(), true, {"label": "Close when " + m})
 	setting("enablevanillasaving", true, {"label": "Save on/off in the character code"})
+	for t in POSITION_TYPES:
+		setting("position_" + t.replace(" ", ""), POSITION_CHOICES[0], {"label": "In %s positions" % t,
+			"options": POSITION_CHOICES,
+			"tip": "With the Positions extension: on or off while a %s position is shown, or the character's own choice." % t})
 
 
 func _enable() -> void:
@@ -122,9 +133,19 @@ func _breath_ok() -> bool:
 
 
 func _is_on() -> bool:
-	if not on:
+	var choice := _position_choice()
+	if not (choice == "On" or (on and choice != "Off")):
 		return false
 	var m := mood()   # includes moremoods' moods, as the Loader mod read moremoods_comm.mymood
 	if m in MOODS:
 		return get_setting("closeon" + m.to_lower())
 	return true
+
+
+## The choice for the shown position's type ("" without the Positions extension); the game's own animation is oral.
+func _position_choice() -> String:
+	var p = Extensions.get_extension("positions")   # (untyped: its own members)
+	if p == null or not p.enabled:
+		return ""
+	var t := int(p.current.values["positiontype"]) if p.current != null else 0
+	return get_setting("position_" + POSITION_TYPES[t].replace(" ", "")) if t < POSITION_TYPES.size() else ""
