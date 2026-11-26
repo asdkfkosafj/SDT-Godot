@@ -23,7 +23,7 @@ const OWNER := "positions"
 ## The position keys her arms use (a change of one sets her arms again).
 const KEYS := ["armpostypeleft", "armpostyperight", "armposx", "armposy", "armposxend", "armposyend", "armpos2x",
 	"armpos2y", "armpos2xend", "armpos2yend", "handangler", "handanglel", "handrinverted", "handlinverted",
-	"userightclosehand", "useleftclosehand"]
+	"userightclosehand", "useleftclosehand", "behindleg"]
 
 var _ext
 var player_arms := ["", ""]    # the player's arm choices (names) while a position has set hers; "" = none set

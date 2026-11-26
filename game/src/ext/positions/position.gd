@@ -82,9 +82,10 @@ static func from_text(text: String, pos_name: String, base = null, globals: Dict
 			p.version = int(v.to_float())
 		elif (Fields.is_field(k) or Fields.LEGACY.has(k)) and is_number(v):
 			p.values[k] = v.to_float()
-		elif Fields.SETTINGS.has(k):
-			p.settings[k] = v.to_float() if is_number(v) else v
-			p.own_settings[k] = p.settings[k]
+		elif Fields.SETTINGS.has(k):   # (a partial's own stay out of `settings`: a save of the changed position does not write them)
+			p.own_settings[k] = v.to_float() if is_number(v) else v
+			if not (p.partial and base != null):
+				p.settings[k] = p.own_settings[k]
 		elif not seen.has(k):
 			seen[k] = p.extra.size()
 			p.extra.append([k, v])

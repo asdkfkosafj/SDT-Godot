@@ -215,7 +215,8 @@ func _rule_checks() -> void:
 	based.path = "base.txt"
 	var part2 = Position.from_text("himhidden=0\npreV33herarmonlegs=1", "test/x_partial", based)
 	_check("a partial keeps its base's name, file and unknown lines; its own settings apart", part2.name == "test/rules"
-		and part2.path == "base.txt" and part2.extra == [["mykey", "7"]] and part2.own_settings == {"preV33herarmonlegs": 1.0},
+		and part2.path == "base.txt" and part2.extra == [["mykey", "7"]] and part2.own_settings == {"preV33herarmonlegs": 1.0}
+		and not part2.settings.has("preV33herarmonlegs") and not part2.to_text().contains("preV33herarmonlegs"),
 		"%s %s %s %s" % [part2.name, part2.path, part2.extra, part2.own_settings])
 	_check("partial files: the name ends in _partial (animtools' rule), in the library and the reader alike",
 		L.is_partial("animtools/_partial/a_partial") and not L.is_partial("animtools/_partial/b")
@@ -644,6 +645,28 @@ func _browse_checks() -> void:
 	_check("preV33herarmonlegs off: On Legs is the game's again", x.setting_value("preV33herarmonlegs") == 0.0
 		and not x.arms._legs_custom(true) and ik.targetPointCoordinateSpace != g.sceneLayer)
 	x.file_settings.erase("preV33herarmonlegs")
+	var arm1 = Position.from_text("posversion=40
+armpostypeleft=1", "test/arm")
+	var arm1_leg = Position.from_text("posversion=40
+armpostypeleft=1
+behindleg=1", "test/arm")
+	x.apply(arm1)
+	var in_her: bool = g.her.leftArmContainer.parent == g.her
+	x.apply(arm1_leg, true)
+	var behind: bool = g.her.leftArmContainer.parent == g.backLayer
+	x.apply(arm1, true)
+	_check("editor: her leg behind him switched on / off moves her On Legs arm with it", in_her and behind
+		and g.her.leftArmContainer.parent == g.her, "%s %s %s" % [in_her, behind, g.her.leftArmContainer.parent])
+	x.load_position("animtools/Anal/ATV_doggy_hard")
+	_check("a library load names the position as animtools does (atv_position_name, the code)",
+		x.loaded_name == "Anal\\ATV_doggy_hard" and x.library.find(x.loaded_name) == "animtools/Anal/ATV_doggy_hard"
+		and L.animtools_name("Imported/Characters/Mia") == "Characters\\Mia" and L.animtools_name("Mine/x") == "Mine\\x", x.loaded_name)
+	var bcx = Extensions.get_extension("bodycontact")
+	x.apply(Position.from_text("posversion=40
+positiontype=9", "test/odd"))
+	bcx._tick()
+	_check("body contact: an unknown position type counts as other", bcx.active and bcx._type == 4, str(bcx._type))
+	x.load_position("animtools/Anal/ATV_doggy_hard")
 	x.set_setting("transition", "Instant")
 	x.load_position("animtools/Anal/ATV_doggy_hard")
 	var names: Array = []

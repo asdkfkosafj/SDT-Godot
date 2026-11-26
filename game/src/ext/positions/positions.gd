@@ -261,8 +261,8 @@ func load_position(given: String) -> bool:
 	serial += 1
 	apply(p)
 	_da_masturbate(p)
-	if not (library.is_partial(n) and before != null):
-		loaded_name = given
+	if not (library.is_partial(n) and before != null):   # (a library name: in animtools' form)
+		loaded_name = library.animtools_name(library.find(given)) if library.has(given) else given
 	return true
 
 

@@ -129,6 +129,8 @@ func _setting_changed(_key: String, _value) -> void:
 func _load(fresh: bool) -> void:
 	var cur = positions.current if positions != null and positions.enabled else null
 	var t: int = int(cur.values["positiontype"]) if cur != null else ORAL
+	if t < ORAL or t > ALT_PLEASURE:   # a type animtools does not know: "other"
+		t = 4
 	var on: bool = cur != null and (t > ORAL or cur.values["pleasurefromcontact"] == 1)
 	if not on:
 		active = false

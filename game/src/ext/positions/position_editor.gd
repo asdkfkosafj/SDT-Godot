@@ -302,7 +302,7 @@ func _write(n: String, file: String) -> void:
 	_ext.rescan()
 	_ext.current = _base
 	_applied = _base
-	_ext.loaded_name = n
+	_ext.loaded_name = _ext.library.animtools_name(n)
 	_thumbnail(file.get_basename() + ".png")
 
 

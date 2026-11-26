@@ -150,6 +150,15 @@ static func short_name(n: String) -> String:
 	return f.replace("_", " ").strip_edges()
 
 
+## The name animtools gives a position (dialogues' atv_position_name, the animtoolsPosition code): relative to its
+## positions folder, without the source folder (animtools / Imported), "\\" between folders.
+static func animtools_name(n: String) -> String:
+	var parts := n.split("/")
+	if parts.size() > 1 and parts[0].to_lower() in ["animtools", "imported"]:
+		parts.remove_at(0)
+	return "\\".join(parts)
+
+
 func thumbnail_path(n: String) -> String:
 	var p := path_of(n)
 	if p == "":
