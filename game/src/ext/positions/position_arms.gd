@@ -3,10 +3,11 @@ extends RefCounted
 ## her arm lists while the positions extension is on (Her.addArmPosition; the armoverhaul plugin offers its own on top
 ## of these), and the arms a position asks for.
 ##
-## A position's arm types (armpostypeleft / right): -1 keeps her arm, 0-4 the game's five, 5-11 the 7 below, 12
-## Custom. Custom puts her hand on the position's own point (scene space, from the start to the end point along her
-## stroke) at the position's hand angle (absolute, in scene space), closed or turned over as the file says; without
-## a point it is On Legs. The arms a position sets are temporary: the character code keeps the player's arms, and
+## A position's arm types (armpostypeleft / right): -1 keeps her own arm (the player's; animtools kept the arm the
+## position before had set, so after one with her hands on her breasts they stayed there), 0-4 the game's five, 5-11
+## the 7 below, 12 Custom. Custom puts her hand on the position's own point (scene space, from the start to the end
+## point along her stroke) at the position's hand angle (absolute, in scene space), closed or turned over as the file
+## says; without a point it is On Legs. The arms a position sets are temporary: the character code keeps the player's arms, and
 ## they come back when the position ends (P2). The player can still change them while it is on.
 ##
 ## With animtools' preV33herarmonlegs setting on (a partial switches it), the game's On Legs takes the position's
@@ -81,8 +82,11 @@ func show(values) -> void:
 					_put(her, left, back)
 			continue
 		var want := _type_name(int(values["armpostypeleft" if left else "armpostyperight"]))
-		if want == "":   # keep (-1): the arm she has, set up again for this position's numbers
-			_put(her, left, -1)
+		if want == "":   # keep (-1): her own arm (not one an earlier position set), set up for this position's numbers
+			held[s] = ""
+			var own := Her.armPositions.find(player_arms[s]) if player_arms[s] != "" else -1
+			player_arms[s] = ""
+			_put(her, left, own)
 			continue
 		var i := Her.armPositions.find(want)
 		if i < 0:

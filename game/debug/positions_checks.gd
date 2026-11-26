@@ -45,7 +45,9 @@ func _init() -> void:
 	_at(62, _layer_checks)
 	_at(63, func():
 		x.clear()
-		_check("cleared: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state()))
+		_check("cleared: her layers, rotation, shadow, props and the player's zoom back", _layers_vanilla(), _layers_state())
+		_check("cleared: her near arm back under the hair", not x.layers.arm_over_hair and _arm_order() == "under",
+			_arm_order()))
 	_at(64, _him_start)
 	for k in 40:
 		_at(65 + k, func(): _him_stroke(k))
@@ -373,6 +375,17 @@ func _layer_checks() -> void:
 	x.layers._leg_holder.addChild(her.leftLegContainer)
 	_check("her moved leg is where it would be in her", leg_ok.distance_to(leg_in) < 0.01, "%s vs %s" % [leg_ok, leg_in])
 	_check("her moved breast keeps her skin colour", her.torsoBack.leftBreast.filters == her.torsoBack.filters)
+	var pierce: FlashDisplayObject = her.torso.leftNipplePiercing
+	her.rotation_degrees += 3.0   # (her body moves; the layer follows in the late tick)
+	her.updateNipplePiercing()
+	x.layers._follow()
+	var nip = her.torsoBack.leftBreast.nipple
+	var want_at: Vector2 = nip.localToGlobal(Vector2(nip.getChildByName("piercingPoint").x, nip.getChildByName("piercingPoint").y)) \
+		if nip.getChildByName("piercingPoint") else nip.localToGlobal(Vector2.ZERO)
+	var got_at: Vector2 = pierce.parent.localToGlobal(Vector2(pierce.x, pierce.y))
+	her.rotation_degrees -= 3.0
+	_check("her moved breast's nipple piercing: behind him with the breast, on her nipple the same tick",
+		pierce.parent == her.torsoBack.leftBreast.parent and got_at.distance_to(want_at) < 0.01, "%s vs %s" % [got_at, want_at])
 	g.changeLayer(her.leftArmContainer, her, her.leftLegContainer)
 	_check("while her leg is out, \"next to her leg\" puts her left arm behind her; the leg stays out",
 		her.leftLegContainer.parent != her and her.leftArmContainer.parent == g.backLayer)
@@ -389,6 +402,36 @@ func _layer_checks() -> void:
 	_check("Custom arm: her hand aims at the position's point", Her.armPositions[her.currentLeftArmPosition] == "Custom"
 		and her.leftArmIK.targetPoint == Vector2(v["armpos2x"], v["armpos2y"]) and her.leftArmIK.targetPointCoordinateSpace == g.sceneLayer,
 		"%s %s" % [Her.armPositions[her.currentLeftArmPosition], her.leftArmIK.targetPoint])
+	x.load_position("animtools/Oral/ATV_breastsholdthrust_prop")   # (Cupping Breast both)
+	x.load_position("animtools/Oral/ATV_facefuck_pole")   # (keeps her arms: -1 both)
+	_check("a position that keeps her arms after one that set them: the player's arms, not the last position's",
+		Her.armPositions[her.currentLeftArmPosition] == _player_arms[0]
+		and Her.armPositions[her.currentRightArmPosition] == _player_arms[1] and not x.arms.holds(true),
+		"%s %s (player's: %s)" % [Her.armPositions[her.currentLeftArmPosition], Her.armPositions[her.currentRightArmPosition],
+		_player_arms])
+	x.load_position("animtools/Oral/HimD/ATV_KorraSlave3")   # (her hands tied above her head)
+	for i in 30:
+		her.updateArms()
+	x.layers._follow()
+	_check("her near arm up: over the hair layers in front of her, the forearm just above it", x.layers.arm_over_hair
+		and _arm_order() == "over", _arm_order())
+
+
+## Where her near arm is to the hair layers in the front layer: "over" (above all of them, the forearm just above
+## the arm), "under" (under the lowest one above him, as the game has it), else the indices.
+func _arm_order() -> String:
+	var front: FlashSprite = g.frontLayer
+	var arm: int = front.getChildIndex(g.her.rightArmContainer)
+	var fore: int = front.getChildIndex(g.her.rightForeArmContainer)
+	var above: int = front.getChildIndex(g.him) if g.him.parent == front else -1
+	var hair := []
+	for h in x.layers._hair_layers(front):
+		hair.append(front.getChildIndex(h))
+	if fore == arm + 1 and arm > hair.max():
+		return "over"
+	if fore == arm + 1 and arm > above and arm < hair.filter(func(i): return i > above).min():
+		return "under"
+	return "arm %d fore %d him %d hair %s" % [arm, fore, above, hair]
 
 
 ## Stage 3: him turned round, his layer, her mouth closed to him in non-oral positions, his body hidden.

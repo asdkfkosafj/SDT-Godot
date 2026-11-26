@@ -52,6 +52,9 @@ static var tip := 0.0                   # his tip, in depth units (0 while outsi
 static var push := 0.0                  # how hard he pushes in this tick, 0..1
 static var collar_name := ""            # the collar the ring is for ("Leather", "Tie", ...; "Custom" for a mod's)
 static var _tick_done := -1             # the game tick last worked out (several extensions may ask)
+static var _tip_pos := 0.0              # her pos the tip was measured at (the game measures his depth a tick late)
+static var _last_pos := 0.0
+static var _pos_tick := -1000000
 static var _edges_tick := -1000000
 static var _edges_collar = null
 
@@ -64,6 +67,15 @@ static func _ring(label: String, top: float, bottom: float, tight: float, stiff:
 
 static func rings() -> Array:
 	return [entrance, collar]
+
+
+## His tip where her head is now (depth units): the measured tip moved on by how far her head has moved since it
+## was measured. Forces that hold her head back by his depth use this: on the measured tip, a tick late, a narrow
+## stiff band (the collar's) overshoots every tick and her head swings back and forth on it with the mouse still.
+static func tip_now(her) -> float:
+	if g.penisOut or tip <= 0.0 or _pos_tick < Flash.tick_count - 1:
+		return tip
+	return maxf(0.0, tip + (her.pos - _tip_pos) * Her.range / DEPTH_SCALE)
 
 
 ## True once the rings have been worked out this game tick (their values are this tick's).
@@ -82,6 +94,10 @@ static func tick(her) -> void:
 	_tick_done = Flash.tick_count
 	var neck = her.head.neck
 	tip = 0.0 if g.penisOut else maxf(0.0, her.penisInMouthDist / DEPTH_SCALE)
+	# his depth (penisInMouthDist) is where her head was the tick before (it is measured before she moves)
+	_tip_pos = _last_pos if _pos_tick == Flash.tick_count - 1 else her.pos
+	_last_pos = her.pos
+	_pos_tick = Flash.tick_count
 	push = 0.0 if g.penisOut else clampf(her.movement / PUSH_FULL, 0.0, 1.0)
 	entrance["tight"] = clampf(g.throatResistance / 100.0, 0.0, 1.0)
 	_update_collar(her, neck)

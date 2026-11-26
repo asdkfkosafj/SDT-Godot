@@ -151,6 +151,7 @@ func step(_frame: int) -> void:
 				_value_point_port_checks()
 				_tongueguard_checks()
 				_loadershortcuts_checks()
+				_pulloff_checks()
 				_disable_checks()
 				_plugin_checks()
 				_guard_start()
@@ -1098,6 +1099,23 @@ func _collar_checks() -> void:
 		and her.collarContainer.collar.scaleX == 1.0)
 	ThroatRings.set_stiffness(0.6)
 	ThroatRings.reset_stretch()
+	# his depth is measured a tick late: the collar reads it moved on by her head's motion since (no swinging on the
+	# band with the mouse still)
+	var out_was: bool = g.penisOut
+	var keep := [ThroatRings.tip, ThroatRings._tip_pos, ThroatRings._pos_tick]
+	g.penisOut = false
+	ThroatRings.tip = 0.5
+	ThroatRings._tip_pos = her.pos - 0.1
+	ThroatRings._pos_tick = Flash.tick_count
+	var now: float = ThroatRings.tip_now(her)
+	ThroatRings._pos_tick = Flash.tick_count - 5
+	var stale: float = ThroatRings.tip_now(her)
+	g.penisOut = out_was
+	ThroatRings.tip = keep[0]
+	ThroatRings._tip_pos = keep[1]
+	ThroatRings._pos_tick = keep[2]
+	_check("rings: his tip where her head is now (the measured one moved on by her motion; as measured when stale)",
+		is_equal_approx(now, 0.5 + 0.1 * Her.range / ThroatRings.DEPTH_SCALE) and stale == 0.5, "%s %s" % [now, stale])
 	cc.select(was)
 
 
@@ -2062,6 +2080,29 @@ func _loadershortcuts_checks() -> void:
 	_check("loader shortcuts: off drops the keys and lets the strand go", ls._strand == null and not Hotkeys.by_id.has("loadershortcuts:eye"))
 	Extensions.set_enabled("loadershortcuts", true)
 	g.strandControl.clearCumStrands()
+
+
+## Pull off when held: 100 % changes nothing (no modifier at work), 0 % no pull and no power, 200 % twice the power
+## (start / increase / max), and a mood's own power stays under the scaled most.
+func _pulloff_checks() -> void:
+	var x: SDTExtension = Extensions.get_extension("pulloff")
+	var her = g.her
+	var base: Dictionary = her.pullOffPower.duplicate()
+	var po := {"pull": 0.5, "power": 0.004}
+	_check("pull off when held: on by default at 100 %, the game's power", x != null and x.enabled
+		and x.get_setting("strength") == 100 and her._pullOffPower()["max"] == base["max"])
+	x.set_setting("strength", 200)
+	var pp: Dictionary = her._pullOffPower()
+	_check("pull off when held 200 %: twice the power", is_equal_approx(pp["start"], base["start"] * 2.0)
+		and is_equal_approx(pp["increase"], base["increase"] * 2.0) and is_equal_approx(pp["max"], base["max"] * 2.0), str(pp))
+	x.set_setting("strength", 50)
+	var capped: Dictionary = x._cap({"pull": 0.5, "power": 1.0}, her)   # (its own part: moods change the pull too)
+	_check("pull off when held 50 %: a mood's power stays under the scaled most", is_equal_approx(capped["power"],
+		base["max"] * 0.5) and capped["pull"] == 0.5, str(capped))
+	x.set_setting("strength", 0)
+	_check("pull off when held 0 %: no pull, no power", x._cap(po, her) == {"pull": 0.0, "power": 0.0}
+		and her._pullOffPower()["max"] == 0.0)
+	x.set_setting("strength", 100)
 
 
 func _disable_checks() -> void:

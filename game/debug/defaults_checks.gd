@@ -121,7 +121,30 @@ func _end_checks() -> void:
 			off.append(id)
 	_check("every extension on again after off and on", off.is_empty(), str(off))
 	_fault_check("switched off and on")
+	_tied_hands_check()
 	_finish()
+
+
+## armoverhaul's resistance (her arms slow her head) only from her free arms: none while a body position holds both
+## (her hands tied above her head), all of it again once the position ends.
+func _tied_hands_check() -> void:
+	var ao: SDTExtension = Extensions.get_extension("armoverhaul")
+	var pe: SDTExtension = Extensions.get_extension("positions")
+	var was_on: bool = pe.enabled
+	Extensions.set_enabled("positions", true)
+	var text := "posversion=34;positiontype=0;armpostypeleft=12;armpostyperight=12;armposx=-332;armposy=-202;" \
+		+ "armpos2x=-315;armpos2y=-192"
+	var p = preload("res://src/ext/positions/position.gd").from_text(text.replace(";", "\n"), "test/tied")
+	pe.apply(p)
+	var tied: int = ao.hands.free_arms()
+	ao.hands.resistance = 1.0
+	ao.hands._resist(g.her)
+	var drag: float = ao.hands.drag
+	pe.clear()
+	var free: int = ao.hands.free_arms()
+	Extensions.set_enabled("positions", was_on)
+	_check("armoverhaul: no arm resistance while a position holds both her arms, both free again after", tied == 0
+		and drag == 0.0 and free == 2, "%d %s %d" % [tied, drag, free])
 
 
 func _fault_check(when: String) -> void:

@@ -220,6 +220,13 @@ func _resist(her: Her) -> void:
 	var arms := maxf(1.0, _arms_on_him(V["resistanceArmFactor"]))
 	drag = (1.0 - x.dyn.exh("resistance")) * arms * maxf(0.0, resistance) * V["resistanceAmount"] \
 		* (m()["resistanceFactor"] + m()["resistanceDistanceFactor"] * d * (1.0 - x.dyn.exh("resistanceDistance")))
+	drag *= free_arms() / 2.0
+
+
+## Her arms that can push him back: not one a body position holds in its pose (tied to a pole, on her breasts...;
+## the mod did not know animtools' poses).
+func free_arms() -> int:
+	return int(not x.position_holds(true)) + int(not x.position_holds(false))
 
 
 # ---------------------------------------------------------------- rubbing

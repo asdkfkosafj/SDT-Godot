@@ -147,12 +147,13 @@ func refresh_band() -> void:
 	band = {"top": c["top"], "bottom": c["bottom"], "inside": BAND_GAP + minf(room(), push_px + SLACK), "soft": BAND_SOFT}
 
 
-## How far (depth units) his tip is into the collar's band (0 above it, the band's height once through) while it holds.
+## How far (depth units) his tip is into the collar's band (0 above it, the band's height once through) while it holds:
+## where her head is now (ThroatRings.tip_now), not a tick late, so she rests on the band instead of swinging on it.
 func _band_past() -> float:
 	var c: Dictionary = ThroatRings.collar
 	if not c["on"] or c["snapped"] or g.penisOut:
 		return 0.0
-	return clampf(ThroatRings.tip - c["top"], 0.0, c["bottom"] - c["top"])
+	return clampf(ThroatRings.tip_now(g.her) - c["top"], 0.0, c["bottom"] - c["top"])
 
 
 ## What the collar adds to her resistance now: like her throat entrance, rising across its band up to its wall (less
@@ -163,7 +164,7 @@ func wall() -> float:
 	if past <= 0.0:
 		return 0.0
 	var w: float = ThroatRings.collar_wall * (1.0 - c["stretch"])
-	if ThroatRings.tip >= c["bottom"]:
+	if ThroatRings.tip_now(g.her) >= c["bottom"]:
 		return SQUEEZE * w
 	return w * past / maxf(0.001, c["bottom"] - c["top"])
 

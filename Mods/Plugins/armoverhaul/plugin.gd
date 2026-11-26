@@ -6,7 +6,8 @@ extends SDTExtension
 ## hand in his left hand; hotkeys cycle her arms, his arms and his leg layer, with the mod's arm transitions.
 ## Dynamic arms (dynamic_arms.gd): her arms move by themselves, following what happens and her mood.
 ## Restrained mode (restrained.gd): her hands tied to her thighs or behind her back, and her struggling.
-## Hands (hands.gd): tapping, rubbing, jitter, resistance, how her arms drop when she passes out.
+## Hands (hands.gd): tapping, rubbing, jitter, resistance (only from her free arms: not one a body position holds),
+## how her arms drop when she passes out.
 ## Spank reactions (spank.gd, with the spankanywhere plugin): hits move her arms, by where they land.
 ## The mod's numbers are in values.cfg (its own key names); the menu has only the switches.
 

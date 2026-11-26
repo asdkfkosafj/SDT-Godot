@@ -48,8 +48,8 @@ const SEAM_EPS := 0.05     # her throat is the pipe where its walls are this nea
 const TIP_ROUND := 6       # her throat is rounded round his tip this many samples past it (what sits on his tip)
 const SPLIT_AT := 0.7      # the lower painter takes over this far down her neck (0 jaw .. 1 chest): above her
                            # shoulder, below her earrings
-const SPLIT_MIN := 0.4     # ... or higher, where her near arm covers her throat above that (_split_above_arm), but
-const SPLIT_MARGIN := 5    #   not above this; this many samples above the highest it covers
+const SPLIT_MARGIN := 5    # ... or higher, where her near arm covers her throat above that (_split_above_arm): this
+                           #   many samples above the highest it covers
 const FOLD := 0.85         # inside a bend, nothing reaches further than this times the bend's radius
 const FADE := 0.25         # per tick, in and out
 ## The fade behind the start edge, per pixel (set per vertex, it would follow the strips' rows: a wide strip's
@@ -718,7 +718,9 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 
 ## Her near arm can come up over her throat above _split (her head down low on him): the lower painter (over her arm)
 ## then takes over higher, from where her arm no longer covers the centre line (SPLIT_MARGIN samples above that), so
-## her sleeve does not cut straight across what is in her throat there. Not above SPLIT_MIN down her neck.
+## her sleeve does not cut across what is in her throat there. Her arm covers a sample where it covers its centre or
+## the outside of either wall (a sleeve often covers only the back wall), and it can take over up to her jaw: all of
+## her throat that her arm covers is drawn over it.
 func _split_above_arm(her: Her, throat: PackedVector2Array, axis: Vector2) -> void:
 	if _split <= 0 or her.rightArmContainer == null:
 		return
@@ -739,15 +741,17 @@ func _split_above_arm(her: Her, throat: PackedVector2Array, axis: Vector2) -> vo
 			o = o._flash_parent
 		if shows:
 			arms.append([a, a.flash_global_transform().affine_inverse(), masked])
-	var top: Vector2 = throat[int(SPLIT_MIN * (throat.size() - 1))]
-	var lo := _split - 1   # the highest sample looked at: not above `top`, nor sample 0
+	var top: Vector2 = throat[0]
+	var lo := _split - 1   # the highest sample looked at: not above her jaw, nor sample 0
 	while lo > 1 and (_path[lo - 1] - top).dot(axis) >= 0.0:
 		lo -= 1
 	var covers := func(i: int) -> bool:   # her arm covers sample i (a hit test costs some 10 us: masked)
-		var p := localToGlobal(_path[i])
-		for a in arms:
-			if a[0].hitTestVisible(p.x, p.y) if a[2] else a[0]._hit_visible(a[1] * p):
-				return true
+		var out := WALL + _thick[i]
+		for q in [_path[i], _at(i, _e0[i] - out), _at(i, _e1[i] + out)]:
+			var p := localToGlobal(q)
+			for a in arms:
+				if a[0].hitTestVisible(p.x, p.y) if a[2] else a[0]._hit_visible(a[1] * p):
+					return true
 		return false
 	var hi := _split - 1
 	if hi < 1 or (_path[hi] - top).dot(axis) < 0.0 or not covers.call(hi):
