@@ -619,6 +619,27 @@ func _fade_dark_start() -> void:
 	_check("dark fade: a pick at full dark changes while it is still dark", x.current != before
 		and x.current.name.ends_with("ATV_facefuck") and x._shade.modulate.a > 0.8, "%.2f" % x._shade.modulate.a)
 	x._end_fade()
+	# picks while a fade waits: the game's default and next / previous see the waiting one
+	x.clear()
+	x.request("animtools/Oral/ATV_facefuck")
+	x.request_default()
+	while x._fade_left > 0:
+		x._fade_tick()
+	_check("dark fade: the game's default picked while a position waits wins", x.current == null and x._fade == null)
+	x.set_setting("transition", "Instant")
+	x.load_position("animtools/Anal/ATV_doggy_hard")
+	var cat: String = L.category("animtools/Anal/ATV_doggy_hard")
+	var f: String = x.browser.filter
+	var list: Array = Array(x.library.names).filter(func(n): return not L.is_partial(n) and L.category(n) == cat and (f == "All" or L.dominance(n) == f))
+	var want: String = list[posmod(list.find("animtools/Anal/ATV_doggy_hard") + 2, list.size())]
+	x.set_setting("transition", "Dark fade")
+	x.step(1)
+	x.step(1)
+	while x._fade_left > 0:
+		x._fade_tick()
+	_check("dark fade: two quick next presses go two positions on", x.current != null and x.current.name == want,
+		"%s, want %s" % [x.current.name if x.current else "none", want])
+	x.set_setting("transition", "Instant")
 
 
 func _fade_end() -> void:
@@ -666,6 +687,10 @@ behindleg=1", "test/arm")
 positiontype=9", "test/odd"))
 	bcx._tick()
 	_check("body contact: an unknown position type counts as other", bcx.active and bcx._type == 4, str(bcx._type))
+	_check("a position type animtools does not know reads as other (4)",
+		_p("posversion=40;positiontype=-1").values["positiontype"] == 4.0
+		and _p("posversion=40;positiontype=2.5").values["positiontype"] == 4.0
+		and _p("posversion=40;positiontype=3").values["positiontype"] == 3.0)
 	x.load_position("animtools/Anal/ATV_doggy_hard")
 	x.set_setting("transition", "Instant")
 	x.load_position("animtools/Anal/ATV_doggy_hard")

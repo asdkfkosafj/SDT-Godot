@@ -84,7 +84,7 @@ func _enable() -> void:
 	# pin mode: her head stays where it was while the mouse moves his hand
 	modify(&"DT.mousePos", {"op": "fn", "fn": func(v, _dt): return pins.mouse_pos(v)})
 	modify(&"Him.cumCaught", {"op": "set", "value": true, "phase": Hooks.FINAL,
-		"when": func(_him): return roll > 0.0 and _off < 2 and condom != null and condom.sprite.parent != null})
+		"when": func(_him): return catching()})
 	# taking a full one off: his left hand
 	modify(&"HimMaleBody.leftHand", {"op": "fn", "fn": func(v, _body): return _hand_target(v)})
 	hook_after(&"Him.catchCum", func(c): _caught(c.args[0]))
@@ -150,7 +150,16 @@ func _setting_changed(_key: String, _value) -> void:
 
 
 ## A link of a spurt caught: it shoots into the sack (seen when it hangs free), its cum into the bulb.
+## Whether a condom is on his penis and catches his cum.
+func catching() -> bool:
+	return roll > 0.0 and _off < 2 and condom != null and condom.sprite.parent != null
+
+
+## A caught link of a spurt: into the condom. Only while one is on: other code catches cum too (body contact keeps it
+## inside her), and that is not the condom's.
 func _caught(mass: float) -> void:
+	if not catching():
+		return
 	add_cum(mass)
 	if condom != null and g.him != null:
 		var h = g.him

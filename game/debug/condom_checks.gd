@@ -31,6 +31,7 @@ func _check(name: String, ok: bool, detail := "") -> void:
 func _init() -> void:
 	_at(0, func(): Flash.stage.getChildAt(0).playClicked())
 	_at(1, _start)
+	_at(3, _not_worn_checks)
 	_at(5, func(): x.set_worn(true))
 	_at(30, _on_checks)
 	_at(31, func(): g.him.ejaculate())
@@ -105,6 +106,14 @@ func _start() -> void:
 	# so he goes in and deep at once, whatever her mood (the condom's own hold on her head stays: Her.holdOut)
 	for vp in [&"Her.resistance", &"Her.pushBack"]:
 		Hooks.add_modifier(vp, {"phase": Hooks.FINAL, "op": "set", "value": 0.0}, "test")
+
+
+## Cum caught by other code (body contact keeps it inside her) is not the condom's while none is on.
+func _not_worn_checks() -> void:
+	var before: float = x.cum
+	x._caught(0.5)
+	_check("no condom on: cum caught elsewhere (body contact) does not go into the condom", not x.catching()
+		and x.cum == before and not _built.has("condom_filled"), "cum %s" % x.cum)
 
 
 func _on_checks() -> void:

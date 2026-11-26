@@ -129,14 +129,14 @@ func request(given: String, shown := "", fade := true) -> bool:
 	if library.is_partial(n) or not fade:
 		change.call()
 	else:
-		_transition(change)
+		_transition(change, n)
 	return true
 
 
-## Back to the game's default animation, with the transition.
+## Back to the game's default animation, with the transition (also when a picked position still waits for the dark).
 func request_default() -> void:
-	if current != null:
-		_transition(clear)
+	if current != null or _fade_do.is_valid():
+		_transition(clear, "")
 
 
 ## A random full position (not partial, not the current one): animtools' random key / [ANIMTOOLSRANDOM].
@@ -160,6 +160,8 @@ func reload() -> void:
 ## dominance filter too); from the game's default: the first or last position.
 func step(by: int) -> void:
 	var cur: String = "" if current == null else current.name
+	if _fade_do.is_valid() and _fade_target != null:   # a pick still waits for the dark: on from that one
+		cur = _fade_target
 	var cat: String = library.category(cur) if cur != "" else ""
 	var list: Array = Array(library.names).filter(func(n):
 		return not library.is_partial(n) and (cat == "" or library.category(n) == cat) \
@@ -179,15 +181,17 @@ var _shade: ColorRect = null
 var _fade_left := 0          # ticks left (0: no fade)
 var _fade_len := 0
 var _fade_do := Callable()   # runs at the darkest point
+var _fade_target = null      # the library name _fade_do loads ("": the game's default; null: none waits)
 
 
 ## Runs `change` now (Instant, or in Vanilla-like states without a scene) or at the midpoint of a dark fade. A
 ## second request during a fade replaces the change if the screen is not dark yet, else waits for the next fade.
-func _transition(change: Callable) -> void:
+func _transition(change: Callable, target = null) -> void:
 	var n := int(get_setting("fade_ticks"))
 	if get_setting("transition") != TRANSITIONS[0] or n < 2 or g.sceneLayer == null:
 		change.call()
 		return
+	_fade_target = target
 	if _fade_left > 0 and _fade_do.is_valid():   # still fading out: the newer pick wins
 		_fade_do = change
 		return
@@ -213,6 +217,7 @@ func _fade_tick() -> void:
 	if _fade_left <= half and _fade_do.is_valid():   # animtools: the change at the midpoint (or at once when the fade started dark)
 		var c := _fade_do
 		_fade_do = Callable()
+		_fade_target = null
 		c.call()
 	_shade.modulate.a = 1.0 - absf(_fade_left - _fade_len * 0.5) / (_fade_len * 0.5)
 	if _fade_left <= 0:
@@ -223,6 +228,7 @@ func _end_fade() -> void:
 	if _fade_do.is_valid():
 		var c := _fade_do
 		_fade_do = Callable()
+		_fade_target = null
 		c.call()
 	_fade_left = 0
 	if _fade != null:

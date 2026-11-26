@@ -103,6 +103,8 @@ func _g(globals: Dictionary, key: String) -> float:
 ## position is used (hands on her breasts as arm types). After this the values mean what V40 means.
 func _convert(prev_version: int, globals: Dictionary) -> void:
 	var v := values
+	if v["positiontype"] < 0 or v["positiontype"] > 5 or v["positiontype"] != floorf(v["positiontype"]):
+		v["positiontype"] = 4.0   # a type animtools does not know: other
 	if partial and _g(globals, "assumepartialsareofequalversion") == 1:
 		version = maxi(prev_version, version)
 	var pv := version
