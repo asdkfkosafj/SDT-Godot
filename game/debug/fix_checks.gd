@@ -62,10 +62,30 @@ func step(frame: int) -> void:
 			g.characterControl.setBackground(2)
 			var bg := [g.inGameMenu.bgModIndex, g.inGameMenu.bgPicker.itemLabel.text]
 			_check("setBackground shows the background's name in the picker", bg == [-1, "Dungeon"], bg)
+			_pending_arm()
 		700:
 			_info("orphans", Flash.orphan_stats(5))
 			print("FIX CHECKS: %d passed, %d failed" % [_pass, _fail])
 			Flash.get_tree().quit()
+
+
+## A saved arm position an extension adds: the save loads before the extensions start, so the name waits and is
+## taken once they have (DT: Her.applyPendingArms).
+func _pending_arm() -> void:
+	var her: Her = g.her
+	var before := her.currentLeftArmPosition
+	Extensions.started = false   # as while the save loads at the game's start
+	her.findLeftArmPosition("Fix Check Arm")
+	Extensions.started = true
+	var waited := her.currentLeftArmPosition == before
+	var noop := func(_h): pass
+	var i := Her.addArmPosition("Fix Check Arm", noop, Callable(), "fix_checks")
+	her.applyPendingArms()
+	var taken := her.currentLeftArmPosition == i
+	Her.removeArmPositions("fix_checks")
+	her.findLeftArmPosition("Fix Check Arm")   # (after the start: not kept)
+	_check("a saved arm position an extension adds is taken once the extensions start", waited and taken
+		and her._pendingArms == ["", ""], [waited, taken, her._pendingArms])
 
 
 ## Dialogue "delay characters": a character the embedded dialogue font has no glyph for (Б) shows as nothing,

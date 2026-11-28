@@ -1,11 +1,13 @@
 extends CanvasLayer
 ## The position editor's handles on the scene: a dot for each point of the editor's open cards (her and his path
-## ends, his feet, her knee, her and his arm points, the chosen prop) and a short arm for an angle. Hold Ctrl and
-## drag a dot (or the end of its arm) to move it; without Ctrl the mouse plays the game as usual. Drawn over the
-## game and under the menu; built only while the editor is open.
+## ends, his feet, her knee, her and his arm points, his shoulder, the zoom point, the chosen prop) and a short arm
+## for an angle. Hold Ctrl and drag a dot (or the end of its arm) to move it; without Ctrl the mouse plays the game
+## as usual. The camera dot sits at the screen's centre: dragging it drags the whole scene (camerax / cameray).
+## Drawn over the game and under the menu; built only while the editor is open.
 ##
 ## A handle: {label, x, y (value keys), angle (key or ""), angle_deg (the key is in degrees), space ("scene": the
-## scene layer's coordinates, "him": his), color}.
+## scene layer's coordinates, "him" / "him_shoulder": his, "pan": the camera), offset (optional Callable: a shift in
+## that space, his shoulder's height on the stroke), color}.
 
 const R := 6.0          # dot radius (window pixels)
 const ARM := 34.0       # angle arm length
@@ -32,9 +34,11 @@ func _process(_d: float) -> void:
 	_view.queue_redraw()
 
 
-## Scene-layer (or his) coordinates -> this layer's canvas.
+## Scene-layer (his; "pan": the scene layer's parent, the game's screen) coordinates -> this layer's canvas.
 func _xf(space: String) -> Transform2D:
-	var node: Node2D = g.him if space == "him" else g.sceneLayer
+	var node: Node2D = g.him if space.begins_with("him") else g.sceneLayer
+	if space == "pan" and node != null:
+		node = node.get_parent() as Node2D
 	if node == null or not node.is_inside_tree():
 		return Transform2D.IDENTITY
 	var vp := get_viewport()
@@ -42,8 +46,15 @@ func _xf(space: String) -> Transform2D:
 
 
 func _pos(h: Dictionary) -> Vector2:
+	if h["space"] == "pan":
+		return _xf("pan") * (g.screenSize / 2.0)
 	var v: Dictionary = editor.values
-	return _xf(h["space"]) * Vector2(v[h["x"]], v[h["y"]])
+	var off: Vector2 = h["offset"].call() if h.has("offset") else Vector2.ZERO
+	return _xf(h["space"]) * (Vector2(v[h["x"]], v[h["y"]]) + off)
+
+
+func _has_arm(h: Dictionary) -> bool:
+	return h["angle"] != "" and editor.values[h["angle"]] != -5000
 
 
 func _arm_end(h: Dictionary, p: Vector2) -> Vector2:
@@ -56,7 +67,7 @@ func _arm_end(h: Dictionary, p: Vector2) -> Vector2:
 
 
 func _unset(h: Dictionary) -> bool:
-	return editor.values[h["x"]] == -5000 or editor.values[h["y"]] == -5000
+	return h["space"] != "pan" and (editor.values[h["x"]] == -5000 or editor.values[h["y"]] == -5000)
 
 
 func _draw_view() -> void:
@@ -67,7 +78,7 @@ func _draw_view() -> void:
 		var p := _pos(h)
 		var c: Color = h["color"]
 		var hot: bool = (_hover.get("h") == h) or (_drag.get("h") == h)
-		if h["angle"] != "":
+		if _has_arm(h):
 			var e := _arm_end(h, p)
 			_view.draw_line(p, e, c, 2.0, true)
 			_view.draw_circle(e, 3.5, c)
@@ -84,7 +95,7 @@ func _hit(at: Vector2) -> Dictionary:
 		if _unset(h):
 			continue
 		var p := _pos(h)
-		if h["angle"] != "":
+		if _has_arm(h):
 			var d := at.distance_to(_arm_end(h, p))
 			if d < bd:
 				bd = d
@@ -111,6 +122,7 @@ func _input(event: InputEvent) -> void:
 			var hit := _hit(at)
 			if not hit.is_empty():
 				_drag = hit
+				_drag["last"] = at
 				dragging = true
 				get_viewport().set_input_as_handled()
 		elif not event.pressed and dragging:
@@ -123,8 +135,19 @@ func _input(event: InputEvent) -> void:
 func _move_to(at: Vector2) -> void:
 	var h: Dictionary = _drag["h"]
 	var inv := _xf(h["space"]).affine_inverse()
-	if _drag["part"] == "dot":
-		var p := inv * at
+	if h["space"] == "pan":
+		# the scene follows the mouse: the mouse's move on the screen over how far one camera unit moves the scene
+		var d := inv.basis_xform(at - _drag["last"])
+		_drag["last"] = at
+		var rate: Vector2 = editor._ext.camera_rate()
+		var v: Dictionary = editor.values
+		if absf(rate.x) > 0.001:
+			editor.set_value(h["x"], snappedf(v[h["x"]] + d.x / rate.x, 0.1))
+		if absf(rate.y) > 0.001:
+			editor.set_value(h["y"], snappedf(v[h["y"]] + d.y / rate.y, 0.1))
+	elif _drag["part"] == "dot":
+		var off: Vector2 = h["offset"].call() if h.has("offset") else Vector2.ZERO
+		var p := inv * at - off
 		editor.set_value(h["x"], snappedf(p.x, 0.5))
 		editor.set_value(h["y"], snappedf(p.y, 0.5))
 	else:

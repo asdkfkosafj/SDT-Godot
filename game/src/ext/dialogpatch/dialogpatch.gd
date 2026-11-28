@@ -142,7 +142,7 @@ func _best_state(dc: Dialogue, skip: Array, min_priority: int) -> String:
 		if dc.states[k].build > dc.states[best].build:
 			best = k
 			found = found or dc.states[best].build > 0
-	if g.her.intro and dc.states[best].build < Dialogue.STATE_THRESHOLD:
+	if g.her.introRunning() and dc.states[best].build < Dialogue.STATE_THRESHOLD:
 		return Dialogue.INTRO
 	return best if found else ""
 

@@ -8,10 +8,11 @@ extends RefCounted
 ## the window at the dumps listed in IMAGES, for the image goldens in tests/golden/images/. Textures then load on
 ## the main thread, so a picture never misses one that was still loading.
 
-const SCENARIOS := ["menu", "idle", "grab", "costumes", "characters", "cum"]
+const SCENARIOS := ["menu", "idle", "grab", "costumes", "characters", "cum", "positions"]
 ## Dumps that also get a picture with --images.
 const IMAGES := ["menu_menu", "idle_start", "idle_idle", "grab_grabbed", "grab_stroking", "costumes_dressed",
-	"characters_char02", "characters_char05", "characters_char08", "cum_spurt", "cum_after"]
+	"characters_char02", "characters_char05", "characters_char08", "cum_spurt", "cum_after", "positions_oral_prop",
+	"positions_anal_reversed", "positions_rotated"]
 
 var _steps: Array = []   # [tick, Callable]
 var _next := 0
@@ -106,6 +107,28 @@ func _scenario_cum() -> void:
 	_dump(100, "spurt")
 	_dump(250, "after")
 	_quit(251)
+
+
+## animtools' body positions (the only scenario not in Vanilla mode: tools/regress.sh runs it with the extensions at
+## their defaults and the shipped positions): oral with a prop, anal with him turned round and her leg behind him,
+## a turned scene (vaginal, body contact).
+func _scenario_positions() -> void:
+	var pos := func(): return Extensions.get_extension("positions")
+	_play(30)
+	_at(32, func(): pos.call().set_setting("transition", "Instant"))
+	_at(35, func(): pos.call().request("animtools/Oral/ATV_facefuck_pole"))
+	for i in 6:
+		_move(40 + i * 10, Vector2(250 + (i % 2) * 200, 250))
+	_dump(100, "oral_prop")
+	_at(105, func(): pos.call().request("animtools/Anal/anal_bed_holding_propped"))
+	for i in 6:
+		_move(110 + i * 10, Vector2(200 + (i % 2) * 300, 240))
+	_dump(170, "anal_reversed")
+	_at(175, func(): pos.call().request("animtools/Vaginal/ATV_ReverseCowgirl6"))
+	for i in 6:
+		_move(180 + i * 10, Vector2(200 + (i % 2) * 300, 240))
+	_dump(240, "rotated")
+	_quit(241)
 
 
 # ---------------------------------------------------------------- helpers

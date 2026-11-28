@@ -212,8 +212,7 @@ func _set_up_custom(her: Her, left: bool) -> void:
 			ik.setEndRotationTarget(-50, [her.torso.leg, her.torso, her])
 		return
 	ik.newTarget(_custom_point(v, left), g.sceneLayer, true)
-	var a: float = v["handanglel" if left else "handangler"]
-	ik.setEndRotationTarget(-50.0 if a == -5000 else a, _scene_chain(her, left))
+	ik.setEndRotationTarget(_hand_angle(v, left), _scene_chain(her, left))
 	ik.reversedEnd = v["handlinverted" if left else "handrinverted"] == 1
 	if v["useleftclosehand" if left else "userightclosehand"] == 1:
 		_close(her, left, true)
@@ -233,6 +232,18 @@ func _custom_point(v: Dictionary, left: bool) -> Vector2:
 		var u := clampf((g.her.pos + 0.25) / 1.27, 0.0, 1.0)
 		p = p.lerp(Vector2(v[s + "xend"], v[s + "yend"]), u)
 	return p
+
+
+## The Custom hand's angle (degrees): the start angle, or with an end angle too (handanglelend / handanglerend) from
+## the start to the end angle the short way round along her stroke (animtools' translatehandleft / right).
+func _hand_angle(v: Dictionary, left: bool) -> float:
+	var a: float = v["handanglel" if left else "handangler"]
+	var e: float = v["handanglelend" if left else "handanglerend"]
+	if a == -5000:
+		return -50.0
+	if e == -5000:
+		return a
+	return a + wrapf(e - a, -180.0, 180.0) * clampf((g.her.pos + 0.25) / 1.27, 0.0, 1.0)
 
 
 ## A closed hand; the left one also shows the hand drawn over her breast (her.leftHandOver), as armoverhaul does.
@@ -275,11 +286,16 @@ func _tick() -> void:
 	var v = _values()
 	if v == null:
 		return
-	for left in [true, false]:   # Custom with an end point: the hand moves along her stroke
+	for left in [true, false]:   # Custom with an end point / end angle: the hand moves / turns along her stroke
 		var s := "armpos2" if left else "armpos"
-		if _on_point(left) and v[s + "x"] != -5000 and v[s + "y"] != -5000 and v[s + "xend"] != -5000 \
-				and v[s + "yend"] != -5000 and not (her.leftArmIK if left else her.rightArmIK).dropping:
-			(her.leftArmIK if left else her.rightArmIK).newTarget(_custom_point(v, left), g.sceneLayer, true)
+		var ik: IKController = her.leftArmIK if left else her.rightArmIK
+		if not _on_point(left) or v[s + "x"] == -5000 or v[s + "y"] == -5000 or ik.dropping:
+			continue
+		if v[s + "xend"] != -5000 and v[s + "yend"] != -5000:
+			ik.newTarget(_custom_point(v, left), g.sceneLayer, true)
+		if _name(left) == CUSTOM and v["handanglel" if left else "handangler"] != -5000 \
+				and v["handanglelend" if left else "handanglerend"] != -5000:
+			ik.setEndRotationTarget(_hand_angle(v, left), ik.endRotationTargets)
 
 
 ## allowleftarmtap / allowrightarmtap = 0: that hand does not tap him.

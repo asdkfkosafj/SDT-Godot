@@ -198,7 +198,8 @@ arms, and him: turned round (his tween mirrored; his over layer and arm mirror w
 turns his feet against his unmirrored turn), his penis's angle offset or a steady penis (`Him.penisAngle`), his
 spurts along his penis (`Him.spurtAngle`), behind her or in front (`g.penisInFront`, `g.updatePenisLayer()`), his body
 hidden (the files with himhidden = 0). Non-oral positions close her mouth to him (`Her.mouthContact` false: no mouth
-full, intro or deep throat; they keep their values) and keep her teeth from clenching.
+full, intro or deep throat; they keep their values; `Her.introRunning()` is false meanwhile, so no intro lines) and
+keep her teeth from clenching.
 While a position is shown her breath is louder with her mouth half open (`SoundControl.breathOpenness`), and
 each position it loads starts or stops her masturbating (DialogueActions' `[MASTURBATE_ON]` / `[MASTURBATE_OFF]`, by
 the file's DAhermasterbate). animtools' voices are not ported (its voice triggers are taken and do nothing).
@@ -207,14 +208,17 @@ arm lists; `positions.arms.holds(left)` tells whether a position holds that arm 
 arms by itself, like armoverhaul's dynamic arms, leaves it alone). A position is a temporary state: the options
 save and the character code keep the player's zoom and arms (`SaveData.sceneZoom`, `InGameMenu.savedArms`), and
 everything comes back when it ends. The menu's Positions page (its button only while the extension is on) shows the
-positions by folder with their thumbnails (HimD / HerD folders = who leads, a filter), the game's default, Random and
-Rescan; hotkeys: F11 random, F10 reload the file, Page Down / Page Up the next / previous position in the folder.
+positions by folder with their thumbnails (HimD / HerD folders = who leads, a filter; a Find field; a right-click makes
+one a favourite, shown in a Favourites folder first, `positions.set_favourite(name, on)`, kept in port.cfg), the game's
+default, Random (from all positions or the favourites: "Random picks from") and Rescan, and the last position name a
+character code or dialogue asked for that is not there (`positions.missing`); hotkeys: F11 random, F10 reload the file, Page Down / Page Up the next / previous position in the folder.
 `positions.request(name)` loads one with the transition (a dark fade that applies it at the darkest point, the
 "Transition" setting; partial positions at once), as the page, the hotkeys and the dialogue triggers do;
 `load_position(name)` at once. The Loader import also copies the Loader's positions (Settings/animtools_positions and
 character folders' animtoolscharposition.txt) into `Mods/Positions/Imported`. Edit / New on the page open the position editor
 (`positions.editor`): animtools' keys in folding cards, the open cards' points as handles on the scene (hold Ctrl and
-drag; she keeps still meanwhile through `DT.mousePos`), undo, revert, and saving into `Mods/Positions/My positions`
+drag; she keeps still meanwhile through `DT.mousePos`; the camera dot drags the whole scene, his shoulder dots move with
+his body's height, an end hand angle turns her Custom hand along her stroke), undo, revert, and saving into `Mods/Positions/My positions`
 with a 700x600 thumbnail of the scene (the shipped files are never written: saving one makes a copy).
 
 The built-in `bodycontact` extension (animtools' body contact) runs while a non-oral position does (or an oral one with

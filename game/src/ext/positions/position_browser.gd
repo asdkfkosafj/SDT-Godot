@@ -1,7 +1,9 @@
 extends RefCounted
 ## The Positions page of the menu (MenuSchema's "positions" section, shown while the extension is on): the game's
-## default, a random position, rescan; a dominance filter; then the positions by folder (PositionLibrary.category),
-## each folder a fold with a grid of thumbnails. A click loads the position with the transition (Positions.request).
+## default, a random position, rescan; a dominance filter; a Find field; then the positions by folder
+## (PositionLibrary.category), each folder a fold with a grid of thumbnails, the player's favourites first. A click
+## loads the position with the transition (Positions.request); a right-click makes it a favourite (or not).
+## While Find has text, every folder with a match shows it (the folds stay as they were for later).
 ##
 ## Thumbnails (700x600 .png files next to the .txt) are read and made small on worker threads when a folder first
 ## opens, so opening the page never stalls a frame; they stay in memory (~10 MB for the shipped set at 2x).
@@ -12,9 +14,11 @@ const PIC_H := 80.0
 const LOAD := Vector2i(188, 160)   # the size thumbnails are kept at (2x: the window scales the stage up)
 const FOLD_CFG := "positions_fold"
 const DOMINANCE := ["All", "Him", "Her", "Neutral"]
+const FAVOURITES := "Favourites"   # the folder of the player's favourites (shown first)
 
 var _ext
 var filter := "All"
+var query := ""   # Find: part of a name (no case)
 
 static var _thumbs: Dictionary = {}    # .png path -> Texture2D (null: not readable)
 static var _waiting: Dictionary = {}   # .png path -> [TextureRect] while it loads
@@ -35,10 +39,14 @@ func start() -> void:
 		["New", func(): ext.editor.begin(true), "Opens the position editor on a new position from the game's default values."]],
 		{"keywords": "position animtools default random reload"}))
 	ext.menu_control("positions", "Position", MenuSchema.setting_control(ext, "transition"))
+	ext.menu_control("positions", "Position", MenuSchema.setting_control(ext, "random_from"))
 	ext.menu_control("positions", "Position", {"type": "chips", "label": "Who leads",
 		"tip": "Shows only the positions where he leads (HimD folders), she leads (HerD) or neither.",
 		"options": DOMINANCE, "get": func(): return filter, "set": func(v: String): filter = v,
 		"keywords": "dominance dominant filter"})
+	ext.menu_control("positions", "Browse", {"type": "text", "label": "Find", "placeholder": "part of a name",
+		"live": true, "tip": "Shows only the positions whose name or folder has this text.",
+		"get": func(): return query, "set": func(t: String): query = t.strip_edges(), "keywords": "search find name"})
 	ext.menu_control("positions", "Browse", {"type": "custom", "label": "", "build": _grid,
 		"keywords": "position animtools oral anal vaginal titfuck browse"})
 
@@ -57,6 +65,8 @@ func _current_label() -> Control:
 				t = "Now: the game's default, changed by a partial position"
 			else:
 				t = "Now: %s (%s)" % [_ext.library.short_name(n), _ext.library.category(n)] if _ext.library.has(n) else "Now: " + n
+		if _ext.missing != "":
+			t += "\nNot found in Mods/Positions: \"%s\" (asked for by a character or a dialogue)." % _ext.missing
 		if l.text != t:
 			l.text = t)
 	l.get_meta("refresh").call()
@@ -68,7 +78,7 @@ func _current_label() -> Control:
 func _grid() -> Control:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 3)
-	var state := {"version": -1, "filter": "", "current": null, "folds": {}}
+	var state := {"version": -1, "fav": -1, "filter": "", "query": "", "current": null, "folds": {}}
 	box.set_meta("refresh", func(): _refresh(box, state))
 	_refresh(box, state)
 	return box
@@ -76,21 +86,35 @@ func _grid() -> Control:
 
 func _refresh(box: VBoxContainer, state: Dictionary) -> void:
 	var lib = _ext.library
-	if state["version"] != lib.version:
+	if state["version"] != lib.version or state["fav"] != _ext.fav_serial:
 		state["version"] = lib.version
+		state["fav"] = _ext.fav_serial
 		state["filter"] = ""
 		state["current"] = null
 		_rebuild(box, state)
 	var cur: String = "" if _ext.current == null else _ext.current.name
-	if state["filter"] != filter or state["current"] != cur:
+	if state["filter"] != filter or state["current"] != cur or state["query"] != query:
 		state["filter"] = filter
 		state["current"] = cur
+		state["query"] = query
 		for f in state["folds"].values():
 			for cell in f["cells"]:
 				_show_cell(cell, cur)
-			var shown: int = f["names"].filter(func(n): return filter == "All" or lib.dominance(n) == filter).size()
-			f["head"].text = "%s %s (%d)" % ["▸" if f["folded"] else "▾", f["title"], shown]
+			var shown: int = f["names"].filter(_shows).size()
+			var open: bool = not f["folded"] or query != ""
+			f["head"].text = "%s %s (%d)" % ["▾" if open else "▸", f["title"], shown]
 			f["head"].visible = shown > 0
+			f["grid"].visible = open
+			if open:
+				_build_cells(f)
+
+
+## A position the filter and Find let through.
+func _shows(n: String) -> bool:
+	var lib = _ext.library
+	if filter != "All" and lib.dominance(n) != filter:
+		return false
+	return query == "" or lib.short_name(n).containsn(query) or lib.category(n).containsn(query)
 
 
 ## The folders' headings only; a folder's cells are made when it is first opened, a few per frame (_jobs).
@@ -108,13 +132,17 @@ func _rebuild(box: VBoxContainer, state: Dictionary) -> void:
 		by_cat[c].append(n)
 	var cats: Array = by_cat.keys()
 	cats.sort_custom(func(a, b): return _order(a) < _order(b) if _order(a) != _order(b) else a < b)
+	var favs: Array = _ext.favourites()
+	if not favs.is_empty():
+		by_cat[FAVOURITES] = favs
+		cats.push_front(FAVOURITES)
 	if cats.is_empty():
 		var l := Label.new()
 		l.text = "No positions in Mods/Positions."
 		l.add_theme_color_override("font_color", MenuTheme.MUTED)
 		box.add_child(l)
 	for c in cats:
-		var f := {"title": c, "names": by_cat[c], "cells": [], "folded": bool(PortSettings.get_value(FOLD_CFG, c, true)),
+		var f := {"title": c, "names": by_cat[c], "cells": [], "folded": bool(PortSettings.get_value(FOLD_CFG, c, c != FAVOURITES)),
 			"built": false}
 		var head := Button.new()
 		head.flat = true
@@ -132,6 +160,8 @@ func _rebuild(box: VBoxContainer, state: Dictionary) -> void:
 		f["grid"] = grid
 		box.add_child(grid)
 		head.pressed.connect(func():
+			if query != "":   # Find shows every folder with a match: the folds wait for it to be empty
+				return
 			f["folded"] = not f["folded"]
 			PortSettings.set_value(FOLD_CFG, c, f["folded"])
 			grid.visible = not f["folded"]
@@ -139,7 +169,7 @@ func _rebuild(box: VBoxContainer, state: Dictionary) -> void:
 			if not f["folded"]:
 				_build_cells(f))
 		state["folds"][c] = f
-		if not f["folded"]:
+		if not f["folded"] or query != "":
 			_build_cells(f)
 
 
@@ -164,7 +194,7 @@ func _build_cells(f: Dictionary) -> void:
 
 
 func _show_cell(cell: Button, cur: String) -> void:
-	cell.visible = filter == "All" or cell.get_meta("dominance") == filter
+	cell.visible = _shows(cell.get_meta("name"))
 	_mark(cell, cell.get_meta("name") == cur)
 
 
@@ -178,9 +208,10 @@ func _cell(n: String) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = CELL
 	b.focus_mode = Control.FOCUS_NONE
-	b.tooltip_text = n + ("\n(Partial: changes only some parts of the current position.)" if _ext.library.is_partial(n) else "")
+	var fav: bool = _ext.is_favourite(n)
+	b.tooltip_text = n + ("\n(Partial: changes only some parts of the current position.)" if _ext.library.is_partial(n) else "") \
+		+ ("\nRight-click: no longer a favourite." if fav else "\nRight-click: make it a favourite.")
 	b.set_meta("name", n)
-	b.set_meta("dominance", _ext.library.dominance(n))
 	b.set_meta("png", _ext.library.thumbnail_path(n))
 	b.set_meta("marked", false)
 	_style(b, false)
@@ -202,7 +233,7 @@ func _cell(n: String) -> Button:
 	v.add_child(pic)
 	b.set_meta("pic", pic)
 	var l := Label.new()
-	l.text = _ext.library.short_name(n)
+	l.text = ("★ " if fav else "") + _ext.library.short_name(n)
 	l.clip_text = true
 	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -210,6 +241,10 @@ func _cell(n: String) -> Button:
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(l)
 	b.pressed.connect(func(): _ext.request(n))
+	b.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_RIGHT:
+			_ext.set_favourite(n, not _ext.is_favourite(n))
+			b.accept_event())
 	return b
 
 

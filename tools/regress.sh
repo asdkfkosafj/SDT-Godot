@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Regression tests: plays fixed scenarios headless (game/debug/regress.gd) and compares the state dumps with the
 # reference dumps in tests/golden/. Runs without mods, in Vanilla mode (no extensions) and with a throwaway save,
-# so your own save is never touched.
+# so your own save is never touched. The "positions" scenario is the exception: the extensions at their defaults and
+# only the shipped body positions (Mods/Positions/animtools) as mods.
 #
 #   tools/regress.sh                 run all scenarios, report differences
 #   tools/regress.sh grab cum        run only these scenarios
@@ -36,7 +37,7 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/sdt-regress.XXXXXX")
 # in one godot.log there and rotate the player's logs away. Godot needs a native path (cygpath on Windows).
 LOGS=$WORK
 command -v cygpath > /dev/null && LOGS=$(cygpath -m "$WORK")
-ALL="menu idle grab costumes characters cum"
+ALL="menu idle grab costumes characters cum positions"
 update=0
 stress=0
 mods=""
@@ -54,7 +55,16 @@ for a in "$@"; do
 	esac
 done
 scenarios=${scenarios:-$ALL}
-mkdir -p "$WORK/mods" "$WORK/out"
+mkdir -p "$WORK/mods" "$WORK/out" "$WORK/mods_regpos/Positions"
+cp -r Mods/Positions/animtools "$WORK/mods_regpos/Positions/"
+
+mode_args() {   # name, work folder: Vanilla mode and the empty mods folder, or for "positions" its own mods folder
+	if [ "$1" = positions ]; then
+		echo "--mods-dir=$2/mods_regpos"
+	else
+		echo "--vanilla --mods-dir=$2/mods"
+	fi
+}
 
 godot() {   # the game, stopped after TIMEOUT seconds (exit code 124)
 	timeout -k 10 "$TIMEOUT" "$GODOT" "$@"
@@ -66,8 +76,8 @@ timed_out() {   # exit code -> " (timed out after N s)" for 124
 
 run_game() {   # name, extra args...
 	local name=$1; shift
-	godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_$name.log" -- --deterministic --seed=1 --vanilla \
-		--save-dir="$WORK/save_$name" --mods-dir="$WORK/mods" "$@" > "$WORK/$name.log" 2>&1
+	godot --headless --fixed-fps 30 --path game --log-file "$LOGS/godot_$name.log" -- --deterministic --seed=1 \
+		$(mode_args "$name" "$WORK") --save-dir="$WORK/save_$name" "$@" > "$WORK/$name.log" 2>&1
 }
 
 run_pictures() {   # name: the scenario in a window on a hidden desktop, its pictures into $WORK/img
@@ -77,7 +87,7 @@ run_pictures() {   # name: the scenario in a window on a hidden desktop, its pic
 	local exe args
 	exe=$(cygpath -w "$(command -v "$GODOT")")
 	args="--audio-driver Dummy --fixed-fps 30 --path \"$(cygpath -m "$ROOT/game")\" --log-file \"$LOGS/godot_img_$name.log\""
-	args="$args -- --deterministic --seed=1 --vanilla --save-dir=\"$LOGS/save_img_$name\" --mods-dir=\"$LOGS/mods\""
+	args="$args -- --deterministic --seed=1 $(mode_args "$name" "$LOGS") --save-dir=\"$LOGS/save_img_$name\""
 	args="$args --driver=res://debug/regress.gd --scenario=$name --out=\"$LOGS/out_img\" --images=\"$LOGS/img\""
 	powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$ROOT/tools/hidden_desktop.ps1")" \
 		-TimeoutSec "$TIMEOUT" -Output "$LOGS/img_$name.log" -CommandLine "\"$exe\" $args"

@@ -150,7 +150,7 @@ func doneEjaculating() -> void:
 func _pickMode(modes: Array, skipIntro: bool) -> void:
 	var i: int
 	while true:
-		if skipIntro and g.her.intro:
+		if skipIntro and g.her.introRunning():   # port: her intro only while his tip can reach her mouth
 			i = int(floor(randf() * (modes.size() - 2))) + 2
 		else:
 			i = int(floor(randf() * modes.size()))

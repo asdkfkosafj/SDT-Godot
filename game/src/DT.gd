@@ -248,6 +248,7 @@ func initGame() -> void:
 	openMainMenu()
 	g.her.initialise()
 	Extensions.start()   # port extension: built-in extensions and plugins (src/ext), once the game is built
+	g.her.applyPendingArms()   # port: a saved arm position an extension adds (the save loaded before it was there)
 	SDTMenu.start()   # port addition: the new in-game menu (src/menu); the classic one in Vanilla mode
 
 

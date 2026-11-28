@@ -275,13 +275,18 @@ func _fit_screen_effects() -> void:
 
 
 ## The game's screen masks (ScreenMask, 700x600) are widened to the window, so her, him and the strands are not
-## cut off at the field's edge.
+## cut off at the field's edge. The same for the layers that follow the camera (SceneLayer.giveExternalLayer), so
+## an extension's layer there (the props of Positions) is not cut either.
 func _fit_masks() -> void:
 	if not is_instance_valid(g.container):
 		return
 	for layer in [g.sceneLayer, g.backLayer, g.frontLayer, g.strandBackLayer, g.strandFrontLayer, g.cumLayer]:
 		if is_instance_valid(layer) and is_instance_valid(layer.mask):
 			_fit_mask(layer.mask)
+	if is_instance_valid(g.sceneLayer):
+		for layer in g.sceneLayer.externalLayers:
+			if is_instance_valid(layer) and is_instance_valid(layer.mask):
+				_fit_mask(layer.mask)
 
 
 func _fit_mask(clip: FlashDisplayObject) -> void:

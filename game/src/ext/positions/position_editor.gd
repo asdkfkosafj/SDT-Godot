@@ -38,6 +38,7 @@ const CARDS := [
 		["positiontype", "Type", "c", TYPES], ["dominant", "Who leads", "c", DOMINANT],
 		["maxpenissize", "Max penis size", "n", 0.0, 999.0], ["reversescreen", "Screen mirror", "c", ["Player's", "Normal", "Reversed"]],
 		["enablelicking", "Licking", "c", ["Off", "On", "Player's"]], ["hisarmfree", "His arm free", "c", ["No", "Yes", "Player's"]],
+		["DAhermasterbate", "She masturbates (DialogueActions)", "f"],
 	], []],
 	["Scene & camera", [
 		["camerax", "Camera x", "n", -600.0, 1200.0], ["cameray", "Camera y", "n", -600.0, 1000.0],
@@ -46,7 +47,8 @@ const CARDS := [
 		["changegravityforstrands", "Strands fall to the screen's bottom", "f"],
 		["changegravityforhairstrands", "Hair falls to the screen's bottom", "f"],
 		["angledgravity", "Angled gravity force", "n", 0.0, 5.0],
-	], []],
+	], [["camera", "camerax", "cameray", "", "pan", Color("f0f0f0")],
+		["zoom point", "zoompointx", "zoompointy", "", "scene", Color("90e0c0")]]],
 	["Her body & paths", [
 		["hertweenstartx", "Start x", "n", SCENE_X[0], SCENE_X[1]], ["hertweenstarty", "Start y", "n", SCENE_Y[0], SCENE_Y[1]],
 		["hertweenstartang", "Start angle", "r", -200.0, 200.0],
@@ -85,17 +87,19 @@ const CARDS := [
 		["armpostyperight", "Right arm", "a"], ["armposx", "Right hand x", "n", SCENE_X[0], SCENE_X[1]],
 		["armposy", "Right hand y", "n", SCENE_Y[0], SCENE_Y[1]], ["armposxend", "Right hand x at the end", "n", SCENE_X[0], SCENE_X[1]],
 		["armposyend", "Right hand y at the end", "n", SCENE_Y[0], SCENE_Y[1]], ["handangler", "Right hand angle", "n", -270.0, 270.0],
+		["handanglerend", "Right hand angle at the end", "n", -270.0, 270.0],
 		["handrinverted", "Right hand reversed", "f"], ["userightclosehand", "Right hand closed", "f"],
 		["allowrightarmdrop", "Right arm may drop", "f"], ["allowrightarmtap", "Right arm may tap", "f"],
 		["armpostypeleft", "Left arm", "a"], ["armpos2x", "Left hand x", "n", SCENE_X[0], SCENE_X[1]],
 		["armpos2y", "Left hand y", "n", SCENE_Y[0], SCENE_Y[1]], ["armpos2xend", "Left hand x at the end", "n", SCENE_X[0], SCENE_X[1]],
 		["armpos2yend", "Left hand y at the end", "n", SCENE_Y[0], SCENE_Y[1]], ["handanglel", "Left hand angle", "n", -270.0, 270.0],
+		["handanglelend", "Left hand angle at the end", "n", -270.0, 270.0],
 		["handlinverted", "Left hand reversed", "f"], ["useleftclosehand", "Left hand closed", "f"],
 		["allowleftarmdrop", "Left arm may drop", "f"], ["allowleftarmtap", "Left arm may tap", "f"],
 	], [["right hand", "armposx", "armposy", "deg:handangler", "scene", Color("ffb070")],
-		["right hand end", "armposxend", "armposyend", "", "scene", Color("e08840")],
+		["right hand end", "armposxend", "armposyend", "deg:handanglerend", "scene", Color("e08840")],
 		["left hand", "armpos2x", "armpos2y", "deg:handanglel", "scene", Color("ffe070")],
-		["left hand end", "armpos2xend", "armpos2yend", "", "scene", Color("e0b840")]]],
+		["left hand end", "armpos2xend", "armpos2yend", "deg:handanglelend", "scene", Color("e0b840")]]],
 	["His arm", [
 		["enablehiscustomarm", "His own arm path", "f"],
 		["handpointrestx", "Rest x", "n", HIS_X[0], HIS_X[1]], ["handpointresty", "Rest y", "n", HIS_X[0], HIS_X[1]],
@@ -107,14 +111,26 @@ const CARDS := [
 		["hishandrottarget", "Hand rotation against", "c", ["Nothing", "His arm", "Her", "Her leg", "Her torso"]],
 	], [["his hand rest", "handpointrestx", "handpointresty", "", "him", Color("c0a0ff")],
 		["his hand start", "handpointstartx", "handpointstarty", "", "scene", Color("a080ff")],
-		["his hand end", "handpointendx", "handpointendy", "", "scene", Color("8060e0")]]],
+		["his hand end", "handpointendx", "handpointendy", "", "scene", Color("8060e0")],
+		["his shoulder start", "shoulderpointstartx", "shoulderpointstarty", "", "him_shoulder", Color("ff9fe0")],
+		["his shoulder end", "shoulderpointendx", "shoulderpointendy", "", "him_shoulder", Color("e060b0")]]],
 	["Body contact", [
-		["bodycontactsounds", "Contact sounds", "f"], ["pleasurefromcontact", "Pleasure from contact", "f"],
+		["", "In vaginal and anal positions the Sexual experience setting replaces most of these numbers; set it to \"Position's own\" to try them.", "t"],
+		["bodycontactsounds", "Contact sounds", "f"],
+		["bodycontactsoundsinspeed", "Entry sound from speed", "n", 0.0, 0.5],
+		["bodycontactsoundsoutspeed", "Exit sound from speed", "n", -0.5, 0.0], ["pleasurefromcontact", "Pleasure from contact", "f"],
 		["pleasurefromcontactmult", "Pleasure multiplier", "n", 0.0, 5.0],
 		["resistancewithbodycontact", "Resistance", "f"], ["resistancestartingdistance", "Resistance starts at", "n", 0.0, 200.0],
 		["startingresistance", "Starting resistance", "n", 0.0, 20.0], ["minresistance", "Lowest resistance", "n", -0.1, 0.1],
-		["resistdecreaserate", "Resistance wears down", "n", 0.0, 0.01], ["movementresistancemult", "Movement resistance", "n", 0.0, 6.0],
+		["resistdecreaserate", "Resistance wears down", "n", 0.0, 0.01],
+		["resistnormalizerate", "Resistance comes back", "n", 0.0, 0.01], ["movementresistancemult", "Movement resistance", "n", 0.0, 6.0],
 		["bodycontactvigour", "Vigour from contact", "f"], ["bodycontactvigourcontinuousamount", "Vigour amount", "n", 0.0, 10.0],
+		["bodycontactvigourspeedmult", "Vigour from speed", "n", 0.0, 5.0],
+		["resistivevigor", "Vigour from resistance", "f"],
+		["resistivevigourmult", "Resistance vigour", "n", 0.0, 2.0],
+		["resistivevigourspeedmult", "Resistance vigour from speed", "n", 0.0, 2.0],
+		["continuousresistivevigourmult", "Steady resistance vigour", "n", 0.0, 2.0],
+		["resistivevigourspaceheldmult", "Resistance vigour while pushing", "n", 0.0, 0.5],
 		["hidestrandsinbodycontact", "No strands inside her", "f"], ["adjustspeedinbodycontact", "Adjust speed in contact", "f"],
 		["spaceholdresist", "Space holds resistance", "f"], ["usepenisrangebodycontactmask", "Penis mask inside her", "f"],
 		["undovanillavigourmovechanges", "Undo the game's movement vigour", "f"],
@@ -154,7 +170,7 @@ func start() -> void:
 		["Undo", undo, "Takes back the last change."],
 		["Revert", revert, "Back to the file as it was opened."]],
 		{"keywords": "position editor save undo"}))
-	ext.menu_control(SECTION, "Edit", MenuSchema.note("Hold Ctrl and drag the dots on the scene (the open cards' points; the end of a dot's arm turns it)."))
+	ext.menu_control(SECTION, "Edit", MenuSchema.note("Hold Ctrl and drag the dots on the scene (the open cards' points; the end of a dot's arm turns it; the camera dot drags the whole scene)."))
 	for card in CARDS:
 		for f in card[1]:
 			ext.menu_control(SECTION, card[0], _spec(f))
@@ -394,6 +410,8 @@ func _open_handles() -> Array:
 			var ak: String = h[3]
 			out.append({"label": h[0], "x": h[1], "y": h[2], "angle": ak.trim_prefix("deg:"),
 				"angle_deg": ak.begins_with("deg:"), "space": h[4], "color": h[5]})
+			if h[4] == "him_shoulder":
+				out[-1]["offset"] = _ext.his_shoulder_offset
 	if not MenuFold.is_folded(sec, {"title": "Props"}):
 		var n: String = Fields.PROPS[prop][0]
 		if values.get(n + "active", 0.0) == 1.0:
@@ -448,6 +466,10 @@ func _prop_spec(f: Array) -> Dictionary:
 func _spec(f: Array) -> Dictionary:
 	var key: String = f[0]
 	var label: String = f[1]
+	if f[2] == "t":
+		var note := MenuSchema.note(label)
+		note["visible"] = func(): return editing
+		return note
 	var d: float = Fields.defaults()[key]
 	var spec: Dictionary
 	match f[2]:
@@ -476,6 +498,8 @@ func _spec(f: Array) -> Dictionary:
 				"format": func(v):
 					if values.get(key, d) == UNSET:
 						return "unset"
+					if hi - lo <= 0.2:
+						return str(snappedf(v, 0.0001))
 					return str(snappedf(v, 0.01)) if hi - lo <= 20.0 else str(snappedf(v, 0.5))}
 	spec["visible"] = func(): return editing
 	spec["keywords"] = key

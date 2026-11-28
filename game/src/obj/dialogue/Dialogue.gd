@@ -389,7 +389,7 @@ func checkForSpeechStart() -> void:
 				best = k
 				if states[best].build > 0:
 					found = true
-		if g.her.intro:
+		if g.her.introRunning():   # port: not her intro's lines while his tip cannot reach her mouth (Her.introRunning)
 			if states[best].build < STATE_THRESHOLD:
 				best = INTRO
 				found = true

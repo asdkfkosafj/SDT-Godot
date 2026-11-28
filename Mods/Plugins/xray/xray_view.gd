@@ -3,9 +3,10 @@ extends FlashDisplayObject
 ## neck and his penis, so it can sit anywhere in the display list.
 ##
 ## A centre line leaves her lips along him and bends once, smoothly, down through her neck into her chest: it ends
-## past the base of her throat (a part of the way from the front of her neck to its back), heading along her neck. Along it: the throat wall, the inside of her
-## throat (around him where he is, closed past his tip), and his penis, taken from his offscreen render and bent
-## along the line, as long as the part of him inside her.
+## past the base of her throat (a part of the way from the front of her neck to its back), heading along her neck;
+## where it crosses her neck, the cutaway stays in her neck (whatever the angle of her head: _keep_in_neck).
+## Along it: the throat wall, the inside of her throat (around him where he is, closed past his tip), and his penis,
+## taken from his offscreen render and bent along the line, as long as the part of him inside her.
 ##
 ## Drawn in the main pass as a canvas group (its opacity applies to the whole cutaway at once), not in a render
 ## target of its own: that one could be drawn before his render in a frame and show his previous frame.
@@ -28,6 +29,9 @@ extends FlashDisplayObject
 const STEP := 3.0          # spacing of the samples along the centre line (local units)
 const DEPTH := 0.32        # where her throat runs, from the front of her neck (0) to its back (1)
 const JOIN := 0.5          # the point along her throat (0 jaw .. 1 chest) the curve's end is measured from
+const NECK_AT := [0.5, 0.62, 0.74]   # where along her neck's front (0 jaw .. 1 chest) the cutaway stays in her neck
+const NECK_MARGIN := 0.0   # its walls stay this far in from her neck's front and back there (local units)
+const FIT_NEAR := 4        # _measure_fit looks at the cutaway's walls this many samples each side of where it crosses
 const TAIL := 20.0         # how far past the base of her neck the curve ends (towards her chest)
 const PULL_IN := 0.45      # how far the curve keeps going in along him (times the distance from her lips to its end)
 const PULL_DOWN := 0.45    # how far up her neck it comes down along her neck (same)
@@ -55,6 +59,9 @@ const FADE := 0.25         # per tick, in and out
 ## The fade behind the start edge, per pixel (set per vertex, it would follow the strips' rows: a wide strip's
 ## triangles blend it straight across, cut off where it reaches full). `behind` is linear in the position, so
 ## interpolating it is exact; the clamp happens per pixel. Premultiplied, as his render is.
+## The start edge ends at her chin: past her chin (along the line of her lips), behind that line, nothing fades
+## (in front of it nothing shows, as before). Where her head is bent far down, her throat there lies along the line of
+## her lips, and the edge, a straight line, would fade it out and cut it off.
 const FADE_SHADER := """
 shader_type canvas_item;
 render_mode blend_premul_alpha;
@@ -62,15 +69,21 @@ uniform vec2 edge_at;
 uniform vec2 edge_in;
 uniform float start_len;
 uniform float fade_len;
+uniform vec2 chin_dir;    // along her lips, towards her chin
+uniform float chin_at;    // where her chin ends along that (from edge_at)
+uniform float soft;       // the width of the edges there
 varying float behind;
+varying float past_chin;
 // > 1: it builds up slowly at first, so it is half in further along (at 0.5 ^ (1 / FADE_CURVE) of fade_len)
 const float FADE_CURVE = 1.5;
 void vertex() {
 	behind = dot(VERTEX - edge_at, edge_in) - start_len;
+	past_chin = dot(VERTEX - edge_at, chin_dir) - chin_at;
 }
 void fragment() {
 	// COLOR already holds the texture (his render) times the vertex colour
-	COLOR *= pow(clamp(behind / fade_len, 0.0, 1.0), FADE_CURVE);
+	float chin = clamp(past_chin / soft, 0.0, 1.0) * clamp((behind + start_len) / soft, 0.0, 1.0);
+	COLOR *= max(pow(clamp(behind / fade_len, 0.0, 1.0), FADE_CURVE), chin);
 }
 """
 const START_OUT := 30.0    # the centre line starts this far outside her lips (a multiple of STEP): the cutaway's
@@ -176,6 +189,11 @@ var _split := -1                     # the sample low on her neck where the lowe
 var _half_px := 0.5                  # half a screen pixel in local units (_paint)
 var _edge_at := Vector2.ZERO         # the cutaway's start edge at Start 0: through here, along her lips,
 var _edge_in := Vector2.RIGHT        # and its unit normal into her
+var _chin_dir := Vector2.DOWN        # along her lips towards her chin (the start edge ends there: FADE_SHADER)
+var _chin_at := INF                  # where her chin ends along that, from _edge_at (INF: not found)
+var _fit: Array[Vector4] = []        # the cutaway across her neck at NECK_AT as drawn (_measure_fit)
+var _chin_d := -1.0                  # that, from her lower lip, eased (_find_chin; < 0: not found)
+var _chin_deep := CHIN_IN            # how far behind the line of her lips her jaw was there (_find_chin)
 var _fade_mat := ShaderMaterial.new()
 var _wall_col := Color(0.8, 0.45, 0.45)
 var _lumen_col := Color(0.42, 0.1, 0.14)
@@ -638,6 +656,7 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 		_edge_in = -_edge_in
 	var axis := _neck_axis(her, inv)
 	var tail := _tail(throat, int(JOIN * (throat.size() - 1)), axis)
+	var across := _neck_across(her, inv)
 	# her mouth at rest (as closed, without him): its walls, which stay where he does not push them out
 	_with_penis = false
 	_inside = 0.0
@@ -646,8 +665,15 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 	_close = CLOSE_LEN
 	_drawn = 0.0
 	_seam = ceili(CLOSE_LEN / STEP)   # (as far as it reaches at least, for the line's length: set below)
-	_line(lips_mid, _edge_in, tail, axis)
-	_outline(him)
+	# (where its walls are not in her neck, once more, kept in by how far they reach out; past him, the line with him
+	# goes over to this one)
+	_fit = []
+	for _pass in 2:
+		_line(lips_mid, _edge_in, tail, axis, across, _fit)
+		_outline(him)
+		_fit = _measure_fit(across)
+		if _pass == 1 or _in_neck(_fit):
+			break
 	_pocket(top_lip, bottom_lip, jaw_at)
 	var gate_at := _gate_point()
 	var her_k := (inv * her.localToGlobal(Vector2(1, 0))).distance_to(inv * her.localToGlobal(Vector2.ZERO))   # local per her unit
@@ -682,12 +708,19 @@ func update_shape(want: bool, keep_mouth := false) -> void:
 		# along him, towards his tip; past what is drawn of him, her throat at rest
 		# (only his own art is stiff: what sits on his tip is soft and follows her throat)
 		var stiff := minf(_drawn, _inside + PAST_TIP * _len_scale) if not _extra.is_empty() else _drawn
-		_line(start, -pv.x.normalized(), tail, axis, rest_path, stiff / STEP + 1.0)
-		_side = 1.0 if _norm[0].dot(pv.y) >= 0.0 else -1.0
-		_outline(him)
-		_pocket(top_lip, bottom_lip, jaw_at)
-		_fit_mouth(rest)
+		# (where its walls round him are not in her neck, once more, kept in by how far they reach out)
+		_fit = []
+		for _pass in 2:
+			_line(start, -pv.x.normalized(), tail, axis, across, _fit, rest_path, stiff / STEP + 1.0)
+			_side = 1.0 if _norm[0].dot(pv.y) >= 0.0 else -1.0
+			_outline(him)
+			_pocket(top_lip, bottom_lip, jaw_at)
+			_fit_mouth(rest)
+			_fit = _measure_fit(across)
+			if _pass == 1 or _in_neck(_fit):
+				break
 	_edge_at = start
+	_find_chin(her, top_lip, bottom_lip)
 	_gate_f = minf(_index_near(gate_at), float(_path.size() - 1 - GATE_LEN))
 	_gate = int(round(_gate_f))
 	_close_gate(her)
@@ -811,6 +844,109 @@ func _throat(her: Her, inv: Transform2D) -> PackedVector2Array:
 				nearest = b
 		out.append(p.lerp(nearest, DEPTH))
 	return out
+
+
+## Across her neck at NECK_AT along its front: [its front there, its back across from that] each, or [] without
+## her neck's outline. Her neck's shape turns with her head (its lower end goes under her torso), upright in its own
+## space (down: +y, its front: +x): its back across is at the same height there.
+func _neck_across(her: Her, inv: Transform2D) -> Array:
+	var neck = her.head.neck
+	var pts: Array = neck.renderedPoints
+	var n: int = neck.frontEndPoint
+	if pts.size() <= n + 2 or n < 4:
+		return []
+	var nv := inv * (neck as FlashDisplayObject).flash_global_transform()
+	var out := []
+	for at in NECK_AT:
+		var p: Vector2 = pts[int(at * (n - 1))]
+		out.append([nv * p, nv * _neck_back(pts, n + 1, p)])
+	return out
+
+
+## Her neck's back across from the point `p` of its front (neck-local): where its outline's back (pts[from] on: after
+## the edge across its bottom, from the front's last point, up to her head) crosses p's height, the crossing nearest
+## p; above or below the whole back, its nearest end.
+static func _neck_back(pts: Array, from: int, p: Vector2) -> Vector2:
+	var best := Vector2.INF
+	for i in range(from, pts.size() - 1):
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		if (a.y - p.y) * (b.y - p.y) > 0.0 or a.y == b.y:
+			continue
+		var q := a.lerp(b, (p.y - a.y) / (b.y - a.y))
+		if absf(q.x - p.x) < absf(best.x - p.x):
+			best = q
+	if best.x != INF:
+		return best
+	var low: Vector2 = pts[from]
+	var high: Vector2 = pts[-1]
+	return low if absf(low.y - p.y) < absf(high.y - p.y) else high
+
+
+const CHIN_STEP := 3.0    # the search for her chin's end: step and reach (local units), past her lower lip
+const CHIN_REACH := 60.0
+const CHIN_IN := 2.0      # just behind the line of her lips (that line touches her face's outline)
+const CHIN_DEEP := 30.0   # her chin goes back from that line: the search follows it in this far at most,
+const CHIN_DEEP_STEP := 4.0   # in these steps
+const CHIN_EASE := 0.35   # how much of a change in where it ends shows each tick (the steps above do not jump)
+
+
+## Where the start edge ends (FADE_SHADER): her chin's end, from her lower lip on along the line of her lips, where
+## her jaw ends along that line (not found when the search does not start in her jaw, or does not find its end
+## nearby: then the edge does not end). Her chin goes back from the line below her lip: the search follows the
+## outline in (behind the line, at most CHIN_DEEP), so it goes on to the bottom of her chin. It starts a little
+## before where it ended last tick (it moves little), at the depth it found there, if her jaw is there, else at her
+## lip: some 6 to 8 hit tests.
+func _find_chin(her: Her, top_lip: Vector2, bottom_lip: Vector2) -> void:
+	_chin_at = INF
+	_chin_dir = (bottom_lip - top_lip).normalized()
+	if _chin_dir == Vector2.ZERO:
+		_chin_d = -1.0
+		return
+	var jaw: FlashDisplayObject = her.head.jaw
+	var from := (bottom_lip - _edge_at).dot(_chin_dir)
+	# hit tests in her jaw's space (no transform to the stage and back each time)
+	var to_jaw := jaw.flash_global_transform().affine_inverse() * flash_global_transform()
+	var o := to_jaw * (_edge_at + _chin_dir * from)
+	var along := to_jaw.basis_xform(_chin_dir)
+	var into := to_jaw.basis_xform(_edge_in)
+	var direct := FlashDisplayObject.native and FlashDisplayObject.hit_exclude == null
+	var hits := func(d: float, deep: float) -> bool:
+		var q := o + along * d + into * deep
+		if direct:
+			return ClassDB.class_call_static(&"SDTNative", &"hit_shape", jaw, q, FlashDisplayObject.hb_gen)
+		var sq := jaw.flash_global_transform() * q
+		return jaw.hitTestPoint(sq.x, sq.y, true)
+	# the depth (from `deep` in) at which her jaw is at d, or > CHIN_DEEP: none
+	var depth_at := func(d: float, deep: float) -> float:
+		while deep <= CHIN_DEEP and not hits.call(d, deep):
+			deep += CHIN_DEEP_STEP
+		return deep
+	if not hits.call(0.0, CHIN_IN):
+		_chin_d = -1.0
+		return
+	var d := 0.0
+	var deep := CHIN_IN   # how far behind the line her jaw's outline is, about (it only goes in on down)
+	if _chin_d > 0.0:   # (her jaw is solid behind its outline: last tick's depth there, a little less, is in it)
+		var d0 := floorf(maxf(0.0, _chin_d - 2.0 * CHIN_STEP) / CHIN_STEP) * CHIN_STEP
+		var k: float = depth_at.call(d0, maxf(CHIN_IN, _chin_deep - CHIN_DEEP_STEP))
+		if k <= CHIN_DEEP:
+			d = d0
+			deep = k
+	var end := INF
+	while d + CHIN_STEP <= CHIN_REACH:
+		var k: float = depth_at.call(d + CHIN_STEP, deep)
+		if k > CHIN_DEEP:
+			end = d + CHIN_STEP * 0.5
+			break
+		deep = k
+		d += CHIN_STEP
+	if not is_finite(end):
+		_chin_d = -1.0
+		return
+	_chin_deep = deep   # (at the last step in her jaw)
+	_chin_d = end if _chin_d < 0.0 else lerpf(_chin_d, end, CHIN_EASE)
+	_chin_at = from + _chin_d
 
 
 static func _cubic(a: Vector2, b: Vector2, c: Vector2, d: Vector2, t: float) -> Vector2:
@@ -1035,15 +1171,104 @@ func _width_at(pos: float) -> void:
 
 
 ## The centre line: from `start` (between her lips) along `dir` (into her), one bend down into her chest along her
-## neck (`axis`) through `tail` (past the base of her throat); past its end it goes straight on. From sample `from`
-## on it goes over to the line `rest` (see _resample).
-func _line(start: Vector2, dir: Vector2, tail: Vector2, axis: Vector2, rest := PackedVector2Array(),
-		from := INF) -> void:
+## neck (`axis`) through `tail` (past the base of her throat), kept in her neck where it crosses it (`across`,
+## `fit`: _keep_in_neck); past its end it goes straight on. From sample `from` on it goes over to the line
+## `rest` (see _resample).
+func _line(start: Vector2, dir: Vector2, tail: Vector2, axis: Vector2, across: Array, fit: Array,
+		rest := PackedVector2Array(), from := INF) -> void:
 	var d := start.distance_to(tail)
 	var raw := PackedVector2Array([start - dir * START_OUT])   # straight on into the curve (its tangent there)
 	for k in 33:
 		raw.append(_cubic(start, start + dir * d * PULL_IN, tail - axis * d * PULL_DOWN, tail, k / 32.0))
-	_resample(raw, rest, from)
+	_resample(_keep_in_neck(raw, across, fit), rest, from)
+
+
+## Where the curve `raw` (from her lips to its end) crosses each line across her neck (`across`: _neck_across), the
+## cutaway's walls must be in her neck (NECK_MARGIN in from its front and back; how far they reach out from the
+## centre line: `fit`, _measure_fit; without it, its centre line), or, where her neck is too narrow for that, the
+## cutaway in its middle. Where they are not
+## (her head at an angle the curve's two ends do not follow: it would cut under her neck, or behind it), the curve is
+## moved across her neck as far as that takes, and less so on each side of it, to nothing at its ends (smoothly: a
+## smoothstep each way). Where they are, it stays as it is. Returns it.
+func _keep_in_neck(raw: PackedVector2Array, across: Array, fit: Array) -> PackedVector2Array:
+	var n := raw.size() - 1
+	for k in across.size():
+		var f: Vector2 = across[k][0]
+		var way: Vector2 = across[k][1] - f
+		var w := way.length()
+		if w < 1.0:
+			continue
+		var c := _crossing(raw, f, way, 1)
+		if c.x < 0.0:
+			continue
+		var front := 0.0
+		var back := 0.0
+		if k < fit.size() and is_finite(fit[k].x):
+			front = fit[k].z
+			back = fit[k].w
+		var lo := (front + NECK_MARGIN) / w
+		var hi := 1.0 - (back + NECK_MARGIN) / w
+		var to := clampf(c.y, lo, hi) if lo <= hi else (lo + hi) * 0.5
+		if to == c.y:
+			continue
+		var shift := way * (to - c.y)
+		for i in range(2, n):
+			var t := smoothstep(1.0, c.x, i) if i <= c.x else 1.0 - smoothstep(c.x, float(n), i)
+			raw[i] += shift * t
+	return raw
+
+
+## Where `line` (from its point `from` on) crosses the line across her neck (through `f` along `way`, its front to
+## its back), near her neck (within its width before its front or past its back): Vector2(where, between points;
+## how far across her neck, 0 front .. 1 back); of several, the one nearest her throat (DEPTH). (-1, 0): nowhere.
+static func _crossing(line: PackedVector2Array, f: Vector2, way: Vector2, from: int) -> Vector2:
+	var w2 := way.length_squared()
+	var best := Vector2(-1.0, 0.0)
+	var side := way.cross(line[from] - f)
+	for i in range(from + 1, line.size()):
+		var next := way.cross(line[i] - f)
+		if (side <= 0.0) != (next <= 0.0):
+			var t := side / (side - next)
+			var s := (line[i - 1].lerp(line[i], t) - f).dot(way) / w2
+			if s > -1.0 and s < 2.0 and (best.x < 0.0 or absf(s - DEPTH) < absf(best.y - DEPTH)):
+				best = Vector2(i - 1 + t, s)
+		side = next
+	return best
+
+
+## How the cutaway lies across her neck where it crosses each line across it (`across`: _neck_across), each a
+## Vector4: where its centre line crosses (share of the way from front to back; NAN: nowhere), her neck's width, and
+## how far its walls (not its glow) reach out from there to her neck's front and to its back, on the samples near.
+func _measure_fit(across: Array) -> Array[Vector4]:
+	var out: Array[Vector4] = []
+	for pair in across:
+		var f: Vector2 = pair[0]
+		var way: Vector2 = pair[1] - f
+		var w := way.length()
+		var x := _crossing(_path, f, way, 0) if w >= 1.0 and _path.size() >= 3 else Vector2(-1.0, 0.0)
+		if x.x < 0.0:
+			out.append(Vector4(NAN, w, 0.0, 0.0))
+			continue
+		var u := way / w
+		var at := int(round(x.x))
+		var c := f + way * x.y
+		var front := 0.0
+		var back := 0.0
+		for i in range(maxi(0, at - FIT_NEAR), mini(_path.size(), at + FIT_NEAR + 1)):
+			for q in [_at(i, _e0[i] - WALL), _at(i, _e1[i] + WALL)]:
+				var d: float = (q - c).dot(u)
+				front = maxf(front, -d)
+				back = maxf(back, d)
+		out.append(Vector4(x.y, w, front, back))
+	return out
+
+
+## The cutaway is in her neck (NECK_MARGIN in) everywhere `fit` (_measure_fit) measured it.
+static func _in_neck(fit: Array[Vector4]) -> bool:
+	for f in fit:
+		if is_finite(f.x) and (f.x * f.y - f.z < NECK_MARGIN or (1.0 - f.x) * f.y - f.w < NECK_MARGIN):
+			return false
+	return true
 
 
 ## Her mouth along the centre line: from her lips (`top_lip`, `bottom_lip`: their outer points; sample _m0) back to
@@ -1498,6 +1723,9 @@ func _paint() -> void:
 	_fade_mat.set_shader_parameter(&"edge_in", _edge_in)
 	_fade_mat.set_shader_parameter(&"start_len", start_len)
 	_fade_mat.set_shader_parameter(&"fade_len", maxf(fade_len, 2.0 * _half_px))
+	_fade_mat.set_shader_parameter(&"chin_dir", _chin_dir)
+	_fade_mat.set_shader_parameter(&"chin_at", _chin_at if is_finite(_chin_at) else 1e9)
+	_fade_mat.set_shader_parameter(&"soft", maxf(2.0, 4.0 * _half_px))
 	var last := mini(_split, _end()) if _splitting() else _end()
 	_paint_range(_painter.get_canvas_item(), 0, last)
 	_paint_pool(_painter.get_canvas_item())
@@ -1768,12 +1996,24 @@ func _glow(ci: RID, edge: PackedFloat32Array, inner: float, outer: float, i0: in
 
 
 ## His penis from his render, bent along the centre line: each sample takes the penis-local cross-section at the
-## same distance from her lips.
+## same distance from her lips. From the render of his penis clip alone when it has one (the plugin gives it a group
+## while the cutaway shows), so nothing of him behind it (a leg a position lifts next to it) comes along at its
+## sides or past its tip; else from his whole render.
 func _penis(ci: RID, i0: int, i1: int) -> void:
-	var grp := FlashGroupProxy.of(g.him)
-	if grp == null or _drawn <= 0.0 or not _with_penis:
+	if _drawn <= 0.0 or not _with_penis:
 		return
-	var rect := grp.render_rect()
+	var to_uv := _penis_xf
+	var grp := FlashGroupProxy.of(g.him.penis)
+	var rect := Rect2()
+	if grp != null and grp._obj == g.him.penis:
+		rect = grp.render_rect()
+		to_uv = Transform2D.IDENTITY   # (its render is in penis-local space)
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:   # no penis group yet (its first frame): his whole render
+		grp = FlashGroupProxy.of(g.him)
+		if grp == null:
+			return
+		rect = grp.render_rect()
+		to_uv = _penis_xf
 	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return
 	var pts := PackedVector2Array()
@@ -1798,7 +2038,7 @@ func _penis(ci: RID, i0: int, i1: int) -> void:
 		var y1 := _y1[i]
 		for y in [y0 - h, y0 + h, y1 - h, y1 + h]:
 			pts[v] = _at(i, _side * y * _wid_scale)
-			uvs[v] = (_penis_xf * Vector2(x, y) - rect.position) / rect.size
+			uvs[v] = (to_uv * Vector2(x, y) - rect.position) / rect.size
 			v += 1
 		cols[v - 3] = pen_col
 		cols[v - 2] = pen_col

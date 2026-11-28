@@ -5,8 +5,9 @@ extends SDTExtension
 ## size, type or colour, lipstick and wetness included), bent along her throat.
 ##
 ## His penis is drawn whole into that render while the x-ray shows: the game's mask, which cuts off its far end when
-## he is deep (so it never pokes out behind her head), becomes a cut where his render is drawn on screen
-## (FlashGroupProxy.set_cut), so the scene looks the same.
+## he is deep (so it never pokes out behind her head), becomes a cut where his penis's render is drawn on screen
+## (FlashGroupProxy.set_cut), so the scene looks the same. The cut is on his penis's own group, so nothing else of him
+## is cut (a knee a position lifts next to his penis).
 ##
 ## Stomach (its own switch): a cutaway of her stomach, in her torso (stomach_part.gd), drawn over her near arm, and
 ## while the mouth cutaway shows too, of the food pipe down to it from where her throat is closed below her mouth. What
@@ -49,7 +50,7 @@ var _stomach: FlashDisplayObject
 var _in_mouth_before := 0   # cum in her mouth before a swallow
 var _drained := 0.0         # taken from her mouth to run down her throat, not gone yet (the game counts whole units)
 var _game_mask := {"x": -100.0, "scale": 1.0}   # what the game asked of the mask this tick
-var _cut_set := false
+var _cut_grp: FlashGroupProxy = null   # the group that has the cut
 var _lifted := false   # the mask was lifted this tick (the cut must hide the far end on screen)
 
 
@@ -109,6 +110,7 @@ func _enable() -> void:
 
 func _disable() -> void:
 	_clear_cut()
+	_penis_group(false)
 	for o in [_view, _stomach]:
 		if o == null:
 			continue
@@ -209,10 +211,33 @@ func _tick() -> void:
 	# the food pipe, from the stomach up to where her throat closes below her mouth, shows while both do
 	_view.update_stomach(_stomach, stomach_on and (show == STOMACH_SHOW[1]
 		or (show == STOMACH_SHOW[0] and mouth_shows) or (show == STOMACH_SHOW[2] and in_mouth)), mouth_shows)
-	if _showing() or _lifted:
+	var cut := _showing() or _lifted
+	if not cut:
+		_clear_cut()   # (before his penis's group goes)
+	_penis_group(cut)
+	if cut:
 		_set_cut()
-	else:
-		_clear_cut()
+
+
+var _grouped: FlashDisplayObject = null   # his penis clip while it has the blend this gives it
+var _blend_before := "normal"
+
+
+## While the cutaway shows his penis (and while the game's mask over it is lifted), his penis clip is a group of its
+## own (Flash's "layer" blend: on screen it looks the same), so the view takes his penis from a render of it alone,
+## not from his whole render (where what is behind his penis, such as a leg a position lifts next to it, would show at
+## its sides), and the cut for the game's mask goes on it alone.
+func _penis_group(on: bool) -> void:
+	var pen: FlashDisplayObject = g.him.penis if on and g.him != null else null
+	if pen == _grouped:
+		return
+	if _grouped != null and is_instance_valid(_grouped) and _grouped.blendMode == "layer":
+		_grouped.blendMode = _blend_before   # direct: our own render setting on his penis clip, given back
+	_grouped = null
+	if pen != null and pen.blendMode == "normal":
+		_blend_before = pen.blendMode
+		pen.blendMode = "layer"   # direct: a render group for the view (looks the same on screen)
+		_grouped = pen
 
 
 ## Where the cutaway goes in the display list: just above her torso, so it shows down into her chest (over her
@@ -247,26 +272,38 @@ func _place_stomach() -> void:
 		_stomach.reset_physics_interpolation()
 
 
-## Hides on screen what the game's mask would have hidden of his penis: inside a band around the penis, outside
-## the mask's rect where the game put it.
+## Hides on screen what the game's mask would have hidden of his penis: outside the mask's rect where the game put
+## it. On his penis's own group; until that exists (its first frame), on his whole render, inside a band around his
+## penis.
 func _set_cut() -> void:
 	var him: Him = g.him
-	var grp := FlashGroupProxy.of(him)
-	if grp == null:
-		return
-	var him_inv := him.flash_global_transform().affine_inverse()
-	var to_penis: Transform2D = (him_inv * him.penis.flash_global_transform()).affine_inverse()
+	var pen: FlashDisplayObject = him.penis
 	var mask: FlashDisplayObject = him.penisMask
 	var mask_xf := Transform2D(0.0, Vector2(_game_mask.get("scale", 1.0), mask.scaleY), 0.0,
 		Vector2(_game_mask["x"], mask.y))
-	grp.set_cut(to_penis, Rect2(-5000, -150, 5000, 300), mask_xf.affine_inverse(), FlashRectClip.rect_of(mask))
-	_cut_set = true
+	var pen_in_him: Transform2D = him.flash_global_transform().affine_inverse() * pen.flash_global_transform()
+	var grp: FlashGroupProxy = FlashGroupProxy.of(pen) if _grouped == pen else null
+	if grp != null and grp._obj == pen:
+		_cut_on(grp)
+		grp.set_cut(Transform2D.IDENTITY, Rect2(-1e6, -1e6, 2e6, 2e6), mask_xf.affine_inverse() * pen_in_him,
+			FlashRectClip.rect_of(mask))
+		return
+	grp = FlashGroupProxy.of(him)
+	if grp == null:
+		return
+	_cut_on(grp)
+	grp.set_cut(pen_in_him.affine_inverse(), Rect2(-5000, -150, 5000, 300), mask_xf.affine_inverse(),
+		FlashRectClip.rect_of(mask))
+
+
+## The cut moves to `grp` (cleared where it was).
+func _cut_on(grp: FlashGroupProxy) -> void:
+	if _cut_grp != grp:
+		_clear_cut()
+		_cut_grp = grp
 
 
 func _clear_cut() -> void:
-	if not _cut_set:
-		return
-	_cut_set = false
-	var grp := FlashGroupProxy.of(g.him) if g.him != null else null
-	if grp != null:
-		grp.clear_cut()
+	if _cut_grp != null and is_instance_valid(_cut_grp):
+		_cut_grp.clear_cut()
+	_cut_grp = null

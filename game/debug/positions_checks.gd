@@ -453,6 +453,13 @@ func _him_start() -> void:
 	_check("anal: her mouth closed to him, his feet not limited",
 		Hooks.has_value(&"Her.mouthContact") and not Hooks.value(&"Her.mouthContact", her, true)
 		and Hooks.value(&"IKController.endLimit", leg, 1.22) == INF)
+	var dt: bool = her.firstDT
+	var hilt: bool = her.hilt
+	her.lastPenisDirection = 1   # as at the game's start: the tip last went in, not out
+	her.checkMovementSounds()
+	_check("anal, first tick: his far tip is outside her mouth (no deep throat, no hilt)", her.penisInMouthDist < 0.0
+		and her.firstDT == dt and her.hilt == hilt and her.lastPenisDirection == -1, str(her.penisInMouthDist))
+	_check("anal: her intro waits (no intro lines, auto mode not held to its gentle start)", not her.introRunning())
 	her.startClenchingTeeth()
 	_check("anal: her teeth do not clench", not her.clenchTeeth)
 	g.setPenisOut(false)
@@ -487,13 +494,18 @@ func _him_checks() -> void:
 	_check("spurts along his penis (here: to the right, at her)",
 		absf(angle_difference(Hooks.value(&"Him.spurtAngle", him, -2.9), axis)) < 0.01 and absf(axis) < PI / 2, str(axis))
 	x.load_position("animtools/Vaginal/ATV_Missionary_V2_Medium_QuiteQuaint")
-	_check("vaginal, penis not behind her: he draws in front of her", him.parent == g.frontLayer and not g.penisOut)
+	_check("vaginal without setpenisoutbehind: he draws behind her while his penis is not out (animtools)",
+		him.parent == g.sceneLayer and g.sceneLayer.getChildIndex(him) < g.sceneLayer.getChildIndex(her) and not g.penisOut,
+		"%s %s" % [him.parent, g.penisOut])
+	g.setPenisOut(true)
+	_check("... and in front of her while it is out", him.parent == g.frontLayer, str(him.parent))
+	g.setPenisOut(false)
 	x.load_position("animtools/Other/HerD/Futa_anal")
 	_check("himhidden = 0: his body hidden, his penis shows", him.bodyHidden and him.penis.visible)
 	x.load_position("animtools/Oral/BedBJ")
 	_check("oral again: his body back, him where his penis says, her mouth open to him",
 		not him.bodyHidden and him.parent == (g.frontLayer if g.penisOut else g.sceneLayer) and not Hooks.has_value(&"Her.mouthContact")
-		and not Hooks.has_value(&"g.penisInFront"))
+		and not Hooks.has_value(&"g.penisInFront") and her.introRunning() == her.intro)
 	x.clear()
 	_check("cleared: him unmirrored, in the scene, his body shown, her mouth open to him", _him_vanilla(), _him_state())
 
@@ -786,6 +798,41 @@ positiontype=9", "test/odd"))
 				shown += 1 if c.visible else 0
 	_check("browser filter: only the positions she leads", shown > 0 and shown < cells, "%d of %d" % [shown, cells])
 	x.browser.filter = "All"
+	x.browser.query = "DOGGY"
+	box.get_meta("refresh").call()
+	var found: Array = []
+	for ch in box.get_children():
+		if ch is GridContainer and ch.visible:
+			for c in ch.get_children():
+				if c.visible:
+					found.append(c.get_meta("name"))
+	_check("browser Find: only names with the text (no case), in open folders", found.size() > 1
+		and found.all(func(n): return n.containsn("doggy")), str(found))
+	x.browser.query = ""
+	var favs := ["animtools/Anal/ATV_doggy_hard", "animtools/Oral/ATV_facefuck"]
+	for n in favs:
+		x.set_favourite(n, true)
+	box.get_meta("refresh").call()
+	for i in 200:
+		if x.browser._jobs.is_empty():
+			break
+		x.browser._run_jobs()
+	var first: Button = box.get_child(0)
+	var fav_grid: GridContainer = box.get_child(1)
+	_check("browser: the favourites in their own folder first, open, with a star", first.text == "▾ Favourites (2)"
+		and fav_grid.get_child_count() == 2 and fav_grid.get_child(0).get_child(0).get_child(1).text.begins_with("★"),
+		"%s %d" % [first.text, fav_grid.get_child_count()])
+	x.set_setting("random_from", "Favourites")
+	names.clear()
+	for i in 6:
+		x.random()
+		names.append(x.current.name)
+	_check("random from favourites: only favourites", names.all(func(n): return n in favs) and names.has(favs[0])
+		and names.has(favs[1]), str(names))
+	x.set_setting("random_from", "All positions")
+	for n in favs:
+		x.set_favourite(n, false)
+	_check("favourites: none left after taking them off", x.favourites().is_empty())
 	box.free()
 	x.request_default()
 	_check("back to the game's default", x.current == null)
@@ -881,6 +928,7 @@ func _editor_checks() -> void:
 	ed._tick()
 	_check("editor: undo", x.current.values["himreversed"] == rev and x.current.values["hertweenstarty"] == y0 + 50.0,
 		"%s %s %s" % [x.current.values["himreversed"], x.current.values["hertweenstarty"], y0])
+	_editor_more_checks(ed)
 	ed.revert()
 	ed._tick()
 	_check("editor: revert to the file", x.current.values["hertweenstarty"] == y0)
@@ -915,6 +963,55 @@ func _editor_checks() -> void:
 		DirAccess.remove_absolute(x.library.path_of(n))
 	DirAccess.remove_absolute(x.positions_root().path_join("My positions"))
 	x.rescan()
+
+
+## The editor's cards and handles name real keys; the camera dot's rate; the end hand angle.
+func _editor_more_checks(ed) -> void:
+	var defaults := Fields.defaults()
+	var bad: Array = []
+	for card in ed.CARDS:
+		for f in card[1]:
+			if f[2] != "t" and not defaults.has(f[0]):
+				bad.append(f[0])
+		for h in card[2]:
+			for k in [h[1], h[2], h[3].trim_prefix("deg:")]:
+				if k != "" and not defaults.has(k):
+					bad.append(k)
+	_check("editor: every card field and handle names a position key", bad.is_empty(), str(bad))
+	# the camera dot: camerax / cameray changed by d / camera_rate() move the scene d pixels
+	var rate: Vector2 = x.camera_rate()
+	var at := Vector2(g.sceneLayer.x, g.sceneLayer.y)
+	ed.set_value("camerax", ed.values["camerax"] + 10.0 / rate.x)
+	ed.set_value("cameray", ed.values["cameray"] + 6.0 / rate.y)
+	ed.commit()
+	ed._tick()
+	var moved := Vector2(g.sceneLayer.x, g.sceneLayer.y) - at
+	_check("editor: the camera dot moves the scene with the mouse", absf(rate.x) > 0.01 and absf(rate.y) > 0.01
+		and moved.distance_to(Vector2(10, 6)) < 0.05, "rate %s moved %s" % [rate, moved])
+	# her Custom hand from the start to the end angle, the short way round
+	var u := clampf((g.her.pos + 0.25) / 1.27, 0.0, 1.0)
+	var a: float = x.arms._hand_angle({"handangler": 170.0, "handanglerend": -170.0}, false)
+	var a1: float = x.arms._hand_angle({"handangler": 170.0, "handanglerend": -5000.0}, false)
+	_check("editor: the end hand angle turns the short way round", is_equal_approx(a, 170.0 + 20.0 * u) and a1 == 170.0,
+		"%s %s (u %s)" % [a, a1, u])
+	ed.set_value("armpostyperight", 12.0)
+	ed.set_value("armposx", 300.0)
+	ed.set_value("armposy", 300.0)
+	ed.set_value("handangler", 10.0)
+	ed.set_value("handanglerend", 100.0)
+	ed.commit()
+	ed._tick()
+	x.arms._tick()
+	var want := 10.0 + 90.0 * clampf((g.her.pos + 0.25) / 1.27, 0.0, 1.0)
+	_check("editor: her Custom hand follows the end angle along her stroke",
+		is_equal_approx(g.her.rightArmIK.endRotationAngle, want), "%s %s" % [g.her.rightArmIK.endRotationAngle, want])
+	var cur = x.current
+	var gone: bool = not x.load_position("No Such Position 1.1") and x.missing == "No Such Position 1.1" and x.current == cur
+	var label: Label = x.browser._current_label()
+	var shown: bool = label.text.contains("No Such Position 1.1")
+	label.free()
+	_check("a missing position: the page names it, the position stays", gone and shown, "%s %s" % [gone, shown])
+	x.missing = ""
 
 
 ## The game's face fuck style is not offered while positions is on; the player's choice is kept and comes back.

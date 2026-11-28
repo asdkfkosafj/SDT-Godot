@@ -535,14 +535,32 @@ func findLeftArmPosition(n: String) -> void:
 	for i in armPositions.size():
 		if g.dataName(armPositions[i]) == g.dataName(n):
 			setLeftArmPosition(i)
-			break
+			_pendingArms[0] = ""
+			return
+	_pendingArms[0] = "" if Extensions.started else n
 
 
 func findRightArmPosition(n: String) -> void:
 	for i in armPositions.size():
 		if g.dataName(armPositions[i]) == g.dataName(n):
 			setRightArmPosition(i)
-			break
+			_pendingArms[1] = ""
+			return
+	_pendingArms[1] = "" if Extensions.started else n
+
+
+## Port: arm names the saved character asked for before the extensions added their arm positions (the save loads
+## first); DT takes them once the extensions have started.
+var _pendingArms := ["", ""]
+
+
+func applyPendingArms() -> void:
+	var p: Array = _pendingArms.duplicate()
+	_pendingArms = ["", ""]
+	if p[0] != "":
+		findLeftArmPosition(p[0])
+	if p[1] != "":
+		findRightArmPosition(p[1])
 
 
 func setArmPosition(p: int = -1, update: bool = true) -> void:
@@ -1550,6 +1568,12 @@ func swallow(intensity: float = 0.0, speak: bool = true) -> void:
 		Hooks.after(&"Her.swallow", self, [intensity, speak], started)
 
 
+## Port: her intro counts (its lines, auto mode's gentle start) only while his tip can reach her mouth
+## (Her.mouthContact): in a body position that is not oral the intro waits, kept for when he is back at her mouth.
+func introRunning() -> bool:
+	return intro and (not Hooks.has_value(&"Her.mouthContact") or Hooks.value(&"Her.mouthContact", self, true))
+
+
 func checkMovementSounds() -> void:
 	if Hooks.has(&"Her.checkMovementSounds"):   # HOOK
 		var h := Hooks.before(&"Her.checkMovementSounds", self, [])
@@ -1560,8 +1584,10 @@ func checkMovementSounds() -> void:
 	var tip: Vector2 = globalToLocal(g.him.getPenisTipPoint())
 	var tipVec := Vector2(tip.x - topLipA.x, tip.y - topLipA.y)
 	var crossV := Maths.cross(mouthVec, tipVec)
+	var closed := false   # port: his tip cannot reach her mouth (Her.mouthContact)
 	if Hooks.has_value(&"Her.mouthContact") and not Hooks.value(&"Her.mouthContact", self, true):   # HOOK value point: whether his tip can reach her mouth at all (true; false: it is always outside her lips)
 		crossV = minf(crossV, -0.001)
+		closed = true
 	var inside := crossV > 0
 	var entering := false
 	var dotV := Maths.pointDot(topLipA, lipB, tip)
@@ -1574,7 +1600,8 @@ func checkMovementSounds() -> void:
 		lastPenisDirection = 1
 		if penisTipMouthOffset > -5 and penisTipMouthOffset < mouthLength + 5:
 			entering = true
-	penisInMouthDist = lastPenisDirection * Maths.vectorLength(Vector2(tip.x - proj.x, tip.y - proj.y))
+	# port: closed counts as outside from this tick on (the tip may be far away: a positive distance would be a deep throat)
+	penisInMouthDist = (-1 if closed else lastPenisDirection) * Maths.vectorLength(Vector2(tip.x - proj.x, tip.y - proj.y))
 	if inside:
 		if not mouthFull and not g.penisOut:
 			if (swallowing and not gagged) or not entering or clenchTeeth:

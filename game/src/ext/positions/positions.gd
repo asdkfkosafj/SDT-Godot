@@ -58,6 +58,8 @@ func _init() -> void:
 		"tip": "How the scene changes to another position: a short fade to dark (the change happens while it is dark) or at once. Partial positions always change at once."})
 	setting("fade_ticks", 18, {"label": "Fade length", "min": 6, "max": 60, "step": 1,
 		"tip": "How long the dark fade takes, in game frames (60 a second). animtools' default: 18."})
+	setting("random_from", RANDOM_FROM[0], {"label": "Random picks from", "options": RANDOM_FROM,
+		"tip": "What Random, its hotkey and the dialogue's [ANIMTOOLSRANDOM] pick from. Right-click a position to make it a favourite."})
 
 
 func _enable() -> void:
@@ -120,8 +122,9 @@ func rescan() -> void:
 func request(given: String, shown := "", fade := true) -> bool:
 	var n: String = library.find(given)
 	if n == "":
-		push_warning("Positions: no position \"%s\"" % given)
+		_not_found(given)
 		return false
+	missing = ""
 	var change := func():
 		var had = current
 		if load_position(given) and shown != "" and not (library.is_partial(n) and had != null):
@@ -135,16 +138,51 @@ func request(given: String, shown := "", fade := true) -> bool:
 
 ## Back to the game's default animation, with the transition (also when a picked position still waits for the dark).
 func request_default() -> void:
+	missing = ""
 	if current != null or _fade_do.is_valid():
 		_transition(clear, "")
 
 
 ## A random full position (not partial, not the current one): animtools' random key / [ANIMTOOLSRANDOM].
+## With "Random picks from" Favourites, only the favourite ones (all when no favourite is a full position).
 func random() -> void:
 	var cur: String = "" if current == null else current.name
 	var full: Array = Array(library.names).filter(func(n): return not library.is_partial(n) and n != cur)
+	if get_setting("random_from") == RANDOM_FROM[1]:
+		var fav := full.filter(func(n): return is_favourite(n))
+		if not fav.is_empty() or favourites().any(func(n): return n == cur):
+			full = fav
 	if not full.is_empty():
 		request(full[randi() % full.size()])
+
+
+# ---------------------------------------------------------------- favourites (port.cfg, by library name)
+
+const FAV_CFG := "positions_fav"
+const RANDOM_FROM := ["All positions", "Favourites"]
+var fav_serial := 0   # goes up on each change (the browser's Favourites folder is made again)
+
+
+## The favourite positions that are in the library now, in library order.
+func favourites() -> Array:
+	var names: Array = PortSettings.get_value(FAV_CFG, "names", [])
+	return Array(library.names).filter(func(n): return n in names)
+
+
+func is_favourite(n: String) -> bool:
+	return n in PortSettings.get_value(FAV_CFG, "names", [])
+
+
+func set_favourite(n: String, on: bool) -> void:
+	var names: Array = PortSettings.get_value(FAV_CFG, "names", []).duplicate()
+	if on == (n in names):
+		return
+	if on:
+		names.append(n)
+	else:
+		names.erase(n)
+	PortSettings.set_value(FAV_CFG, "names", names)
+	fav_serial += 1
 
 
 ## Reads the folder again and loads the current position's file again (after it was edited): animtools' reload key.
@@ -260,8 +298,9 @@ func load_position(given: String) -> bool:
 	var before = current
 	var p = read_position(given)
 	if p == null:
-		push_warning("Positions: no position \"%s\"" % given)
+		_not_found(given)
 		return false
+	missing = ""
 	var n: String = library.find(given)
 	file_settings.merge(p.own_settings, true)
 	serial += 1
@@ -270,6 +309,14 @@ func load_position(given: String) -> bool:
 	if not (library.is_partial(n) and before != null):   # (a library name: in animtools' form)
 		loaded_name = library.animtools_name(library.find(given)) if library.has(given) else given
 	return true
+
+
+var missing := ""   # the last name asked for that is not in Mods/Positions (a character code, a dialogue): the page shows it
+
+
+func _not_found(given: String) -> void:
+	push_warning("Positions: no position \"%s\"" % given)
+	missing = given
 
 
 ## An animtools global setting: the value a loaded file set (kept for later positions, as animtools' globals), else
@@ -397,12 +444,37 @@ static func _u(pos: float) -> float:
 func _his_shoulder(_sp: Vector2, body) -> Vector2:
 	var v: Dictionary = current.values
 	var u := _u(body.armPos)
+	return Vector2(lerpf(v["shoulderpointstartx"], v["shoulderpointendx"], u),
+		lerpf(v["shoulderpointstarty"], v["shoulderpointendy"], u)) + his_shoulder_offset()
+
+
+## How far his shoulder's points move with his body's height on the stroke now (his space; the editor's handles
+## add it too).
+func his_shoulder_offset() -> Vector2:
+	if current == null or _anim == null:
+		return Vector2.ZERO
 	var t: Transform2D = _anim.hisTween._tweenMatrix
 	var off := Vector2(t.x.y, t.x.x) * (t.origin.y - 120.0)
-	if (v["himreversed"] == 1) != (v["himflipped"] == 1):
+	if (current.values["himreversed"] == 1) != (current.values["himflipped"] == 1):
 		off.y = -off.y
-	return Vector2(lerpf(v["shoulderpointstartx"], v["shoulderpointendx"], u),
-		lerpf(v["shoulderpointstarty"], v["shoulderpointendy"], u)) + off
+	return off
+
+
+## How far the scene moves on the screen (its parent's pixels) for one unit more of camerax / cameray at the
+## player's zoom now (the editor's camera handle drags the scene with the mouse).
+func camera_rate() -> Vector2:
+	if current == null or g.sceneLayer == null:
+		return Vector2.ONE
+	var v: Dictionary = current.values
+	var sl = g.sceneLayer
+	var a0 := _camera_aim(Vector2.ZERO, sl)
+	v["camerax"] += 1.0
+	var ax := _camera_aim(Vector2.ZERO, sl)
+	v["camerax"] -= 1.0
+	v["cameray"] += 1.0
+	var ay := _camera_aim(Vector2.ZERO, sl)
+	v["cameray"] -= 1.0
+	return Vector2(ax.x - a0.x, ay.y - a0.y)
 
 
 func _his_arm_point(_ap: Vector2, body) -> Vector2:
@@ -486,9 +558,10 @@ var _hid_body := false   # his body hidden by the position (the player's "Show h
 
 
 ## Not oral (tit fuck, vaginal, anal, other): his tip never reaches her mouth (so no mouth full, intro, deep throat,
-## gag, nose squash...: they keep their values for the next oral position) and her teeth do not clench; he draws
-## behind her (setpenisoutbehind) or in front of her (the files that do not set it). His body hides in the files that
-## hide it (himhidden = 0).
+## gag, nose squash...: they keep their values for the next oral position) and her teeth do not clench. He draws
+## behind her, so his penis goes in behind her; as in animtools, the files without setpenisoutbehind bring him in
+## front while his penis is out (the game's penisOut: while the mouse button is held), the others never. His body
+## hides in the files that hide it (himhidden = 0).
 func _apply_penis(p) -> void:
 	unmodify(&"Her.mouthContact")
 	unmodify(&"g.penisInFront")
@@ -499,8 +572,6 @@ func _apply_penis(p) -> void:
 			g.her.releaseTeeth()
 	if v["setpenisoutbehind"] == 1:
 		modify(&"g.penisInFront", {"op": "set", "value": false})
-	elif not _oral():
-		modify(&"g.penisInFront", {"op": "set", "value": true})
 	g.updatePenisLayer()
 	_show_body(v["himhidden"] != 0)
 
